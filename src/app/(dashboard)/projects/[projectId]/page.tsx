@@ -73,10 +73,10 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
       />
       
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-4xl mx-auto">
+      <main className="flex-1 overflow-y-auto p-8 lg:p-12">
+        <div className="max-w-5xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-10 lg:mb-12">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h1 className="text-3xl font-bold text-[var(--foreground)] mb-2">
@@ -104,7 +104,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           </div>
           
           {/* Stats grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10 lg:mb-12">
             <Card>
               <CardContent className="pt-6">
                 <div className="text-2xl font-bold text-[var(--foreground)]">
@@ -143,7 +143,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           </div>
           
           {/* Continue CTA */}
-          <Card className="mb-8 bg-gradient-to-r from-[var(--primary)] to-[var(--color-ink-light)] text-[var(--primary-foreground)]">
+          <Card className="mb-10 lg:mb-12 bg-gradient-to-r from-[var(--primary)] to-[var(--color-ink-light)] text-[var(--primary-foreground)]">
             <CardContent className="py-8">
               <div className="flex items-center justify-between">
                 <div>
@@ -169,7 +169,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           </Card>
           
           {/* Premise */}
-          <Card className="mb-8">
+          <Card className="mb-10 lg:mb-12">
             <CardHeader>
               <CardTitle>Premise</CardTitle>
             </CardHeader>
@@ -180,7 +180,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           
           {/* Reference Documents */}
           {approvedDocs.length > 0 && (
-            <Card className="mb-8">
+            <Card className="mb-10 lg:mb-12">
               <CardHeader>
                 <CardTitle>Reference Documents</CardTitle>
               </CardHeader>

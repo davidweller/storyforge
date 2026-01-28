@@ -23,7 +23,7 @@ export function StageActions({
 }: StageActionsProps) {
   if (isApproved) {
     return (
-      <div className="flex items-center justify-between p-4 bg-[rgba(92,124,92,0.1)] border border-[var(--status-approved)] rounded-lg">
+      <div className="flex items-center justify-between p-6 lg:p-8 bg-[rgba(92,124,92,0.1)] border border-[var(--status-approved)] rounded-lg">
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-[var(--status-approved)]" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -38,8 +38,8 @@ export function StageActions({
   }
   
   return (
-    <div className="sticky bottom-0 bg-[var(--background)] border-t border-[var(--border)] p-4 -mx-8 -mb-8 mt-8">
-      <div className="max-w-4xl mx-auto flex items-center justify-between">
+    <div className="sticky bottom-0 bg-[var(--background)] border-t border-[var(--border)] p-6 lg:p-8 -mx-8 lg:-mx-12 -mb-8 lg:-mb-12 mt-10 lg:mt-12">
+      <div className="max-w-5xl lg:max-w-6xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"

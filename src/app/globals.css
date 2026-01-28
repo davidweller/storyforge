@@ -45,6 +45,17 @@
   --sidebar-width: 280px;
   --context-drawer-width: 320px;
   --header-height: 64px;
+  
+  /* Content widths */
+  --content-width-narrow: 768px;
+  --content-width-medium: 1024px;
+  --content-width-wide: 1280px;
+  --content-width-max: 1440px;
+  
+  /* Page spacing */
+  --spacing-page-x: 2rem;
+  --spacing-page-y: 2rem;
+  --spacing-section: 3rem;
 }
 
 @media (prefers-color-scheme: dark) {

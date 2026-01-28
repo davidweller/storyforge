@@ -19,7 +19,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-lg p-6',
+          'rounded-lg p-6 lg:p-8',
           variants[variant],
           className
         )}
@@ -37,7 +37,7 @@ const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('mb-4', className)}
+      className={cn('mb-6', className)}
       {...props}
     />
   )

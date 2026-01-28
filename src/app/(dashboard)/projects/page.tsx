@@ -27,7 +27,7 @@ export default function ProjectsPage() {
   }
   
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 md:px-8 lg:px-12 py-12">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -103,7 +103,7 @@ export default function ProjectsPage() {
       
       {/* Projects grid */}
       {filteredProjects.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredProjects.map((project, index) => (
             <Link
               key={project.id}

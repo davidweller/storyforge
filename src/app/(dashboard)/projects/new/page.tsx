@@ -80,7 +80,7 @@ export default function NewProjectPage() {
   };
   
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
+    <div className="max-w-3xl mx-auto px-8 py-12 lg:px-12">
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Create New Project</CardTitle>
@@ -90,7 +90,7 @@ export default function NewProjectPage() {
         </CardHeader>
         
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8">
             {/* Error */}
             {error && (
               <div className="p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">

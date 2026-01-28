@@ -218,7 +218,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       {/* Main content */}
       <main className="flex-1 overflow-y-auto flex flex-col">
         {/* Header */}
-        <div className="border-b border-[var(--border)] bg-[var(--card)] px-8 py-4">
+        <div className="border-b border-[var(--border)] bg-[var(--card)] px-8 py-6 lg:px-12 lg:py-8">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -269,9 +269,9 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         )}
         
         {/* Editor */}
-        <div className="flex-1 p-8">
+        <div className="flex-1 p-8 lg:p-12">
           {isGenerating ? (
-            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-12">
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-12 lg:p-16">
               <div className="flex flex-col items-center justify-center gap-4">
                 <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
                 <p className="text-[var(--muted-foreground)]">Writing chapter...</p>
@@ -312,7 +312,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         
         {/* Action bar */}
         {content && (
-          <div className="border-t border-[var(--border)] bg-[var(--card)] px-8 py-4">
+          <div className="border-t border-[var(--border)] bg-[var(--card)] px-8 py-6 lg:px-12 lg:py-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Button
