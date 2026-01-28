@@ -27,12 +27,12 @@ export default function ProjectsPage() {
   }
   
   return (
-    <div className="max-w-7xl mx-auto px-6 md:px-8 lg:px-12 py-12">
+    <div className="py-12">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--foreground)]">Your Projects</h1>
-          <p className="text-[var(--muted-foreground)] mt-1">
+          <h1 className="text-3xl font-bold tracking-tight">Your Projects</h1>
+          <p className="text-[var(--muted-foreground)] mt-1.5">
             {projects.length} {projects.length === 1 ? 'project' : 'projects'}
           </p>
         </div>
@@ -63,7 +63,7 @@ export default function ProjectsPage() {
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-[var(--input)] rounded-lg bg-[var(--card)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--ring)] focus:outline-none"
+              className="w-full h-11 pl-10 pr-4 py-2.5 border border-[var(--input)] rounded-xl bg-[var(--card)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--ring)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-opacity-20 transition-all"
             />
           </div>
         </div>
@@ -71,34 +71,36 @@ export default function ProjectsPage() {
       
       {/* Error */}
       {error && (
-        <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
+        <div className="mb-6 p-4 bg-[rgba(239,68,68,0.1)] border border-[var(--destructive)] border-opacity-30 rounded-xl">
           <p className="text-sm text-[var(--destructive)]">{error}</p>
         </div>
       )}
       
       {/* Empty state */}
       {projects.length === 0 && !loading && (
-        <Card className="text-center py-16">
-          <CardContent>
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--muted)] rounded-full mb-4">
-              <svg className="w-8 h-8 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">No projects yet</h2>
-            <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
-              Start your first novel project and let AI help you through the entire writing process.
-            </p>
-            <Link href="/projects/new">
-              <Button size="lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        <div className="max-w-2xl mx-auto">
+          <Card className="text-center py-16">
+            <CardContent>
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--muted)] rounded-full mb-4">
+                <svg className="w-8 h-8 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
-                Create Your First Project
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+              </div>
+              <h2 className="text-xl font-semibold tracking-tight mb-2">No projects yet</h2>
+              <p className="text-[var(--muted-foreground)] mb-6">
+                Start your first novel project and let AI help you through the entire writing process.
+              </p>
+              <Link href="/projects/new">
+                <Button size="lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Create Your First Project
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       )}
       
       {/* Projects grid */}

@@ -61,10 +61,10 @@ export function ContextSection({ title, children, defaultExpanded = true }: Cont
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   
   return (
-    <div className="border-b border-[var(--border)]">
+    <div className="border-b border-[var(--border)] border-opacity-30">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-[var(--muted)] transition-colors"
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-[var(--muted)] hover:bg-opacity-50 transition-colors"
       >
         <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
         <svg
@@ -77,7 +77,7 @@ export function ContextSection({ title, children, defaultExpanded = true }: Cont
         </svg>
       </button>
       {isExpanded && (
-        <div className="px-4 pb-4">
+        <div className="px-5 pb-5">
           {children}
         </div>
       )}

@@ -79,7 +79,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           <div className="mb-10 lg:mb-12">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h1 className="text-3xl font-bold text-[var(--foreground)] mb-2">
+                <h1 className="text-3xl font-bold tracking-tight mb-2">
                   {project.title}
                 </h1>
                 <p className="text-[var(--muted-foreground)]">

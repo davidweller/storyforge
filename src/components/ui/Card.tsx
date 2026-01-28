@@ -10,17 +10,18 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant = 'default', children, ...props }, ref) => {
     const variants = {
-      default: 'bg-[var(--card)] border border-[var(--border)]',
-      outlined: 'bg-transparent border border-[var(--border)]',
-      elevated: 'bg-[var(--card)] shadow-lg',
+      default: 'bg-[var(--card)] border border-[var(--border)] border-opacity-50 shadow-[var(--shadow-sm)]',
+      outlined: 'bg-transparent border border-[var(--border)] border-opacity-50',
+      elevated: 'bg-[var(--card)] border border-[var(--border)] border-opacity-50 shadow-[var(--shadow-md)]',
     };
     
     return (
       <div
         ref={ref}
         className={cn(
-          'rounded-lg p-6 lg:p-8',
+          'rounded-xl p-6 lg:p-8 transition-shadow duration-200',
           variants[variant],
+          variant === 'default' && 'hover:shadow-[var(--shadow-md)]',
           className
         )}
         {...props}
@@ -37,7 +38,7 @@ const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('mb-6', className)}
+      className={cn('mb-8', className)}
       {...props}
     />
   )
@@ -49,7 +50,7 @@ const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingEleme
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-xl font-semibold text-[var(--foreground)]', className)}
+      className={cn('text-xl font-semibold text-[var(--foreground)] tracking-tight', className)}
       {...props}
     />
   )
@@ -81,7 +82,7 @@ const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('mt-4 flex items-center gap-3', className)}
+      className={cn('mt-8 flex items-center gap-4', className)}
       {...props}
     />
   )

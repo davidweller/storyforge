@@ -22,7 +22,7 @@ export function ContentDisplay({
         value={content}
         onChange={(e) => onContentChange(e.target.value)}
         className={cn(
-          'w-full min-h-[500px] p-6 lg:p-8 bg-[var(--card)] border border-[var(--border)] rounded-lg',
+          'w-full min-h-[500px] p-6 lg:p-8 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[var(--shadow-sm)]',
           'text-[var(--foreground)] font-[inherit] text-base leading-relaxed',
           'focus:border-[var(--ring)] focus:outline-none resize-y',
           className
@@ -35,7 +35,7 @@ export function ContentDisplay({
     <div
       className={cn(
         'prose prose-lg max-w-none',
-        'bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 lg:p-8',
+        'bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[var(--shadow-sm)] p-6 lg:p-8',
         className
       )}
     >

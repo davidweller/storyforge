@@ -141,9 +141,9 @@ export function WorkflowSidebar({
   };
   
   return (
-    <aside className="w-[var(--sidebar-width)] h-screen bg-[var(--card)] border-r border-[var(--border)] flex flex-col overflow-hidden">
+    <aside className="w-[var(--sidebar-width)] h-screen bg-[var(--card)] border-r border-[var(--border)] border-opacity-30 flex flex-col overflow-hidden shadow-[var(--shadow-sm)]">
       {/* Header */}
-      <div className="p-4 border-b border-[var(--border)]">
+      <div className="p-5 border-b border-[var(--border)] border-opacity-30">
         <Link 
           href="/projects"
           className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center gap-1 mb-2"
@@ -220,7 +220,7 @@ export function WorkflowSidebar({
       </nav>
       
       {/* Footer with project link */}
-      <div className="p-3 border-t border-[var(--border)]">
+      <div className="p-4 border-t border-[var(--border)] border-opacity-30">
         <Link
           href={`/projects/${projectId}`}
           className={cn(

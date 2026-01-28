@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <ProtectedRoute>
         <div className="min-h-screen bg-[var(--background)]">
           <Header />
-          <main>{children}</main>
+          <main className="max-w-6xl mx-auto px-6">{children}</main>
         </div>
       </ProtectedRoute>
     </AuthProvider>

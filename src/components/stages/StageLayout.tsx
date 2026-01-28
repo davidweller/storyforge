@@ -43,10 +43,10 @@ export function StageLayout({
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         {/* Stage header */}
-        <div className="border-b border-[var(--border)] bg-[var(--card)] px-8 py-8 lg:px-12 lg:py-10">
-          <div className="max-w-5xl lg:max-w-6xl mx-auto">
+        <div className="border-b border-[var(--border)] border-opacity-30 bg-[var(--card)] px-8 py-8 lg:px-12 lg:py-10">
+          <div className="max-w-3xl mx-auto">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-[var(--foreground)]">
+              <h1 className="text-2xl font-bold tracking-tight">
                 {STAGE_NAMES[activeStage]}
               </h1>
               <Badge variant={model === 'claude' ? 'info' : 'default'}>
@@ -61,7 +61,7 @@ export function StageLayout({
         
         {/* Stage content */}
         <div className="p-8 lg:p-12">
-          <div className="max-w-5xl lg:max-w-6xl mx-auto">
+          <div className="max-w-3xl mx-auto">
             {children}
           </div>
         </div>
