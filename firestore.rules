@@ -11,77 +11,112 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    // Development user ID for testing without auth
+    function isDevUser(userId) {
+      return userId == 'dev-user-123';
+    }
+    
     // Projects collection
     match /projects/{projectId} {
-      allow read: if isOwner(resource.data.userId);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isOwner(resource.data.userId);
+      allow read: if isOwner(resource.data.userId) || isDevUser(resource.data.userId);
+      allow create: if (isAuthenticated() && request.resource.data.userId == request.auth.uid) || isDevUser(request.resource.data.userId);
+      allow update, delete: if isOwner(resource.data.userId) || isDevUser(resource.data.userId);
     }
     
     // Documents collection (reference documents for projects)
     match /documents/{documentId} {
-      allow read: if isAuthenticated() && 
+      allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
-      allow create: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+      allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+      allow update, delete: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
     }
     
     // Chapters collection
     match /chapters/{chapterId} {
-      allow read: if isAuthenticated() && 
+      allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
-      allow create: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+      allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+      allow update, delete: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
     }
     
     // Chapter versions collection
     match /chapter_versions/{versionId} {
-      allow read: if isAuthenticated() && 
+      allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
-      allow create: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+      allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid;
-      allow update: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+      allow update: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
       allow delete: if false; // Never delete versions, preserve history
     }
     
     // Editorial issues collection
     match /editorial_issues/{issueId} {
-      allow read: if isAuthenticated() && 
+      allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
-      allow create: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+      allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+      allow update, delete: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
     }
     
     // Revision tasks collection
     match /revision_tasks/{taskId} {
-      allow read: if isAuthenticated() && 
+      allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
-      allow create: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+      allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() &&
+        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+      allow update, delete: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid;
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
     }
   }
 }
