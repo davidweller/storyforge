@@ -38,8 +38,9 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   
   const filteredProjects = projects.filter((project) =>
-    project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.genre.toLowerCase().includes(searchQuery.toLowerCase())
+    (project.title?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    project.genre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (project.niche?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
   
   // Show skeleton loading state
@@ -250,14 +251,14 @@ export default function ProjectsPage() {
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                   }}>
-                    {project.title}
+                    {project.title || `${project.genre} Project`}
                   </h3>
                   <Badge variant={project.status === 'completed' ? 'success' : 'default'}>
                     {project.status}
                   </Badge>
                 </div>
                 <p style={{ fontSize: '0.875rem', color: '#737373', marginBottom: '1rem' }}>
-                  {project.genre}
+                  {project.genre}{project.niche && ` • ${project.niche}`}
                 </p>
                 <p style={{ 
                   fontSize: '0.875rem', 

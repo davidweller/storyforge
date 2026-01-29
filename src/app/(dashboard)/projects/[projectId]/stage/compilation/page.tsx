@@ -134,6 +134,8 @@ export default function CompilationPage({ params }: CompilationPageProps) {
     <StageLayout
       projectId={projectId}
       projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
       currentStage={project.currentStage}
       activeStage="compilation"
       chapters={chapters}

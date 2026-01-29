@@ -189,6 +189,8 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     <StageLayout
       projectId={projectId}
       projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
       currentStage={project.currentStage}
       activeStage="revision"
       chapters={chapters}

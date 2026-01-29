@@ -35,8 +35,9 @@ export type RevisionTaskStatus = 'queued' | 'in_progress' | 'done';
 export interface Project {
   id: string;
   userId: string;
-  title: string;
+  title?: string;  // Optional - deferred until after ending stage
   genre: string;
+  niche?: string;  // Selected niche/subgenre
   premise?: string;
   research?: string;
   status: 'active' | 'completed' | 'archived';
@@ -137,8 +138,9 @@ export interface EndingOption {
 
 // Form Types
 export interface ProjectFormData {
-  title: string;
+  title?: string;  // Optional - deferred until after ending stage
   genre: string;
+  niche?: string;  // Selected niche/subgenre
   premise?: string;
   research?: string;
 }

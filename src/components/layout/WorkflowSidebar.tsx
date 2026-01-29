@@ -8,7 +8,9 @@ import type { WorkflowStage, StageStatus, Chapter } from '@/types';
 
 interface WorkflowSidebarProps {
   projectId: string;
-  projectTitle: string;
+  projectTitle?: string;  // Optional - may not be set until after ending stage
+  genre?: string;         // Used as fallback display when title is missing
+  niche?: string;         // Additional context for display
   currentStage: WorkflowStage;
   chapters?: Chapter[];
   approvedChapterIds?: Set<string>;
@@ -104,11 +106,16 @@ const statusIndicators: Record<StageStatus, React.ReactNode> = {
 export function WorkflowSidebar({
   projectId,
   projectTitle,
+  genre,
+  niche,
   currentStage,
   chapters = [],
   approvedChapterIds = new Set(),
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
+  
+  // Display title or fallback to genre-based name
+  const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
   
   // Group stages: planning (0-5), writing (6-7), editing (8-9)
   const planningStages = STAGE_ORDER.slice(0, 6);
@@ -191,9 +198,14 @@ export function WorkflowSidebar({
           </svg>
           All Projects
         </Link>
-        <h2 style={{ fontWeight: 600, color: '#171717', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={projectTitle}>
-          {projectTitle}
+        <h2 style={{ fontWeight: 600, color: '#171717', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={displayTitle}>
+          {displayTitle}
         </h2>
+        {!projectTitle && genre && (
+          <p style={{ fontSize: '0.75rem', color: '#a3a3a3', marginTop: '0.25rem' }}>
+            {niche || genre}
+          </p>
+        )}
       </div>
       
       {/* Stages */}

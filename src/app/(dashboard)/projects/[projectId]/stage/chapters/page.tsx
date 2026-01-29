@@ -118,6 +118,8 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     <StageLayout
       projectId={projectId}
       projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
       currentStage={project.currentStage}
       activeStage="chapters"
       chapters={chapters}

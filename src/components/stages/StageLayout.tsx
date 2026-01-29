@@ -8,7 +8,9 @@ import type { WorkflowStage, Chapter } from '@/types';
 
 interface StageLayoutProps {
   projectId: string;
-  projectTitle: string;
+  projectTitle?: string;  // Optional - may not be set until after ending stage
+  genre?: string;         // Used as fallback display when title is missing
+  niche?: string;         // Additional context for display
   currentStage: WorkflowStage;
   activeStage: WorkflowStage;
   chapters?: Chapter[];
@@ -20,6 +22,8 @@ interface StageLayoutProps {
 export function StageLayout({
   projectId,
   projectTitle,
+  genre,
+  niche,
   currentStage,
   activeStage,
   chapters = [],
@@ -35,6 +39,8 @@ export function StageLayout({
       <WorkflowSidebar
         projectId={projectId}
         projectTitle={projectTitle}
+        genre={genre}
+        niche={niche}
         currentStage={currentStage}
         chapters={chapters}
         approvedChapterIds={approvedChapterIds}

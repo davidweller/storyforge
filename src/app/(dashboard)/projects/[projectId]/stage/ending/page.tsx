@@ -7,7 +7,7 @@ import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
 import { ContextSection } from '@/components/layout';
-import { Button, Card, CardContent } from '@/components/ui';
+import { Button, Card, CardContent, Input } from '@/components/ui';
 import { getNextStage, cn } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
 
@@ -67,6 +67,7 @@ export default function EndingPage({ params }: EndingPageProps) {
     error: projectError,
     getDocumentByType,
     getLatestDocumentByType,
+    updateProject,
   } = useProject(projectId);
   
   const { createDocument, updateDocument, approveDocument, advanceStage } = useProjectStore();
@@ -79,6 +80,11 @@ export default function EndingPage({ params }: EndingPageProps) {
   const [concepts, setConcepts] = useState<EndingConcept[]>([]);
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Title modal state
+  const [showTitleModal, setShowTitleModal] = useState(false);
+  const [projectTitle, setProjectTitle] = useState('');
+  const [titleError, setTitleError] = useState('');
   
   // Load existing content
   useEffect(() => {
@@ -98,6 +104,13 @@ export default function EndingPage({ params }: EndingPageProps) {
       }
     }
   }, [documents, getLatestDocumentByType]);
+  
+  // Pre-fill title if project already has one
+  useEffect(() => {
+    if (project?.title) {
+      setProjectTitle(project.title);
+    }
+  }, [project?.title]);
   
   if (projectLoading || !project) {
     return (
@@ -181,17 +194,40 @@ export default function EndingPage({ params }: EndingPageProps) {
     }
   };
   
-  // Handle approval
-  const handleApprove = async () => {
+  // Show title modal before approval
+  const handleApproveClick = () => {
+    // If project already has a title, skip the modal
+    if (project.title) {
+      handleApprove(project.title);
+    } else {
+      setShowTitleModal(true);
+    }
+  };
+  
+  // Handle approval with title
+  const handleApprove = async (title: string) => {
     if (!currentDocId) return;
     
+    // Validate title
+    if (!title.trim()) {
+      setTitleError('Please enter a title for your project');
+      return;
+    }
+    
     try {
+      // Update project with title
+      if (!project.title) {
+        await updateProject({ title: title.trim() });
+      }
+      
       await approveDocument(currentDocId);
       
       const nextStage = getNextStage('ending');
       if (nextStage && project.currentStage === 'ending') {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
+      
+      setShowTitleModal(false);
       
       if (nextStage) {
         router.push(`/projects/${projectId}/stage/${nextStage}`);
@@ -203,12 +239,16 @@ export default function EndingPage({ params }: EndingPageProps) {
     }
   };
   
+  const handleTitleSubmit = () => {
+    handleApprove(projectTitle);
+  };
+  
   // Build context content
   const contextContent = (
     <>
       <ContextSection title="Project Info">
         <div className="space-y-2 text-sm">
-          <p><strong>Genre:</strong> {project.genre}</p>
+          <p><strong>Genre:</strong> {project.genre}{project.niche && ` • ${project.niche}`}</p>
           <p><strong>Premise:</strong> {project.premise || 'Not provided yet'}</p>
         </div>
       </ContextSection>
@@ -236,11 +276,143 @@ export default function EndingPage({ params }: EndingPageProps) {
     <StageLayout
       projectId={projectId}
       projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
       currentStage={project.currentStage}
       activeStage="ending"
       chapters={chapters}
       contextContent={contextContent}
     >
+      {/* Title Modal */}
+      {showTitleModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setShowTitleModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'var(--card)',
+              borderRadius: '16px',
+              padding: '2rem',
+              maxWidth: '480px',
+              width: '90%',
+              border: '1px solid var(--border)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{
+                width: '3.5rem',
+                height: '3.5rem',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+              }}>
+                <svg style={{ width: '1.75rem', height: '1.75rem', color: '#8B5CF6' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <h2 style={{ 
+                fontSize: '1.5rem', 
+                fontWeight: 700, 
+                color: 'var(--foreground)',
+                marginBottom: '0.5rem',
+              }}>
+                Name Your Story
+              </h2>
+              <p style={{ 
+                fontSize: '0.9rem', 
+                color: 'var(--muted-foreground)',
+                lineHeight: 1.5,
+              }}>
+                Now that you&apos;ve developed your ending, it&apos;s time to give your story a title. You can always change it later.
+              </p>
+            </div>
+            
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '0.875rem', 
+                fontWeight: 500, 
+                marginBottom: '0.5rem', 
+                color: 'var(--foreground)' 
+              }}>
+                Project Title
+              </label>
+              <input
+                type="text"
+                value={projectTitle}
+                onChange={(e) => {
+                  setProjectTitle(e.target.value);
+                  setTitleError('');
+                }}
+                placeholder="Enter your novel's title"
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '0.875rem 1rem',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--background)',
+                  color: 'var(--foreground)',
+                  border: titleError ? '2px solid var(--destructive)' : '1px solid var(--border)',
+                  outline: 'none',
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleTitleSubmit();
+                  }
+                }}
+              />
+              {titleError && (
+                <p style={{ 
+                  marginTop: '0.5rem', 
+                  fontSize: '0.875rem', 
+                  color: 'var(--destructive)' 
+                }}>
+                  {titleError}
+                </p>
+              )}
+            </div>
+            
+            <div style={{ 
+              display: 'flex', 
+              gap: '0.75rem',
+              justifyContent: 'flex-end',
+            }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowTitleModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleTitleSubmit}>
+                <svg style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Approve & Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Error display */}
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
@@ -345,7 +517,7 @@ export default function EndingPage({ params }: EndingPageProps) {
             onContentChange={setExpandedContent}
           />
           <StageActions
-            onApprove={handleApprove}
+            onApprove={handleApproveClick}
             onRegenerate={handleExpandEnding}
             onEdit={() => setIsEditing(!isEditing)}
             isApproved={isApproved}

@@ -186,7 +186,7 @@ export default function StagePage({ params }: StagePageProps) {
     <>
       <ContextSection title="Project Info">
         <div className="space-y-2 text-sm">
-          <p><strong>Genre:</strong> {project.genre}</p>
+          <p><strong>Genre:</strong> {project.genre}{project.niche && ` • ${project.niche}`}</p>
           <p><strong>Premise:</strong> {project.premise || 'Not provided yet'}</p>
         </div>
       </ContextSection>
@@ -229,6 +229,8 @@ export default function StagePage({ params }: StagePageProps) {
     <StageLayout
       projectId={projectId}
       projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
       currentStage={project.currentStage}
       activeStage={stage}
       chapters={chapters}

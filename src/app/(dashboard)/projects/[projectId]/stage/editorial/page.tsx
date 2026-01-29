@@ -222,6 +222,8 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     <StageLayout
       projectId={projectId}
       projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
       currentStage={project.currentStage}
       activeStage="editorial"
       chapters={chapters}

@@ -67,6 +67,8 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
       <WorkflowSidebar
         projectId={project.id}
         projectTitle={project.title}
+        genre={project.genre}
+        niche={project.niche}
         currentStage={project.currentStage}
         chapters={chapters}
         approvedChapterIds={approvedChapterIds}
@@ -80,11 +82,16 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <div>
                 <h1 style={{ fontSize: '1.875rem', fontWeight: 700, letterSpacing: '-0.025em', marginBottom: '0.5rem', color: '#171717' }}>
-                  {project.title}
+                  {project.title || `${project.genre} Project`}
                 </h1>
                 <p style={{ color: '#737373' }}>
-                  {project.genre} • Created {formatDate(project.createdAt)}
+                  {project.genre}{project.niche && ` • ${project.niche}`} • Created {formatDate(project.createdAt)}
                 </p>
+                {!project.title && (
+                  <p style={{ fontSize: '0.8rem', color: '#a3a3a3', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                    Title will be set after the ending stage
+                  </p>
+                )}
               </div>
               <Badge variant={project.status === 'completed' ? 'success' : 'info'}>
                 {project.status}
