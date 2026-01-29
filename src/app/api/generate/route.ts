@@ -127,6 +127,8 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string,
           previousChapterSummary: data.previousChapterSummary as string | undefined,
           structureContext: data.structureContext as string,
+          genreResearch: data.genreResearch as string | undefined,
+          nicheReference: data.nicheReference as string | undefined,
           wordTarget: data.wordTarget as number | undefined,
         });
         break;

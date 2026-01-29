@@ -87,6 +87,8 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       const structureDoc = getDocumentByType('structure');
       const charactersDoc = getDocumentByType('characters');
       const endingDoc = getDocumentByType('ending');
+      const genreDoc = getDocumentByType('genre');
+      const nicheDoc = getDocumentByType('niche');
       
       // Get previous chapter summary
       let previousChapterSummary: string | undefined;
@@ -108,6 +110,8 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         endingReference: endingDoc?.content || '',
         previousChapterSummary,
         structureContext: structureDoc?.content || '',
+        genreResearch: genreDoc?.content || '',
+        nicheReference: nicheDoc?.content || '',
         wordTarget: 3000,
       });
       

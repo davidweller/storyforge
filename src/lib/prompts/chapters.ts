@@ -20,6 +20,8 @@ export function buildChapterPrompt(params: {
   endingReference: string;
   previousChapterSummary?: string;
   structureContext: string;
+  genreResearch?: string;
+  nicheReference?: string;
   wordTarget?: number;
 }): string {
   const {
@@ -33,6 +35,8 @@ export function buildChapterPrompt(params: {
     endingReference,
     previousChapterSummary,
     structureContext,
+    genreResearch,
+    nicheReference,
     wordTarget = 3000,
   } = params;
   
@@ -55,7 +59,13 @@ ${pov ? `**POV Character:** ${pov}` : ''}
 
 ## Reference Materials
 
-**Key Characters:**
+${genreResearch ? `**Genre Research & Market Context:**
+${genreResearch}
+
+` : ''}${nicheReference ? `**Niche Positioning & Audience:**
+${nicheReference}
+
+` : ''}**Key Characters:**
 ${charactersReference}
 
 **Ending We're Building Toward:**
