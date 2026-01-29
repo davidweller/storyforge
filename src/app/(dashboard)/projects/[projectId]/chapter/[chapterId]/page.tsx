@@ -314,6 +314,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         {content && (
           <div className="border-t border-[var(--border)] bg-[var(--card)] px-8 py-6 lg:px-12 lg:py-8">
             <div className="flex items-center justify-between">
+              {/* Secondary actions */}
               <div className="flex items-center gap-3">
                 <Button
                   variant="secondary"
@@ -328,14 +329,22 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                 <Button
                   variant="ghost"
                   onClick={() => setShowNotes(!showNotes)}
+                  className="relative"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                   </svg>
                   Notes
+                  {notes.trim().length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--accent)] rounded-full" />
+                  )}
                 </Button>
               </div>
               
+              {/* Visual separator */}
+              <div className="h-8 w-px bg-[var(--border)] mx-4 hidden sm:block" />
+              
+              {/* Primary action */}
               {isApproved ? (
                 <div className="flex items-center gap-2 text-[var(--status-approved)]">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -344,7 +353,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                   <span className="font-medium">Approved</span>
                 </div>
               ) : (
-                <Button onClick={handleApprove} disabled={isGenerating || !content}>
+                <Button onClick={handleApprove} disabled={isGenerating || !content} size="lg">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>

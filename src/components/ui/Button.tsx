@@ -11,29 +11,28 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', loading, disabled, children, ...props }, ref) => {
-    const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 cursor-pointer border-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2';
-    
-    const variants = {
-      primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 active:opacity-95 shadow-sm hover:shadow-md',
-      secondary: 'bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[var(--muted)] hover:border-[var(--muted-foreground)]',
-      ghost: 'bg-transparent text-[var(--foreground)] hover:bg-[var(--muted)]',
-      destructive: 'bg-[var(--destructive)] text-[var(--destructive-foreground)] hover:opacity-90 active:opacity-95 shadow-sm hover:shadow-md',
-    };
-    
+    const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+
     const sizes = {
-      sm: 'px-3.5 py-2 text-sm h-9',
-      md: 'px-5 py-2.5 text-sm h-11',
-      lg: 'px-6 py-3 text-base h-12',
+      sm: 'h-9 px-4 py-2 text-sm',
+      md: 'h-10 px-5 py-2.5 text-sm',
+      lg: 'h-11 px-6 py-3 text-sm',
     };
-    
+
+    const variants = {
+      primary: 'bg-[#171717] text-white shadow-sm hover:bg-[#262626] active:bg-[#0a0a0a] focus-visible:ring-[#171717]',
+      secondary: 'bg-white text-[#171717] border border-[#d4d4d4] hover:bg-[#f5f5f5] hover:border-[#a3a3a3] focus-visible:ring-[#171717]',
+      ghost: 'text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717] focus-visible:ring-[#171717]',
+      destructive: 'bg-red-600 text-white shadow-sm hover:bg-red-700 active:bg-red-800 focus-visible:ring-red-600',
+    };
+
     return (
       <button
         ref={ref}
         className={cn(
           baseStyles,
-          variants[variant],
           sizes[size],
-          (disabled || loading) && 'opacity-50 cursor-not-allowed',
+          variants[variant],
           className
         )}
         disabled={disabled || loading}

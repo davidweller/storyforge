@@ -143,11 +143,11 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           </div>
           
           {/* Continue CTA */}
-          <Card className="mb-10 lg:mb-12 bg-gradient-to-r from-[var(--primary)] to-[var(--color-ink-light)] text-[var(--primary-foreground)]">
+          <Card className="mb-10 lg:mb-12 bg-gradient-to-r from-[var(--primary)] to-[var(--color-neutral-700)] text-[var(--primary-foreground)]">
             <CardContent className="py-8">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold mb-2">Continue Your Story</h2>
+                  <h2 className="text-xl font-semibold mb-2 text-[var(--primary-foreground)]">Continue Your Story</h2>
                   <p className="opacity-80">
                     Pick up where you left off at {STAGE_NAMES[project.currentStage]}
                   </p>

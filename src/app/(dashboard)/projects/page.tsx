@@ -3,8 +3,35 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useProjects } from '@/hooks/useProject';
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge } from '@/components/ui';
-import { formatRelativeTime, STAGE_NAMES, countWords } from '@/lib/utils';
+import { Button, Badge } from '@/components/ui';
+import { formatRelativeTime, STAGE_NAMES } from '@/lib/utils';
+
+// Skeleton card component for loading state
+function SkeletonCard() {
+  return (
+    <div style={{
+      backgroundColor: '#ffffff',
+      borderRadius: '12px',
+      padding: '1.5rem',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      height: '100%',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <div style={{ height: '1.5rem', borderRadius: '4px', width: '75%', backgroundColor: '#f5f5f5' }} />
+        <div style={{ height: '1.25rem', borderRadius: '9999px', width: '4rem', backgroundColor: '#f5f5f5' }} />
+      </div>
+      <div style={{ height: '1rem', borderRadius: '4px', width: '33%', backgroundColor: '#f5f5f5', marginBottom: '1rem' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+        <div style={{ height: '1rem', borderRadius: '4px', width: '100%', backgroundColor: '#f5f5f5' }} />
+        <div style={{ height: '1rem', borderRadius: '4px', width: '66%', backgroundColor: '#f5f5f5' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ height: '0.75rem', borderRadius: '4px', width: '6rem', backgroundColor: '#f5f5f5' }} />
+        <div style={{ height: '0.75rem', borderRadius: '4px', width: '4rem', backgroundColor: '#f5f5f5' }} />
+      </div>
+    </div>
+  );
+}
 
 export default function ProjectsPage() {
   const { projects, loading, error } = useProjects();
@@ -15,30 +42,48 @@ export default function ProjectsPage() {
     project.genre.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
+  // Show skeleton loading state
   if (loading && projects.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
-          <p className="text-[var(--muted-foreground)]">Loading projects...</p>
+      <div style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
+        {/* Header skeleton */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div>
+            <div style={{ height: '2.25rem', borderRadius: '4px', width: '12rem', backgroundColor: '#f5f5f5', marginBottom: '0.5rem' }} />
+            <div style={{ height: '1.25rem', borderRadius: '4px', width: '6rem', backgroundColor: '#f5f5f5' }} />
+          </div>
+          <div style={{ height: '2.75rem', borderRadius: '8px', width: '9rem', backgroundColor: '#f5f5f5' }} />
+        </div>
+        
+        {/* Grid skeleton */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: '1.5rem'
+        }}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       </div>
     );
   }
   
   return (
-    <div className="py-12">
+    <div style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Your Projects</h1>
-          <p className="text-[var(--muted-foreground)] mt-1.5">
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#171717', letterSpacing: '-0.025em' }}>
+            Your Projects
+          </h1>
+          <p style={{ marginTop: '0.375rem', color: '#737373' }}>
             {projects.length} {projects.length === 1 ? 'project' : 'projects'}
           </p>
         </div>
         <Link href="/projects/new">
           <Button size="lg">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             New Project
@@ -48,10 +93,18 @@ export default function ProjectsPage() {
       
       {/* Search */}
       {projects.length > 0 && (
-        <div className="mb-6">
-          <div className="relative max-w-md">
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ position: 'relative', maxWidth: '24rem' }}>
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--muted-foreground)]"
+              style={{ 
+                position: 'absolute', 
+                left: '0.75rem', 
+                top: '50%', 
+                transform: 'translateY(-50%)',
+                width: '1.25rem', 
+                height: '1.25rem',
+                color: '#737373'
+              }}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -63,83 +116,171 @@ export default function ProjectsPage() {
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-10 pr-4 py-2.5 border border-[var(--input)] rounded-xl bg-[var(--card)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--ring)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-opacity-20 transition-all"
+              style={{
+                width: '100%',
+                height: '2.75rem',
+                paddingLeft: '2.5rem',
+                paddingRight: '2.5rem',
+                borderRadius: '8px',
+                backgroundColor: '#ffffff',
+                color: '#171717',
+                border: '1px solid #d4d4d4',
+                outline: 'none',
+                fontSize: '0.875rem',
+              }}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{ 
+                  position: 'absolute', 
+                  right: '0.75rem', 
+                  top: '50%', 
+                  transform: 'translateY(-50%)',
+                  width: '1.25rem', 
+                  height: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '9999px',
+                  backgroundColor: '#f5f5f5', 
+                  color: '#737373',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                aria-label="Clear search"
+              >
+                <svg style={{ width: '0.75rem', height: '0.75rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       )}
       
       {/* Error */}
       {error && (
-        <div className="mb-6 p-4 bg-[rgba(239,68,68,0.1)] border border-[var(--destructive)] border-opacity-30 rounded-xl">
-          <p className="text-sm text-[var(--destructive)]">{error}</p>
+        <div style={{ marginBottom: '1.5rem', padding: '1rem', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
+          <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{error}</p>
         </div>
       )}
       
       {/* Empty state */}
       {projects.length === 0 && !loading && (
-        <div className="max-w-2xl mx-auto">
-          <Card className="text-center py-16">
-            <CardContent>
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--muted)] rounded-full mb-4">
-                <svg className="w-8 h-8 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        <div style={{ maxWidth: '32rem', marginLeft: 'auto', marginRight: 'auto' }}>
+          <div style={{ 
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            padding: '4rem 2rem',
+            textAlign: 'center',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}>
+            <div style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              width: '4rem', 
+              height: '4rem', 
+              borderRadius: '9999px', 
+              backgroundColor: '#f5f5f5',
+              marginBottom: '1rem'
+            }}>
+              <svg style={{ width: '2rem', height: '2rem', color: '#737373' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#171717', marginBottom: '0.5rem' }}>
+              No projects yet
+            </h2>
+            <p style={{ color: '#737373', marginBottom: '1.5rem' }}>
+              Start your first novel project and let AI help you through the entire writing process.
+            </p>
+            <Link href="/projects/new">
+              <Button size="lg">
+                <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-              </div>
-              <h2 className="text-xl font-semibold tracking-tight mb-2">No projects yet</h2>
-              <p className="text-[var(--muted-foreground)] mb-6">
-                Start your first novel project and let AI help you through the entire writing process.
-              </p>
-              <Link href="/projects/new">
-                <Button size="lg">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Create Your First Project
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+                Create Your First Project
+              </Button>
+            </Link>
+          </div>
         </div>
       )}
       
       {/* Projects grid */}
       {filteredProjects.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredProjects.map((project, index) => (
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: '1.5rem'
+        }}>
+          {filteredProjects.map((project) => (
             <Link
               key={project.id}
               href={`/projects/${project.id}`}
-              className="group animate-slideIn"
-              style={{ animationDelay: `${index * 0.05}s` }}
+              style={{ textDecoration: 'none' }}
             >
-              <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-[var(--ring)] group-hover:-translate-y-1">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="line-clamp-2 group-hover:text-[var(--accent)] transition-colors">
-                      {project.title}
-                    </CardTitle>
-                    <Badge variant={project.status === 'completed' ? 'success' : 'default'}>
-                      {project.status}
-                    </Badge>
-                  </div>
-                  <CardDescription>{project.genre}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 mb-4">
-                    {project.premise}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
-                    <span className="flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      {STAGE_NAMES[project.currentStage]}
-                    </span>
-                    <span>{formatRelativeTime(project.updatedAt)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                height: '100%',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                  <h3 style={{ 
+                    fontSize: '1.125rem', 
+                    fontWeight: 600, 
+                    color: '#171717',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                  }}>
+                    {project.title}
+                  </h3>
+                  <Badge variant={project.status === 'completed' ? 'success' : 'default'}>
+                    {project.status}
+                  </Badge>
+                </div>
+                <p style={{ fontSize: '0.875rem', color: '#737373', marginBottom: '1rem' }}>
+                  {project.genre}
+                </p>
+                <p style={{ 
+                  fontSize: '0.875rem', 
+                  color: '#737373', 
+                  marginBottom: '1rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                }}>
+                  {project.premise}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#737373' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    {STAGE_NAMES[project.currentStage]}
+                  </span>
+                  <span>{formatRelativeTime(project.updatedAt)}</span>
+                </div>
+              </div>
             </Link>
           ))}
         </div>
@@ -147,8 +288,8 @@ export default function ProjectsPage() {
       
       {/* No search results */}
       {projects.length > 0 && filteredProjects.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-[var(--muted-foreground)]">
+        <div style={{ textAlign: 'center', paddingTop: '3rem', paddingBottom: '3rem' }}>
+          <p style={{ color: '#737373' }}>
             No projects match &quot;{searchQuery}&quot;
           </p>
         </div>

@@ -29,13 +29,23 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
   }, []);
   
   return (
-    <header className="h-[var(--header-height)] bg-[var(--card)] border-b border-[var(--border)] border-opacity-30">
-      <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
+    <header 
+      className="border-b w-full"
+      style={{ 
+        height: '64px', 
+        backgroundColor: '#ffffff', 
+        borderColor: '#e5e5e5' 
+      }}
+    >
+      <div 
+        className="h-full w-full flex items-center justify-between px-6"
+      >
         <div className="flex items-center gap-4">
           {showBackLink && (
             <Link
               href={backLinkHref}
-              className="flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              className="flex items-center gap-1 text-sm transition-colors hover:opacity-80"
+              style={{ color: '#737373' }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -45,9 +55,13 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
           )}
           
           <Link href="/projects" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[var(--primary)] rounded-lg flex items-center justify-center">
+            <div 
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: '#171717' }}
+            >
               <svg
-                className="w-4 h-4 text-[var(--primary-foreground)]"
+                className="w-4 h-4"
+                style={{ color: '#ffffff' }}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -60,7 +74,7 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
                 />
               </svg>
             </div>
-            <span className="font-semibold text-[var(--foreground)]">StoryForge</span>
+            <span className="font-semibold" style={{ color: '#171717' }}>StoryForge</span>
           </Link>
         </div>
         
@@ -78,14 +92,18 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
                   className="w-8 h-8 rounded-full"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-[var(--muted)] flex items-center justify-center">
-                  <span className="text-sm font-medium text-[var(--muted-foreground)]">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: '#f5f5f5' }}
+                >
+                  <span className="text-sm font-medium" style={{ color: '#737373' }}>
                     {user.displayName?.[0] || user.email?.[0] || '?'}
                   </span>
                 </div>
               )}
               <svg
-                className={cn('w-4 h-4 text-[var(--muted-foreground)] transition-transform', showDropdown && 'rotate-180')}
+                className={cn('w-4 h-4 transition-transform', showDropdown && 'rotate-180')}
+                style={{ color: '#737373' }}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -95,12 +113,19 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
             </button>
             
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-56 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[var(--shadow-lg)] py-1 z-50 animate-fadeIn">
-                <div className="px-4 py-3 border-b border-[var(--border)]">
-                  <p className="text-sm font-medium text-[var(--foreground)] truncate">
+              <div 
+                className="absolute right-0 mt-2 w-56 rounded-xl py-1 z-50 animate-fadeIn"
+                style={{ 
+                  backgroundColor: '#ffffff', 
+                  border: '1px solid #e5e5e5',
+                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)'
+                }}
+              >
+                <div className="px-4 py-3" style={{ borderBottom: '1px solid #e5e5e5' }}>
+                  <p className="text-sm font-medium truncate" style={{ color: '#171717' }}>
                     {user.displayName}
                   </p>
-                  <p className="text-xs text-[var(--muted-foreground)] truncate">
+                  <p className="text-xs truncate" style={{ color: '#737373' }}>
                     {user.email}
                   </p>
                 </div>
@@ -109,7 +134,8 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
                     setShowDropdown(false);
                     signOut();
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-gray-50"
+                  style={{ color: '#171717' }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

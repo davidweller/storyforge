@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCreateProject } from '@/hooks/useProject';
-import { Button, Input, Textarea, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui';
-import { cn } from '@/lib/utils';
+import { Button, Input, Textarea } from '@/components/ui';
 
 const GENRES = [
   'Fantasy',
@@ -82,36 +81,41 @@ export default function NewProjectPage() {
   };
   
   return (
-    <div className="max-w-2xl mx-auto py-12">
-      <Card>
-        <CardHeader className="pb-8">
-          <CardTitle className="text-3xl font-bold tracking-tight mb-2">
+    <div style={{ paddingTop: '2.5rem', paddingBottom: '4rem', maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto' }}>
+      <div style={{ 
+        backgroundColor: '#ffffff', 
+        borderRadius: '16px', 
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+        padding: '2rem'
+      }}>
+        <div style={{ paddingBottom: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid #e5e5e5' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#171717', marginBottom: '0.5rem' }}>
             Create New Project
-          </CardTitle>
-          <CardDescription className="text-base">
+          </h1>
+          <p style={{ fontSize: '1rem', color: '#737373' }}>
             Start your novel journey. You can always edit these details later.
-          </CardDescription>
-        </CardHeader>
+          </p>
+        </div>
         
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-10">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             {/* Error */}
             {error && (
-              <div className="p-4 bg-[rgba(239,68,68,0.1)] border border-[var(--destructive)] border-opacity-30 rounded-xl">
-                <p className="text-sm text-[var(--destructive)]">{error}</p>
+              <div style={{ padding: '1rem', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
+                <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{error}</p>
               </div>
             )}
             
             {/* Core Idea Section */}
-            <div className="space-y-8">
-              <div className="pb-3 border-b border-[var(--border)] border-opacity-30">
-                <h3 className="text-lg font-semibold tracking-tight">Core Idea</h3>
-                <p className="text-sm text-[var(--muted-foreground)] mt-1.5">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#171717' }}>Core Idea</h3>
+                <p style={{ fontSize: '0.875rem', color: '#737373', marginTop: '0.25rem' }}>
                   The essential details about your novel
                 </p>
               </div>
               
-              <div className="space-y-6">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {/* Title */}
                 <Input
                   label="Working Title"
@@ -123,13 +127,23 @@ export default function NewProjectPage() {
                 
                 {/* Genre */}
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-[var(--foreground)]">
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', color: '#171717' }}>
                     Genre
                   </label>
                   <select
                     value={formData.genre}
                     onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
-                    className="w-full h-11 px-4 py-2.5 text-sm border rounded-xl bg-[var(--card)] text-[var(--foreground)] border-[var(--input)] focus:border-[var(--ring)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-opacity-20 transition-all"
+                    style={{
+                      width: '100%',
+                      height: '44px',
+                      padding: '0.625rem 1rem',
+                      fontSize: '0.875rem',
+                      borderRadius: '8px',
+                      backgroundColor: '#ffffff',
+                      color: formData.genre ? '#171717' : '#a3a3a3',
+                      border: errors.genre ? '2px solid #ef4444' : '1px solid #d4d4d4',
+                      outline: 'none',
+                    }}
                   >
                     <option value="">Select a genre</option>
                     {GENRES.map((genre) => (
@@ -139,40 +153,65 @@ export default function NewProjectPage() {
                     ))}
                   </select>
                   {errors.genre && (
-                    <p className="mt-1.5 text-sm text-[var(--destructive)]">{errors.genre}</p>
+                    <p style={{ marginTop: '0.375rem', fontSize: '0.875rem', color: '#ef4444' }}>{errors.genre}</p>
                   )}
                 </div>
                 
                 {/* Premise */}
-                <Textarea
-                  label="Premise / Initial Idea"
-                  placeholder="Describe your story idea. What's the core concept? Who's the protagonist? What's the central conflict?"
-                  value={formData.premise}
-                  onChange={(e) => setFormData({ ...formData, premise: e.target.value })}
-                  error={errors.premise}
-                  rows={6}
-                />
+                <div>
+                  <Textarea
+                    label="Premise / Initial Idea"
+                    placeholder="Describe your story idea. What's the core concept? Who's the protagonist? What's the central conflict?"
+                    value={formData.premise}
+                    onChange={(e) => setFormData({ ...formData, premise: e.target.value })}
+                    error={errors.premise}
+                    rows={5}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: formData.premise.length < 50 ? '#737373' : '#059669' }}>
+                      {formData.premise.length < 50 
+                        ? `${50 - formData.premise.length} more characters needed` 
+                        : "✓ Minimum reached"}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#737373' }}>
+                      {formData.premise.length} characters
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
             
             {/* Optional Context Section */}
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <button
                 type="button"
                 onClick={() => setShowOptionalSection(!showOptionalSection)}
-                className="w-full flex items-center justify-between p-5 bg-[var(--muted)] bg-opacity-40 rounded-xl hover:bg-opacity-60 transition-colors border border-[var(--border)] border-opacity-30"
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  backgroundColor: '#f8f8f8',
+                  border: '1px solid #e5e5e5',
+                  cursor: 'pointer',
+                }}
               >
-                <div className="text-left">
-                  <h3 className="text-lg font-semibold tracking-tight">Optional Context</h3>
-                  <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
-                    Research notes and inspiration (optional)
+                <div style={{ textAlign: 'left' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#171717' }}>Optional Context</h3>
+                  <p style={{ fontSize: '0.875rem', color: '#737373', marginTop: '0.125rem' }}>
+                    Research notes and inspiration
                   </p>
                 </div>
                 <svg
-                  className={cn(
-                    'w-5 h-5 text-[var(--muted-foreground)] transition-transform',
-                    showOptionalSection && 'rotate-180'
-                  )}
+                  style={{ 
+                    width: '20px', 
+                    height: '20px', 
+                    color: '#737373',
+                    transform: showOptionalSection ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s'
+                  }}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -182,39 +221,45 @@ export default function NewProjectPage() {
               </button>
               
               {showOptionalSection && (
-                <div className="space-y-6 pt-2 animate-fadeIn">
+                <div style={{ paddingTop: '0.5rem' }}>
                   <Textarea
                     label="Research Notes"
                     placeholder="Paste any research, inspiration, or reference material you've gathered. This helps the AI understand your vision better."
                     value={formData.research}
                     onChange={(e) => setFormData({ ...formData, research: e.target.value })}
-                    rows={6}
+                    rows={5}
                   />
                 </div>
               )}
             </div>
-          </CardContent>
+          </div>
           
-          <CardFooter className="pt-8 pb-6 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center border-t border-[var(--border)]">
+          <div style={{ 
+            paddingTop: '1.5rem', 
+            marginTop: '2rem', 
+            borderTop: '1px solid #e5e5e5',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '0.75rem'
+          }}>
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
+              size="md"
               onClick={() => router.back()}
-              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
               loading={loading}
-              size="lg"
-              className="w-full sm:w-auto font-semibold"
+              size="md"
             >
               Create Project
             </Button>
-          </CardFooter>
+          </div>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

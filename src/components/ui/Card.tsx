@@ -10,18 +10,17 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant = 'default', children, ...props }, ref) => {
     const variants = {
-      default: 'bg-[var(--card)] border border-[var(--border)] border-opacity-50 shadow-[var(--shadow-sm)]',
-      outlined: 'bg-transparent border border-[var(--border)] border-opacity-50',
-      elevated: 'bg-[var(--card)] border border-[var(--border)] border-opacity-50 shadow-[var(--shadow-md)]',
+      default: 'bg-card border border-border shadow-sm',
+      outlined: 'bg-card border border-border',
+      elevated: 'bg-card border border-border shadow-lg',
     };
-    
+
     return (
       <div
         ref={ref}
         className={cn(
           'rounded-xl p-6 lg:p-8 transition-shadow duration-200',
           variants[variant],
-          variant === 'default' && 'hover:shadow-[var(--shadow-md)]',
           className
         )}
         {...props}
@@ -50,7 +49,7 @@ const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingEleme
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-xl font-semibold text-[var(--foreground)] tracking-tight', className)}
+      className={cn('text-xl font-semibold tracking-tight text-foreground', className)}
       {...props}
     />
   )
@@ -62,7 +61,7 @@ const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLPara
   ({ className, ...props }, ref) => (
     <p
       ref={ref}
-      className={cn('text-sm text-[var(--muted-foreground)] mt-1', className)}
+      className={cn('text-sm mt-1 text-muted-foreground', className)}
       {...props}
     />
   )

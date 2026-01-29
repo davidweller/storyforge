@@ -8,9 +8,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <ProtectedRoute>
-        <div className="min-h-screen bg-[var(--background)]">
+        <div className="min-h-screen bg-[#fafafa]">
           <Header />
-          <main className="max-w-6xl mx-auto px-6">{children}</main>
+          <main className="w-full max-w-5xl mx-auto px-6 lg:px-8">
+            {children}
+          </main>
         </div>
       </ProtectedRoute>
     </AuthProvider>
