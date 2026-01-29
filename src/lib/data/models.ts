@@ -45,24 +45,25 @@ export const OPENAI_MODELS: LLMModel[] = [
 ];
 
 // Anthropic Models
+// Using model aliases that always point to the latest versions
 export const ANTHROPIC_MODELS: LLMModel[] = [
   {
-    id: 'claude-sonnet-4-5-20250514',
-    name: 'Claude Sonnet 4.5',
+    id: 'claude-sonnet-4-20250514',
+    name: 'Claude Sonnet 4',
     provider: 'anthropic',
-    description: 'Latest and most capable Claude model',
+    description: 'Latest Claude model, excellent for creative writing',
     maxTokens: 16384,
     isDefault: true,
   },
   {
-    id: 'claude-3-5-sonnet-20241022',
+    id: 'claude-3-5-sonnet-latest',
     name: 'Claude 3.5 Sonnet',
     provider: 'anthropic',
-    description: 'Excellent balance of capability and speed',
+    description: 'Previous generation, balanced capability and speed',
     maxTokens: 16384,
   },
   {
-    id: 'claude-3-5-haiku-20241022',
+    id: 'claude-3-5-haiku-latest',
     name: 'Claude 3.5 Haiku',
     provider: 'anthropic',
     description: 'Fastest Claude model, great for quick tasks',
