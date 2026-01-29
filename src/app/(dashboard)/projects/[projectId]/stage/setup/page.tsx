@@ -1,0 +1,248 @@
+'use client';
+
+import { use, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useProject } from '@/hooks/useProject';
+import { useProjectStore } from '@/stores/projectStore';
+import { StageLayout } from '@/components/stages';
+import { ContextSection } from '@/components/layout';
+import { Button, Input, Textarea } from '@/components/ui';
+import { getNextStage } from '@/lib/utils';
+import type { WorkflowStage } from '@/types';
+
+interface SetupPageProps {
+  params: Promise<{ projectId: string }>;
+}
+
+export default function SetupPage({ params }: SetupPageProps) {
+  const { projectId } = use(params);
+  const router = useRouter();
+  
+  const {
+    project,
+    chapters,
+    loading: projectLoading,
+    error: projectError,
+  } = useProject(projectId);
+  
+  const { updateProject, advanceStage } = useProjectStore();
+  
+  const [premise, setPremise] = useState('');
+  const [research, setResearch] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  
+  // Load existing values
+  useEffect(() => {
+    if (project) {
+      setPremise(project.premise || '');
+      setResearch(project.research || '');
+    }
+  }, [project]);
+  
+  // Track changes
+  useEffect(() => {
+    if (project) {
+      const premiseChanged = premise !== (project.premise || '');
+      const researchChanged = research !== (project.research || '');
+      setHasChanges(premiseChanged || researchChanged);
+    }
+  }, [premise, research, project]);
+  
+  if (projectLoading || !project) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
+          <p className="text-[var(--muted-foreground)]">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateProject(projectId, {
+        premise: premise || undefined,
+        research: research || undefined,
+      });
+      setHasChanges(false);
+    } catch (err) {
+      console.error('Failed to save:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const handleContinue = async () => {
+    setIsSaving(true);
+    try {
+      // Save any pending changes
+      if (hasChanges) {
+        await updateProject(projectId, {
+          premise: premise || undefined,
+          research: research || undefined,
+        });
+      }
+      
+      // Advance to next stage
+      const nextStage = getNextStage('setup');
+      if (nextStage && project.currentStage === 'setup') {
+        await advanceStage(projectId, nextStage as WorkflowStage);
+      }
+      
+      // Navigate to next stage
+      if (nextStage) {
+        router.push(`/projects/${projectId}/stage/${nextStage}`);
+      }
+    } catch (err) {
+      console.error('Failed to continue:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Build context content for the drawer
+  const contextContent = (
+    <>
+      <ContextSection title="Project Info">
+        <div className="space-y-2 text-sm">
+          <p><strong>Genre:</strong> {project.genre}</p>
+          {project.niche && <p><strong>Niche:</strong> {project.niche}</p>}
+        </div>
+      </ContextSection>
+      
+      <ContextSection title="What's Next?" defaultExpanded={true}>
+        <div className="space-y-2 text-sm text-[var(--muted-foreground)]">
+          <p>After setup, you'll move through the following stages:</p>
+          <ol className="list-decimal list-inside space-y-1 mt-2">
+            <li><strong>Market Analysis</strong> - AI researches your genre</li>
+            <li><strong>Reader Targeting</strong> - Define your ideal reader</li>
+            <li><strong>Choose Your Ending</strong> - Select from AI-generated endings</li>
+            <li><strong>Cast of Characters</strong> - Create your characters</li>
+            <li><strong>Plot Blueprint</strong> - Build your story structure</li>
+            <li><strong>Write Chapters</strong> - Draft your novel</li>
+          </ol>
+        </div>
+      </ContextSection>
+    </>
+  );
+  
+  return (
+    <StageLayout
+      projectId={projectId}
+      projectTitle={project.title}
+      genre={project.genre}
+      niche={project.niche}
+      currentStage={project.currentStage}
+      activeStage="setup"
+      chapters={chapters}
+      contextContent={contextContent}
+    >
+      {/* Error display */}
+      {projectError && (
+        <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
+          <p className="text-sm text-[var(--destructive)]">{projectError}</p>
+        </div>
+      )}
+      
+      {/* Setup form */}
+      <div style={{ 
+        backgroundColor: '#ffffff', 
+        border: '1px solid #e5e5e5', 
+        borderRadius: '12px',
+        padding: '2rem',
+      }}>
+        {/* Genre & Niche display */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#737373', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Your Selection
+          </h3>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0.5rem 1rem',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '9999px',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#171717',
+            }}>
+              {project.genre}
+            </span>
+            {project.niche && (
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0.5rem 1rem',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderRadius: '9999px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: '#6366f1',
+              }}>
+                {project.niche}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Premise input */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#171717', marginBottom: '0.5rem' }}>
+            Story Premise (Optional)
+          </label>
+          <Textarea
+            value={premise}
+            onChange={(e) => setPremise(e.target.value)}
+            placeholder="Describe your story idea. What's the core concept? Who's the protagonist? What's the central conflict? The more detail you provide, the better the AI can tailor its suggestions."
+            rows={4}
+          />
+          <p style={{ fontSize: '0.75rem', color: '#737373', marginTop: '0.5rem' }}>
+            This helps the AI understand your vision and generate more relevant content.
+          </p>
+        </div>
+        
+        {/* Research input */}
+        <div style={{ marginBottom: '2rem' }}>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#171717', marginBottom: '0.5rem' }}>
+            Research Notes (Optional)
+          </label>
+          <Textarea
+            value={research}
+            onChange={(e) => setResearch(e.target.value)}
+            placeholder="Paste any research, inspiration, or reference material you've gathered. This could include character ideas, world-building notes, plot points, or examples from books you admire."
+            rows={4}
+          />
+          <p style={{ fontSize: '0.75rem', color: '#737373', marginTop: '0.5rem' }}>
+            Include anything that might help shape your story - notes, links, excerpts, etc.
+          </p>
+        </div>
+        
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          {hasChanges && (
+            <Button
+              variant="outline"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          )}
+          <Button
+            onClick={handleContinue}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Continue to Market Analysis'}
+            <svg style={{ width: '1rem', height: '1rem', marginLeft: '0.5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </Button>
+        </div>
+      </div>
+    </StageLayout>
+  );
+}
