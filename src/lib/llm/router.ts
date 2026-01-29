@@ -1,15 +1,23 @@
-import { generateWithOpenAI, streamWithOpenAI, OpenAIGenerateOptions } from './openai';
-import { generateWithClaude, streamWithClaude, AnthropicGenerateOptions } from './anthropic';
+import { generateWithOpenAI, streamWithOpenAI } from './openai';
+import { generateWithClaude, streamWithClaude } from './anthropic';
 import type { WorkflowStage } from '@/types';
-import { STAGE_MODELS } from '@/lib/utils';
+import { 
+  getModelById, 
+  getDefaultModelForStage, 
+  STAGE_DEFAULT_PROVIDERS,
+  OPENAI_MODELS,
+  ANTHROPIC_MODELS,
+  type LLMProvider 
+} from '@/lib/data/models';
 
-export type LLMProvider = 'openai' | 'claude';
+export type { LLMProvider };
 
 export interface GenerateOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
   jsonMode?: boolean; // Only for OpenAI
+  model?: string; // Model override
 }
 
 export interface GenerateResult {
@@ -19,80 +27,118 @@ export interface GenerateResult {
   provider: LLMProvider;
 }
 
-// Model configurations per stage
-const STAGE_CONFIGS: Record<WorkflowStage, { model: string; maxTokens: number }> = {
-  'setup': { model: 'gpt-4-turbo-preview', maxTokens: 2048 },
-  'genre-research': { model: 'gpt-4-turbo-preview', maxTokens: 4096 },
-  'niche': { model: 'gpt-4-turbo-preview', maxTokens: 4096 },
-  'ending': { model: 'claude-3-5-sonnet-20241022', maxTokens: 8192 },
-  'characters': { model: 'gpt-4-turbo-preview', maxTokens: 8192 },
-  'structure': { model: 'gpt-4-turbo-preview', maxTokens: 8192 },
-  'chapters': { model: 'claude-3-5-sonnet-20241022', maxTokens: 16384 },
-  'compilation': { model: 'gpt-4-turbo-preview', maxTokens: 2048 },
-  'editorial': { model: 'gpt-4-turbo-preview', maxTokens: 8192 },
-  'revision': { model: 'claude-3-5-sonnet-20241022', maxTokens: 16384 },
+// Default max tokens per stage (can be overridden by model or options)
+const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
+  'setup': 2048,
+  'genre-research': 4096,
+  'niche': 4096,
+  'ending': 8192,
+  'characters': 8192,
+  'structure': 8192,
+  'chapters': 16384,
+  'compilation': 2048,
+  'editorial': 8192,
+  'revision': 16384,
 };
 
 /**
+ * Determine the provider for a given model ID
+ */
+function getProviderForModel(modelId: string): LLMProvider {
+  if (OPENAI_MODELS.some((m) => m.id === modelId)) {
+    return 'openai';
+  }
+  if (ANTHROPIC_MODELS.some((m) => m.id === modelId)) {
+    return 'anthropic';
+  }
+  // Default to stage's default provider
+  return 'openai';
+}
+
+/**
  * Generate content using the appropriate LLM based on the stage
+ * Supports model override via options.model
  */
 export async function generateForStage(
   stage: WorkflowStage,
   prompt: string,
   options: GenerateOptions = {}
 ): Promise<GenerateResult> {
-  const provider = STAGE_MODELS[stage];
-  const config = STAGE_CONFIGS[stage];
+  // Determine which model to use
+  let modelId: string;
+  let provider: LLMProvider;
+  
+  if (options.model) {
+    // Use the specified model
+    modelId = options.model;
+    provider = getProviderForModel(modelId);
+  } else {
+    // Use stage default
+    const defaultModel = getDefaultModelForStage(stage);
+    modelId = defaultModel.id;
+    provider = defaultModel.provider;
+  }
+  
+  // Get max tokens (from options, model config, or stage default)
+  const modelConfig = getModelById(modelId);
+  const maxTokens = options.maxTokens || modelConfig?.maxTokens || STAGE_MAX_TOKENS[stage];
   
   const mergedOptions = {
     ...options,
-    maxTokens: options.maxTokens || config.maxTokens,
+    maxTokens,
+    model: modelId,
   };
   
   if (provider === 'openai') {
-    const result = await generateWithOpenAI(prompt, {
-      ...mergedOptions,
-      model: config.model,
-    });
+    const result = await generateWithOpenAI(prompt, mergedOptions);
     return {
       ...result,
-      model: config.model,
+      model: modelId,
       provider: 'openai',
     };
   } else {
-    const result = await generateWithClaude(prompt, {
-      ...mergedOptions,
-      model: config.model,
-    });
+    const result = await generateWithClaude(prompt, mergedOptions);
     return {
       ...result,
-      model: config.model,
-      provider: 'claude',
+      model: modelId,
+      provider: 'anthropic',
     };
   }
 }
 
 /**
  * Stream content using the appropriate LLM based on the stage
+ * Supports model override via options.model
  */
 export async function* streamForStage(
   stage: WorkflowStage,
   prompt: string,
   options: GenerateOptions = {}
 ): AsyncGenerator<string, GenerateResult, unknown> {
-  const provider = STAGE_MODELS[stage];
-  const config = STAGE_CONFIGS[stage];
+  // Determine which model to use
+  let modelId: string;
+  let provider: LLMProvider;
+  
+  if (options.model) {
+    modelId = options.model;
+    provider = getProviderForModel(modelId);
+  } else {
+    const defaultModel = getDefaultModelForStage(stage);
+    modelId = defaultModel.id;
+    provider = defaultModel.provider;
+  }
+  
+  const modelConfig = getModelById(modelId);
+  const maxTokens = options.maxTokens || modelConfig?.maxTokens || STAGE_MAX_TOKENS[stage];
   
   const mergedOptions = {
     ...options,
-    maxTokens: options.maxTokens || config.maxTokens,
+    maxTokens,
+    model: modelId,
   };
   
   if (provider === 'openai') {
-    const generator = streamWithOpenAI(prompt, {
-      ...mergedOptions,
-      model: config.model,
-    });
+    const generator = streamWithOpenAI(prompt, mergedOptions);
     
     let result: IteratorResult<string, { tokensUsed: number }>;
     while (!(result = await generator.next()).done) {
@@ -102,14 +148,11 @@ export async function* streamForStage(
     return {
       content: '', // Content was streamed
       tokensUsed: result.value.tokensUsed,
-      model: config.model,
+      model: modelId,
       provider: 'openai',
     };
   } else {
-    const generator = streamWithClaude(prompt, {
-      ...mergedOptions,
-      model: config.model,
-    });
+    const generator = streamWithClaude(prompt, mergedOptions);
     
     let result: IteratorResult<string, { tokensUsed: number }>;
     while (!(result = await generator.next()).done) {
@@ -119,33 +162,38 @@ export async function* streamForStage(
     return {
       content: '', // Content was streamed
       tokensUsed: result.value.tokensUsed,
-      model: config.model,
-      provider: 'claude',
+      model: modelId,
+      provider: 'anthropic',
     };
   }
 }
 
 /**
- * Generate with explicit provider choice
+ * Generate with explicit provider and model choice
  */
 export async function generate(
   provider: LLMProvider,
   prompt: string,
   options: GenerateOptions = {}
 ): Promise<GenerateResult> {
+  // Get default model for provider if not specified
+  const modelId = options.model || (provider === 'openai' 
+    ? OPENAI_MODELS.find((m) => m.isDefault)?.id || 'o3-mini'
+    : ANTHROPIC_MODELS.find((m) => m.isDefault)?.id || 'claude-sonnet-4-5-20250514');
+  
   if (provider === 'openai') {
-    const result = await generateWithOpenAI(prompt, options);
+    const result = await generateWithOpenAI(prompt, { ...options, model: modelId });
     return {
       ...result,
-      model: 'gpt-4-turbo-preview',
+      model: modelId,
       provider: 'openai',
     };
   } else {
-    const result = await generateWithClaude(prompt, options);
+    const result = await generateWithClaude(prompt, { ...options, model: modelId });
     return {
       ...result,
-      model: 'claude-3-5-sonnet-20241022',
-      provider: 'claude',
+      model: modelId,
+      provider: 'anthropic',
     };
   }
 }

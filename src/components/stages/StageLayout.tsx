@@ -2,8 +2,8 @@
 
 import { ReactNode } from 'react';
 import { WorkflowSidebar, ContextDrawer } from '@/components/layout';
-import { Badge } from '@/components/ui';
-import { STAGE_NAMES, STAGE_DESCRIPTIONS, STAGE_MODELS } from '@/lib/utils';
+import { ModelSelector } from './ModelSelector';
+import { STAGE_NAMES, STAGE_DESCRIPTIONS } from '@/lib/utils';
 import type { WorkflowStage, Chapter } from '@/types';
 
 interface StageLayoutProps {
@@ -31,7 +31,8 @@ export function StageLayout({
   contextContent,
   children,
 }: StageLayoutProps) {
-  const model = STAGE_MODELS[activeStage];
+  // Don't show model selector for setup stage (no generation)
+  const showModelSelector = activeStage !== 'setup';
   
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
@@ -59,11 +60,11 @@ export function StageLayout({
               <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.025em', color: '#171717' }}>
                 {STAGE_NAMES[activeStage]}
               </h1>
-              <Badge variant={model === 'claude' ? 'info' : 'default'}>
-                {model === 'claude' ? 'Claude' : 'GPT-4'}
-              </Badge>
+              {showModelSelector && (
+                <ModelSelector stage={activeStage} />
+              )}
             </div>
-            <p style={{ color: '#737373' }}>
+            <p style={{ color: '#737373', lineHeight: 1.6 }}>
               {STAGE_DESCRIPTIONS[activeStage]}
             </p>
           </div>

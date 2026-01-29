@@ -87,42 +87,31 @@ export function getNextStage(currentStage: string): string | null {
 
 // Stage display names
 export const STAGE_NAMES: Record<string, string> = {
-  'setup': 'Project Setup',
-  'genre-research': 'Genre Research',
-  'niche': 'Niche Positioning',
-  'ending': 'Ending Development',
-  'characters': 'Character Design',
-  'structure': 'Story Structure',
-  'chapters': 'Chapter Drafting',
-  'compilation': 'Compilation',
-  'editorial': 'Editorial Review',
-  'revision': 'Revision',
+  'setup': 'Getting Started',
+  'genre-research': 'Market Analysis',
+  'niche': 'Reader Targeting',
+  'ending': 'Choose Your Ending',
+  'characters': 'Cast of Characters',
+  'structure': 'Plot Blueprint',
+  'chapters': 'Write Chapters',
+  'compilation': 'Manuscript Assembly',
+  'editorial': 'Editorial Analysis',
+  'revision': 'Apply Revisions',
 };
 
 // Stage descriptions
 export const STAGE_DESCRIPTIONS: Record<string, string> = {
-  'setup': 'Set up your project with basic information',
-  'genre-research': 'Analyze market opportunities and genre trends',
-  'niche': 'Define your target audience and positioning',
-  'ending': 'Develop your story\'s ending first',
-  'characters': 'Design your cast of characters',
-  'structure': 'Build your story structure using Save the Cat beats',
-  'chapters': 'Write your chapters one at a time',
-  'compilation': 'Compile your manuscript for export',
-  'editorial': 'Get AI-powered editorial feedback',
-  'revision': 'Apply revisions chapter by chapter',
+  'setup': 'Review your genre and niche selection. Add an optional premise or research notes to guide the AI.',
+  'genre-research': 'AI analyzes current market trends, reader demand, and competitive positioning. You\'ll receive actionable insights about opportunities in your genre.',
+  'niche': 'Define your ideal reader avatar and emotional promise. AI generates a detailed profile of who will love your book and what tropes to include or avoid.',
+  'ending': 'AI generates 8-10 potential endings for your story. Select the one that resonates, then expand it into a detailed blueprint. You\'ll also name your project here.',
+  'characters': 'Design your protagonist, antagonist, and supporting cast. AI creates detailed character profiles including motivations, arcs, and relationships.',
+  'structure': 'Build your story structure using the Save the Cat beat sheet. AI generates a scene-by-scene breakdown to guide your chapter writing.',
+  'chapters': 'Draft your novel chapter by chapter. Each chapter is generated based on your structure, characters, and ending.',
+  'compilation': 'Compile all approved chapters into a complete manuscript. Preview and export your novel in multiple formats.',
+  'editorial': 'AI performs a comprehensive editorial review, identifying issues with continuity, pacing, character consistency, and prose.',
+  'revision': 'Work through editorial suggestions chapter by chapter. AI helps you implement fixes while maintaining your voice.',
 };
 
-// Model used per stage
-export const STAGE_MODELS: Record<string, 'openai' | 'claude'> = {
-  'setup': 'openai',
-  'genre-research': 'openai',
-  'niche': 'openai',
-  'ending': 'claude',
-  'characters': 'openai',
-  'structure': 'openai',
-  'chapters': 'claude',
-  'compilation': 'openai',
-  'editorial': 'openai',
-  'revision': 'claude',
-};
+// Model used per stage - re-exported from models.ts for backwards compatibility
+export { STAGE_DEFAULT_PROVIDERS as STAGE_MODELS } from '@/lib/data/models';

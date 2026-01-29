@@ -11,8 +11,12 @@ interface GenerateResult {
   tokensUsed: number;
 }
 
+interface GenerateOptions {
+  model?: string; // Optional model override
+}
+
 interface UseGenerateReturn {
-  generate: (stage: WorkflowStage, data: Record<string, unknown>) => Promise<GenerateResult>;
+  generate: (stage: WorkflowStage, data: Record<string, unknown>, options?: GenerateOptions) => Promise<GenerateResult>;
   isGenerating: boolean;
   error: string | null;
   clearError: () => void;
@@ -22,7 +26,11 @@ export function useGenerate(): UseGenerateReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const generate = useCallback(async (stage: WorkflowStage, data: Record<string, unknown>): Promise<GenerateResult> => {
+  const generate = useCallback(async (
+    stage: WorkflowStage, 
+    data: Record<string, unknown>,
+    options?: GenerateOptions
+  ): Promise<GenerateResult> => {
     setIsGenerating(true);
     setError(null);
     
@@ -40,7 +48,11 @@ export function useGenerate(): UseGenerateReturn {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ stage, data }),
+        body: JSON.stringify({ 
+          stage, 
+          data,
+          model: options?.model, // Pass model override if provided
+        }),
       });
       
       if (!response.ok) {

@@ -47,7 +47,11 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json();
-    const { stage, data } = body as { stage: WorkflowStage; data: Record<string, unknown> };
+    const { stage, data, model } = body as { 
+      stage: WorkflowStage; 
+      data: Record<string, unknown>;
+      model?: string; // Optional model override
+    };
     
     if (!stage || !data) {
       return NextResponse.json({ error: 'Missing stage or data' }, { status: 400 });
@@ -159,6 +163,7 @@ export async function POST(request: NextRequest) {
     const result = await generateForStage(stage, prompt, {
       systemPrompt,
       temperature: data.temperature as number | undefined,
+      model, // Pass model override if provided
     });
     
     return NextResponse.json({
