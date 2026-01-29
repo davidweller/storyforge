@@ -21,8 +21,17 @@ import {
   buildRevisionQueuePrompt,
 } from '@/lib/prompts';
 
+// Bypass auth in development mode
+const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
+const DEV_USER_ID = 'dev-user-123';
+
 // Verify Firebase auth token
 async function verifyToken(request: NextRequest): Promise<string | null> {
+  // In dev mode, return a mock user ID
+  if (DEV_MODE_BYPASS_AUTH) {
+    return DEV_USER_ID;
+  }
+  
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return null;
@@ -39,7 +48,7 @@ async function verifyToken(request: NextRequest): Promise<string | null> {
 }
 
 export async function POST(request: NextRequest) {
-  // Verify authentication
+  // Verify authentication (bypassed in dev mode)
   const userId = await verifyToken(request);
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

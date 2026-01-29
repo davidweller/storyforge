@@ -4,6 +4,9 @@ import { useState, useCallback } from 'react';
 import { auth } from '@/lib/firebase/config';
 import type { WorkflowStage } from '@/types';
 
+// Bypass auth in development mode
+const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
+
 interface GenerateResult {
   content: string;
   model: string;
@@ -35,12 +38,16 @@ export function useGenerate(): UseGenerateReturn {
     setError(null);
     
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('Not authenticated');
-      }
+      // In dev mode, skip auth check
+      let token = 'dev-token';
       
-      const token = await user.getIdToken();
+      if (!DEV_MODE_BYPASS_AUTH) {
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
+        token = await user.getIdToken();
+      }
       
       const response = await fetch('/api/generate', {
         method: 'POST',

@@ -5,22 +5,29 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useAuth } from './useAuth';
 import type { WorkflowStage, ProjectFormData } from '@/types';
 
+// Bypass auth in development mode
+const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
+const DEV_USER_ID = 'dev-user-123';
+
 export function useProjects() {
   const { user } = useAuth();
   const { projects, loading, error, loadUserProjects, clearError } = useProjectStore();
   
+  // Use dev user ID in development mode
+  const userId = DEV_MODE_BYPASS_AUTH ? DEV_USER_ID : user?.uid;
+  
   useEffect(() => {
-    if (user?.uid) {
-      loadUserProjects(user.uid);
+    if (userId) {
+      loadUserProjects(userId);
     }
-  }, [user?.uid, loadUserProjects]);
+  }, [userId, loadUserProjects]);
   
   return {
     projects,
     loading,
     error,
     clearError,
-    refresh: () => user?.uid && loadUserProjects(user.uid),
+    refresh: () => userId && loadUserProjects(userId),
   };
 }
 
@@ -133,12 +140,15 @@ export function useCreateProject() {
   const { user } = useAuth();
   const { createProject, loading, error, clearError } = useProjectStore();
   
+  // Use dev user ID in development mode
+  const userId = DEV_MODE_BYPASS_AUTH ? DEV_USER_ID : user?.uid;
+  
   const create = async (data: ProjectFormData) => {
-    if (!user?.uid) {
+    if (!userId) {
       throw new Error('User not authenticated');
     }
     
-    return createProject(user.uid, {
+    return createProject(userId, {
       ...data,
       status: 'active',
       currentStage: 'setup',

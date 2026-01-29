@@ -4,6 +4,9 @@ import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
+// Bypass auth in development mode
+const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
+
 interface ProtectedRouteProps {
   children: ReactNode;
 }
@@ -13,10 +16,18 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
 
   useEffect(() => {
+    // Skip auth redirect in dev mode
+    if (DEV_MODE_BYPASS_AUTH) return;
+    
     if (initialized && !loading && !user) {
       router.push('/login');
     }
   }, [initialized, loading, user, router]);
+
+  // In dev mode, skip loading state and auth check
+  if (DEV_MODE_BYPASS_AUTH) {
+    return <>{children}</>;
+  }
 
   if (!initialized || loading) {
     return (
