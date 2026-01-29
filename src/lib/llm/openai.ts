@@ -19,6 +19,13 @@ export interface OpenAIGenerateOptions {
   jsonMode?: boolean;
 }
 
+// Models that use max_completion_tokens instead of max_tokens
+const REASONING_MODELS = ['o3-mini', 'o3', 'o1', 'o1-mini', 'o1-preview'];
+
+function isReasoningModel(model: string): boolean {
+  return REASONING_MODELS.some(m => model.startsWith(m));
+}
+
 export async function generateWithOpenAI(
   prompt: string,
   options: OpenAIGenerateOptions = {}
@@ -39,11 +46,19 @@ export async function generateWithOpenAI(
   
   messages.push({ role: 'user', content: prompt });
 
+  // Reasoning models (o3-mini, o1, etc.) use different parameters
+  const isReasoning = isReasoningModel(model);
+  
   const response = await getOpenAI().chat.completions.create({
     model,
     messages,
-    temperature,
-    max_tokens: maxTokens,
+    // Reasoning models don't support temperature
+    ...(isReasoning ? {} : { temperature }),
+    // Use max_completion_tokens for reasoning models, max_tokens for others
+    ...(isReasoning 
+      ? { max_completion_tokens: maxTokens }
+      : { max_tokens: maxTokens }
+    ),
     response_format: jsonMode ? { type: 'json_object' } : undefined,
   });
 
@@ -72,11 +87,19 @@ export async function* streamWithOpenAI(
   
   messages.push({ role: 'user', content: prompt });
 
+  // Reasoning models (o3-mini, o1, etc.) use different parameters
+  const isReasoning = isReasoningModel(model);
+
   const stream = await getOpenAI().chat.completions.create({
     model,
     messages,
-    temperature,
-    max_tokens: maxTokens,
+    // Reasoning models don't support temperature
+    ...(isReasoning ? {} : { temperature }),
+    // Use max_completion_tokens for reasoning models, max_tokens for others
+    ...(isReasoning 
+      ? { max_completion_tokens: maxTokens }
+      : { max_tokens: maxTokens }
+    ),
     stream: true,
   });
 
