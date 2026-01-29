@@ -41,8 +41,13 @@ export async function createProject(
   userId: string,
   data: Omit<Project, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
+  // Filter out undefined values as Firestore doesn't accept them
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([_, value]) => value !== undefined)
+  );
+  
   const docRef = await addDoc(collection(db, 'projects'), {
-    ...data,
+    ...cleanData,
     userId,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
@@ -73,9 +78,14 @@ export async function updateProject(
   projectId: string,
   data: Partial<Omit<Project, 'id' | 'userId' | 'createdAt'>>
 ): Promise<void> {
+  // Filter out undefined values as Firestore doesn't accept them
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([_, value]) => value !== undefined)
+  );
+  
   const docRef = doc(db, 'projects', projectId);
   await updateDoc(docRef, {
-    ...data,
+    ...cleanData,
     updatedAt: Timestamp.now(),
   });
 }

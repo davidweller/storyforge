@@ -8,8 +8,8 @@ import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { TipTapEditor } from '@/components/editor';
 import { WorkflowSidebar, ContextDrawer, ContextSection } from '@/components/layout';
-import { Button, Badge, Card, CardContent } from '@/components/ui';
-import { countWords, cn } from '@/lib/utils';
+import { Button, Badge } from '@/components/ui';
+import { countWords } from '@/lib/utils';
 
 interface ChapterPageProps {
   params: Promise<{ projectId: string; chapterId: string }>;
@@ -61,10 +61,10 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   
   if (projectLoading || !project || !chapter) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
-          <p className="text-[var(--muted-foreground)]">Loading chapter...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 64px)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '3rem', height: '3rem', border: '4px solid #e5e5e5', borderTopColor: '#3b82f6', borderRadius: '9999px', animation: 'spin 1s linear infinite' }} />
+          <p style={{ color: '#737373' }}>Loading chapter...</p>
         </div>
       </div>
     );
@@ -162,7 +162,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   const contextContent = (
     <>
       <ContextSection title="Chapter Info">
-        <div className="space-y-2 text-sm">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
           <p><strong>Beat:</strong> {chapter.beatReference}</p>
           <p><strong>Scene Goal:</strong> {chapter.sceneGoal}</p>
           {chapter.pov && <p><strong>POV:</strong> {chapter.pov}</p>}
@@ -171,7 +171,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       
       {getDocumentByType('characters') && (
         <ContextSection title="Characters" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-10">
+          <p style={{ fontSize: '0.875rem', color: '#737373', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical' }}>
             {getDocumentByType('characters')?.content.slice(0, 800)}...
           </p>
         </ContextSection>
@@ -179,7 +179,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       
       {getDocumentByType('ending') && (
         <ContextSection title="Ending Reminder" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
+          <p style={{ fontSize: '0.875rem', color: '#737373', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 6, WebkitBoxOrient: 'vertical' }}>
             {getDocumentByType('ending')?.content.slice(0, 500)}...
           </p>
         </ContextSection>
@@ -190,7 +190,17 @@ export default function ChapterPage({ params }: ChapterPageProps) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Add notes for this chapter..."
-          className="w-full p-2 text-sm bg-[var(--background)] border border-[var(--border)] rounded resize-y min-h-[100px]"
+          style={{
+            width: '100%',
+            padding: '0.5rem',
+            fontSize: '0.875rem',
+            backgroundColor: '#fafafa',
+            border: '1px solid #e5e5e5',
+            borderRadius: '4px',
+            resize: 'vertical',
+            minHeight: '100px',
+            outline: 'none',
+          }}
         />
       </ContextSection>
     </>
@@ -205,7 +215,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   }
   
   return (
-    <div className="flex h-[calc(100vh-var(--header-height))]">
+    <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
       {/* Sidebar */}
       <WorkflowSidebar
         projectId={projectId}
@@ -216,13 +226,13 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       />
       
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
+      <main style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div className="border-b border-[var(--border)] bg-[var(--card)] px-8 py-6 lg:px-12 lg:py-8">
-          <div className="flex items-center justify-between">
+        <div style={{ borderBottom: '1px solid #e5e5e5', backgroundColor: '#ffffff', padding: '1.5rem 3rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-xl font-bold text-[var(--foreground)]">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#171717' }}>
                   Chapter {chapter.chapterNumber}: {chapter.title}
                 </h1>
                 <Badge variant={isApproved ? 'success' : 'default'}>
@@ -230,17 +240,17 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                 </Badge>
                 <Badge variant="info">Claude</Badge>
               </div>
-              <p className="text-sm text-[var(--muted-foreground)]">
+              <p style={{ fontSize: '0.875rem', color: '#737373' }}>
                 {chapter.beatReference} • {wordCount.toLocaleString()} words
               </p>
             </div>
             
             {/* Chapter navigation */}
-            <div className="flex items-center gap-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               {prevChapter && (
                 <Link href={`/projects/${projectId}/chapter/${prevChapter.id}`}>
                   <Button variant="ghost" size="sm">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                     Prev
@@ -251,7 +261,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                 <Link href={`/projects/${projectId}/chapter/${nextChapter.id}`}>
                   <Button variant="ghost" size="sm">
                     Next
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </Button>
@@ -263,19 +273,19 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         
         {/* Error display */}
         {(projectError || generateError) && (
-          <div className="mx-8 mt-4 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
-            <p className="text-sm text-[var(--destructive)]">{projectError || generateError}</p>
+          <div style={{ margin: '1rem 3rem 0', padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
+            <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{projectError || generateError}</p>
           </div>
         )}
         
         {/* Editor */}
-        <div className="flex-1 p-8 lg:p-12">
+        <div style={{ flex: 1, padding: '2rem 3rem' }}>
           {isGenerating ? (
-            <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-12 lg:p-16">
-              <div className="flex flex-col items-center justify-center gap-4">
-                <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
-                <p className="text-[var(--muted-foreground)]">Writing chapter...</p>
-                <p className="text-sm text-[var(--muted-foreground)]">This may take a few minutes...</p>
+            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '3rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+                <div style={{ width: '3rem', height: '3rem', border: '4px solid #e5e5e5', borderTopColor: '#3b82f6', borderRadius: '9999px', animation: 'spin 1s linear infinite' }} />
+                <p style={{ color: '#737373' }}>Writing chapter...</p>
+                <p style={{ fontSize: '0.875rem', color: '#737373' }}>This may take a few minutes...</p>
               </div>
             </div>
           ) : content ? (
@@ -286,42 +296,40 @@ export default function ChapterPage({ params }: ChapterPageProps) {
               placeholder="Start writing your chapter..."
             />
           ) : (
-            <Card className="text-center py-16">
-              <CardContent>
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--muted)] rounded-full mb-4">
-                  <svg className="w-8 h-8 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">
-                  Generate Chapter {chapter.chapterNumber}
-                </h2>
-                <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
-                  Let AI write this chapter based on your story structure, characters, and ending.
-                </p>
-                <Button onClick={handleGenerate} size="lg">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Generate Chapter
-                </Button>
-              </CardContent>
-            </Card>
+            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '4rem', textAlign: 'center' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '4rem', height: '4rem', backgroundColor: '#f5f5f5', borderRadius: '9999px', marginBottom: '1rem' }}>
+                <svg style={{ width: '2rem', height: '2rem', color: '#737373' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#171717', marginBottom: '0.5rem' }}>
+                Generate Chapter {chapter.chapterNumber}
+              </h2>
+              <p style={{ color: '#737373', marginBottom: '1.5rem', maxWidth: '28rem', marginLeft: 'auto', marginRight: 'auto' }}>
+                Let AI write this chapter based on your story structure, characters, and ending.
+              </p>
+              <Button onClick={handleGenerate} size="lg">
+                <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Generate Chapter
+              </Button>
+            </div>
           )}
         </div>
         
         {/* Action bar */}
         {content && (
-          <div className="border-t border-[var(--border)] bg-[var(--card)] px-8 py-6 lg:px-12 lg:py-8">
-            <div className="flex items-center justify-between">
+          <div style={{ borderTop: '1px solid #e5e5e5', backgroundColor: '#ffffff', padding: '1.5rem 3rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               {/* Secondary actions */}
-              <div className="flex items-center gap-3">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <Button
                   variant="secondary"
                   onClick={handleGenerate}
                   disabled={isGenerating || isApproved}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                   Regenerate
@@ -329,32 +337,32 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                 <Button
                   variant="ghost"
                   onClick={() => setShowNotes(!showNotes)}
-                  className="relative"
+                  style={{ position: 'relative' }}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                   </svg>
                   Notes
                   {notes.trim().length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--accent)] rounded-full" />
+                    <span style={{ position: 'absolute', top: '-0.25rem', right: '-0.25rem', width: '0.625rem', height: '0.625rem', backgroundColor: '#3b82f6', borderRadius: '9999px' }} />
                   )}
                 </Button>
               </div>
               
               {/* Visual separator */}
-              <div className="h-8 w-px bg-[var(--border)] mx-4 hidden sm:block" />
+              <div style={{ height: '2rem', width: '1px', backgroundColor: '#e5e5e5', margin: '0 1rem' }} />
               
               {/* Primary action */}
               {isApproved ? (
-                <div className="flex items-center gap-2 text-[var(--status-approved)]">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981' }}>
+                  <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  <span className="font-medium">Approved</span>
+                  <span style={{ fontWeight: 500 }}>Approved</span>
                 </div>
               ) : (
                 <Button onClick={handleApprove} disabled={isGenerating || !content} size="lg">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Approve Chapter

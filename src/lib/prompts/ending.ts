@@ -8,16 +8,25 @@ Your approach:
 - The ending should honor genre expectations while offering something fresh`;
 
 export function buildEndingConceptsPrompt(params: {
-  premise: string;
+  premise?: string;
   genre: string;
   nicheReference: string;
 }): string {
   const { premise, genre, nicheReference } = params;
   
-  return `Generate 8-10 potential ending concepts for this novel:
+  let prompt = `Generate 8-10 potential ending concepts for this novel:
 
-**Genre:** ${genre}
-**Premise:** ${premise}
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  } else {
+    prompt += `
+**Premise:** (Not yet provided - use genre and niche analysis to guide ending concepts)`;
+  }
+  
+  prompt += `
 
 **Niche & Audience Analysis:**
 ${nicheReference}
@@ -39,20 +48,31 @@ Generate a diverse range of endings:
 Number each concept clearly (1-10) for easy reference.
 
 Remember: The ending determines everything that comes before it. These concepts will shape the entire story structure.`;
+
+  return prompt;
 }
 
 export function buildEndingExpansionPrompt(params: {
-  premise: string;
+  premise?: string;
   genre: string;
   nicheReference: string;
   selectedEnding: string;
 }): string {
   const { premise, genre, nicheReference, selectedEnding } = params;
   
-  return `Expand the selected ending concept into a detailed ending blueprint:
+  let prompt = `Expand the selected ending concept into a detailed ending blueprint:
 
-**Genre:** ${genre}
-**Premise:** ${premise}
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  } else {
+    prompt += `
+**Premise:** (Not yet provided - use genre and niche analysis to guide ending development)`;
+  }
+  
+  prompt += `
 
 **Niche & Audience Analysis:**
 ${nicheReference}
@@ -104,4 +124,6 @@ How this ending delivers the story's message:
 - Potential for continuation while still being satisfying standalone
 
 This ending blueprint will guide all story development. Be specific and thorough.`;
+
+  return prompt;
 }

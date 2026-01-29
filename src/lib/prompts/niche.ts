@@ -7,16 +7,25 @@ Your analysis should be:
 - Practical for marketing purposes`;
 
 export function buildNichePrompt(params: {
-  premise: string;
+  premise?: string;
   genre: string;
   genreResearch: string;
 }): string {
   const { premise, genre, genreResearch } = params;
   
-  return `Based on the following novel concept and market research, develop a comprehensive niche positioning strategy:
+  let prompt = `Based on the following novel concept and market research, develop a comprehensive niche positioning strategy:
 
-**Genre:** ${genre}
-**Premise:** ${premise}
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  } else {
+    prompt += `
+**Premise:** (Not yet provided - use genre research to guide positioning)`;
+  }
+  
+  prompt += `
 
 **Market Research Summary:**
 ${genreResearch}
@@ -58,4 +67,6 @@ Write a clear positioning statement in this format:
 Provide 3-5 potential taglines or hooks that could be used in marketing.
 
 Be specific and actionable. This analysis will guide the entire creative process.`;
+
+  return prompt;
 }

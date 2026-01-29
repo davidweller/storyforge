@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       case 'genre-research':
         systemPrompt = GENRE_RESEARCH_SYSTEM;
         prompt = buildGenreResearchPrompt({
-          premise: data.premise as string,
+          premise: data.premise as string | undefined,
           genre: data.genre as string,
           research: data.research as string | undefined,
         });
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       case 'niche':
         systemPrompt = NICHE_SYSTEM;
         prompt = buildNichePrompt({
-          premise: data.premise as string,
+          premise: data.premise as string | undefined,
           genre: data.genre as string,
           genreResearch: data.genreResearch as string,
         });
@@ -79,14 +79,14 @@ export async function POST(request: NextRequest) {
         systemPrompt = ENDING_SYSTEM;
         if (data.selectedEnding) {
           prompt = buildEndingExpansionPrompt({
-            premise: data.premise as string,
+            premise: data.premise as string | undefined,
             genre: data.genre as string,
             nicheReference: data.nicheReference as string,
             selectedEnding: data.selectedEnding as string,
           });
         } else {
           prompt = buildEndingConceptsPrompt({
-            premise: data.premise as string,
+            premise: data.premise as string | undefined,
             genre: data.genre as string,
             nicheReference: data.nicheReference as string,
           });
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       case 'characters':
         systemPrompt = CHARACTERS_SYSTEM;
         prompt = buildCharactersPrompt({
-          premise: data.premise as string,
+          premise: data.premise as string | undefined,
           genre: data.genre as string,
           nicheReference: data.nicheReference as string,
           endingReference: data.endingReference as string,
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       case 'structure':
         systemPrompt = STRUCTURE_SYSTEM;
         prompt = buildStructurePrompt({
-          premise: data.premise as string,
+          premise: data.premise as string | undefined,
           genre: data.genre as string,
           nicheReference: data.nicheReference as string,
           endingReference: data.endingReference as string,

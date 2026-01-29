@@ -1,46 +1,52 @@
 'use client';
 
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
-
 interface ContentDisplayProps {
   content: string;
   isEditing?: boolean;
   onContentChange?: (content: string) => void;
-  className?: string;
 }
 
 export function ContentDisplay({
   content,
   isEditing = false,
   onContentChange,
-  className,
 }: ContentDisplayProps) {
   if (isEditing && onContentChange) {
     return (
       <textarea
         value={content}
         onChange={(e) => onContentChange(e.target.value)}
-        className={cn(
-          'w-full min-h-[500px] p-6 lg:p-8 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[var(--shadow-sm)]',
-          'text-[var(--foreground)] font-[inherit] text-base leading-relaxed',
-          'focus:border-[var(--ring)] focus:outline-none resize-y',
-          className
-        )}
+        style={{
+          width: '100%',
+          minHeight: '500px',
+          padding: '1.5rem',
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e5e5',
+          borderRadius: '12px',
+          boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+          color: '#171717',
+          fontFamily: 'inherit',
+          fontSize: '1rem',
+          lineHeight: 1.6,
+          resize: 'vertical',
+          outline: 'none',
+        }}
       />
     );
   }
   
   return (
     <div
-      className={cn(
-        'prose prose-lg max-w-none',
-        'bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[var(--shadow-sm)] p-6 lg:p-8',
-        className
-      )}
+      style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e5e5',
+        borderRadius: '12px',
+        boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        padding: '1.5rem',
+      }}
     >
       <div 
-        className="text-[var(--foreground)] whitespace-pre-wrap"
+        style={{ color: '#171717', whiteSpace: 'pre-wrap' }}
         dangerouslySetInnerHTML={{ __html: formatMarkdown(content) }}
       />
     </div>
@@ -72,11 +78,23 @@ interface LoadingContentProps {
 
 export function LoadingContent({ message = 'Generating content...' }: LoadingContentProps) {
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-12 lg:p-16">
-      <div className="flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
-        <p className="text-[var(--muted-foreground)]">{message}</p>
-        <p className="text-sm text-[var(--muted-foreground)]">This may take a minute...</p>
+    <div style={{
+      backgroundColor: '#ffffff',
+      border: '1px solid #e5e5e5',
+      borderRadius: '12px',
+      padding: '3rem',
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+        <div style={{
+          width: '3rem',
+          height: '3rem',
+          border: '4px solid #e5e5e5',
+          borderTopColor: '#3b82f6',
+          borderRadius: '9999px',
+          animation: 'spin 1s linear infinite',
+        }} />
+        <p style={{ color: '#737373' }}>{message}</p>
+        <p style={{ fontSize: '0.875rem', color: '#737373' }}>This may take a minute...</p>
       </div>
     </div>
   );
@@ -98,31 +116,61 @@ export function EmptyContent({
   isLoading = false,
 }: EmptyContentProps) {
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-12 lg:p-16 text-center">
-      <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--muted)] rounded-full mb-4">
-        <svg className="w-8 h-8 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div style={{
+      backgroundColor: '#ffffff',
+      border: '1px solid #e5e5e5',
+      borderRadius: '12px',
+      padding: '3rem',
+      textAlign: 'center',
+    }}>
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '4rem',
+        height: '4rem',
+        backgroundColor: '#f5f5f5',
+        borderRadius: '9999px',
+        marginBottom: '1rem',
+      }}>
+        <svg style={{ width: '2rem', height: '2rem', color: '#737373' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </div>
-      <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">{title}</h3>
-      <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">{description}</p>
+      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#171717', marginBottom: '0.5rem' }}>{title}</h3>
+      <p style={{ color: '#737373', marginBottom: '1.5rem', maxWidth: '28rem', marginLeft: 'auto', marginRight: 'auto' }}>{description}</p>
       <button
         onClick={onAction}
         disabled={isLoading}
-        className={cn(
-          'inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all',
-          'bg-[var(--primary)] text-[var(--primary-foreground)]',
-          'hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed'
-        )}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.75rem 1.5rem',
+          borderRadius: '8px',
+          fontWeight: 500,
+          backgroundColor: '#171717',
+          color: '#ffffff',
+          border: 'none',
+          cursor: isLoading ? 'not-allowed' : 'pointer',
+          opacity: isLoading ? 0.5 : 1,
+        }}
       >
         {isLoading ? (
           <>
-            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            <div style={{
+              width: '1rem',
+              height: '1rem',
+              border: '2px solid currentColor',
+              borderTopColor: 'transparent',
+              borderRadius: '9999px',
+              animation: 'spin 1s linear infinite',
+            }} />
             Generating...
           </>
         ) : (
           <>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             {actionLabel}

@@ -51,11 +51,7 @@ export default function NewProjectPage() {
       newErrors.genre = 'Please select a genre';
     }
     
-    if (!formData.premise.trim()) {
-      newErrors.premise = 'Premise is required';
-    } else if (formData.premise.trim().length < 50) {
-      newErrors.premise = 'Premise should be at least 50 characters';
-    }
+    // Premise is now optional - no validation required
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -64,24 +60,56 @@ export default function NewProjectPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validate()) return;
+    if (!validate()) {
+      console.log('Validation failed:', errors);
+      return;
+    }
+    
+    console.log('Submitting project with data:', {
+      title: formData.title.trim(),
+      genre: formData.genre,
+      premise: formData.premise.trim() || undefined,
+      research: formData.research.trim() || undefined,
+    });
     
     try {
-      const projectId = await createProject({
+      // Prepare data, filtering out empty strings
+      const projectData: {
+        title: string;
+        genre: string;
+        premise?: string;
+        research?: string;
+      } = {
         title: formData.title.trim(),
         genre: formData.genre,
-        premise: formData.premise.trim(),
-        research: formData.research.trim() || undefined,
-      });
+      };
       
-      router.push(`/projects/${projectId}`);
+      // Only include premise if it has content
+      if (formData.premise.trim()) {
+        projectData.premise = formData.premise.trim();
+      }
+      
+      // Only include research if it has content
+      if (formData.research.trim()) {
+        projectData.research = formData.research.trim();
+      }
+      
+      console.log('Calling createProject with:', projectData);
+      const projectId = await createProject(projectData);
+      console.log('Project created with ID:', projectId);
+      
+      if (projectId) {
+        router.push(`/projects/${projectId}`);
+      }
     } catch (err) {
-      // Error is handled by the store
+      // Error is handled by the store and displayed in the UI
+      console.error('Error creating project:', err);
+      // Don't navigate if there's an error
     }
   };
   
   return (
-    <div style={{ paddingTop: '2.5rem', paddingBottom: '4rem', maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto' }}>
+    <div style={{ paddingTop: '2.5rem', paddingBottom: '4rem', maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto', paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
       <div style={{ 
         backgroundColor: '#ffffff', 
         borderRadius: '16px', 
@@ -160,19 +188,14 @@ export default function NewProjectPage() {
                 {/* Premise */}
                 <div>
                   <Textarea
-                    label="Premise / Initial Idea"
+                    label="Premise / Initial Idea (Optional)"
                     placeholder="Describe your story idea. What's the core concept? Who's the protagonist? What's the central conflict?"
                     value={formData.premise}
                     onChange={(e) => setFormData({ ...formData, premise: e.target.value })}
                     error={errors.premise}
                     rows={5}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: formData.premise.length < 50 ? '#737373' : '#059669' }}>
-                      {formData.premise.length < 50 
-                        ? `${50 - formData.premise.length} more characters needed` 
-                        : "✓ Minimum reached"}
-                    </span>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '0.5rem' }}>
                     <span style={{ fontSize: '0.75rem', color: '#737373' }}>
                       {formData.premise.length} characters
                     </span>

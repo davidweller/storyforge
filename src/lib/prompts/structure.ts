@@ -10,7 +10,7 @@ Your approach:
 Create structures that are both satisfying and surprising.`;
 
 export function buildStructurePrompt(params: {
-  premise: string;
+  premise?: string;
   genre: string;
   nicheReference: string;
   endingReference: string;
@@ -18,10 +18,19 @@ export function buildStructurePrompt(params: {
 }): string {
   const { premise, genre, nicheReference, endingReference, charactersReference } = params;
   
-  return `Create a complete Save the Cat beat sheet and chapter outline for this novel:
+  let prompt = `Create a complete Save the Cat beat sheet and chapter outline for this novel:
 
-**Genre:** ${genre}
-**Premise:** ${premise}
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  } else {
+    prompt += `
+**Premise:** (Not yet provided - use genre, niche, ending, and characters to guide structure)`;
+  }
+  
+  prompt += `
 
 **Niche & Audience Analysis:**
 ${nicheReference}
@@ -119,4 +128,6 @@ Provide guidance on:
 - Chapter length variations for effect
 
 This structure will be the blueprint for chapter drafting. Be specific and thorough.`;
+
+  return prompt;
 }

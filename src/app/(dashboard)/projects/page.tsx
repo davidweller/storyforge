@@ -45,7 +45,7 @@ export default function ProjectsPage() {
   // Show skeleton loading state
   if (loading && projects.length === 0) {
     return (
-      <div style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
+      <div style={{ paddingTop: '3rem', paddingBottom: '3rem', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto', paddingLeft: '2rem', paddingRight: '2rem' }}>
         {/* Header skeleton */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <div>
@@ -70,7 +70,7 @@ export default function ProjectsPage() {
   }
   
   return (
-    <div style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
+    <div style={{ paddingTop: '3rem', paddingBottom: '3rem', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto', paddingLeft: '2rem', paddingRight: '2rem' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
@@ -269,7 +269,7 @@ export default function ProjectsPage() {
                   WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
                 }}>
-                  {project.premise}
+                  {project.premise || 'No premise provided yet'}
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#737373' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>

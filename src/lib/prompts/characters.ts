@@ -9,17 +9,26 @@ export const CHARACTERS_SYSTEM = `You are a character development specialist wit
 Create characters that feel real, serve the story, and resonate with readers.`;
 
 export function buildCharactersPrompt(params: {
-  premise: string;
+  premise?: string;
   genre: string;
   nicheReference: string;
   endingReference: string;
 }): string {
   const { premise, genre, nicheReference, endingReference } = params;
   
-  return `Design the complete cast of characters for this novel:
+  let prompt = `Design the complete cast of characters for this novel:
 
-**Genre:** ${genre}
-**Premise:** ${premise}
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  } else {
+    prompt += `
+**Premise:** (Not yet provided - use genre, niche, and ending to guide character design)`;
+  }
+  
+  prompt += `
 
 **Niche & Audience Analysis:**
 ${nicheReference}
@@ -91,4 +100,6 @@ Explain how the cast works together:
 - How do relationships evolve through the story?
 
 Create characters that readers will remember and care about. Every character should have a purpose.`;
+
+  return prompt;
 }

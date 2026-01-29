@@ -209,7 +209,7 @@ export default function EndingPage({ params }: EndingPageProps) {
       <ContextSection title="Project Info">
         <div className="space-y-2 text-sm">
           <p><strong>Genre:</strong> {project.genre}</p>
-          <p><strong>Premise:</strong> {project.premise}</p>
+          <p><strong>Premise:</strong> {project.premise || 'Not provided yet'}</p>
         </div>
       </ContextSection>
       

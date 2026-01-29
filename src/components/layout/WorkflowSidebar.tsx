@@ -115,6 +115,31 @@ export function WorkflowSidebar({
   const writingStages = STAGE_ORDER.slice(6, 8);
   const editingStages = STAGE_ORDER.slice(8);
   
+  const getStatusStyle = (status: StageStatus, isActive: boolean) => {
+    const baseStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      padding: '0.5rem 0.75rem',
+      borderRadius: '8px',
+      transition: 'all 0.2s',
+      textDecoration: 'none',
+    };
+    
+    const statusStyles: Record<StageStatus, React.CSSProperties> = {
+      locked: { color: '#a3a3a3', backgroundColor: '#f5f5f5', cursor: 'not-allowed', opacity: 0.6 },
+      not_started: { color: '#737373', backgroundColor: '#f5f5f5' },
+      in_progress: { color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.15)' },
+      approved: { color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.15)' },
+    };
+    
+    return {
+      ...baseStyle,
+      ...statusStyles[status],
+      ...(isActive ? { outline: '2px solid #3b82f6', outlineOffset: '2px' } : {}),
+    };
+  };
+  
   const renderStageItem = (stage: WorkflowStage) => {
     const status = getStageStatus(stage, currentStage);
     const isActive = pathname.includes(`/stage/${stage}`);
@@ -124,64 +149,77 @@ export function WorkflowSidebar({
       <Link
         key={stage}
         href={isLocked ? '#' : `/projects/${projectId}/stage/${stage}`}
-        className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200',
-          statusColors[status],
-          isActive && 'ring-2 ring-[var(--ring)]',
-          isLocked && 'cursor-not-allowed opacity-60',
-          !isLocked && 'hover:opacity-80'
-        )}
+        style={getStatusStyle(status, isActive)}
         onClick={(e) => isLocked && e.preventDefault()}
       >
-        <span className="flex-shrink-0">{stageIcons[stage]}</span>
-        <span className="flex-1 text-sm font-medium truncate">{STAGE_NAMES[stage]}</span>
+        <span style={{ flexShrink: 0 }}>{stageIcons[stage]}</span>
+        <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {STAGE_NAMES[stage]}
+        </span>
         {statusIndicators[status]}
       </Link>
     );
   };
   
   return (
-    <aside className="w-[var(--sidebar-width)] h-screen bg-[var(--card)] border-r border-[var(--border)] border-opacity-30 flex flex-col overflow-hidden shadow-[var(--shadow-sm)]">
+    <aside style={{
+      width: '280px',
+      height: '100vh',
+      backgroundColor: '#ffffff',
+      borderRight: '1px solid #e5e5e5',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+    }}>
       {/* Header */}
-      <div className="p-5 border-b border-[var(--border)] border-opacity-30">
+      <div style={{ padding: '1.25rem', borderBottom: '1px solid #e5e5e5' }}>
         <Link 
           href="/projects"
-          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center gap-1 mb-2"
+          style={{ 
+            fontSize: '0.75rem', 
+            color: '#737373', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.25rem', 
+            marginBottom: '0.5rem',
+            textDecoration: 'none',
+          }}
         >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg style={{ width: '0.75rem', height: '0.75rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           All Projects
         </Link>
-        <h2 className="font-semibold text-[var(--foreground)] truncate" title={projectTitle}>
+        <h2 style={{ fontWeight: 600, color: '#171717', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={projectTitle}>
           {projectTitle}
         </h2>
       </div>
       
       {/* Stages */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-6">
+      <nav style={{ flex: 1, overflowY: 'auto', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {/* Planning */}
         <div>
-          <h3 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2 px-3">
+          <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', padding: '0 0.75rem' }}>
             Planning
           </h3>
-          <div className="space-y-1">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {planningStages.map(renderStageItem)}
           </div>
         </div>
         
         {/* Writing */}
         <div>
-          <h3 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2 px-3">
+          <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', padding: '0 0.75rem' }}>
             Writing
           </h3>
-          <div className="space-y-1">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {writingStages.map(renderStageItem)}
           </div>
           
           {/* Chapters list (nested under Writing) */}
           {chapters.length > 0 && getStageIndex(currentStage) >= getStageIndex('chapters') && (
-            <div className="mt-2 ml-4 pl-3 border-l border-[var(--border)]">
+            <div style={{ marginTop: '0.5rem', marginLeft: '1rem', paddingLeft: '0.75rem', borderLeft: '1px solid #e5e5e5' }}>
               {chapters.map((chapter) => {
                 const isApproved = approvedChapterIds.has(chapter.id);
                 const isActive = pathname.includes(`/chapter/${chapter.id}`);
@@ -190,14 +228,21 @@ export function WorkflowSidebar({
                   <Link
                     key={chapter.id}
                     href={`/projects/${projectId}/chapter/${chapter.id}`}
-                    className={cn(
-                      'flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors',
-                      isActive ? 'bg-[var(--muted)] text-[var(--foreground)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                    )}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.375rem 0.5rem',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      textDecoration: 'none',
+                      backgroundColor: isActive ? '#f5f5f5' : 'transparent',
+                      color: isActive ? '#171717' : '#737373',
+                    }}
                   >
-                    <span className="truncate">Ch. {chapter.chapterNumber}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Ch. {chapter.chapterNumber}</span>
                     {isApproved && (
-                      <svg className="w-3 h-3 text-[var(--status-approved)] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg style={{ width: '0.75rem', height: '0.75rem', color: '#10b981', flexShrink: 0 }} fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -210,27 +255,32 @@ export function WorkflowSidebar({
         
         {/* Editing */}
         <div>
-          <h3 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2 px-3">
+          <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', padding: '0 0.75rem' }}>
             Editing
           </h3>
-          <div className="space-y-1">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {editingStages.map(renderStageItem)}
           </div>
         </div>
       </nav>
       
       {/* Footer with project link */}
-      <div className="p-4 border-t border-[var(--border)] border-opacity-30">
+      <div style={{ padding: '1rem', borderTop: '1px solid #e5e5e5' }}>
         <Link
           href={`/projects/${projectId}`}
-          className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
-            pathname === `/projects/${projectId}` 
-              ? 'bg-[var(--muted)] text-[var(--foreground)]' 
-              : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]'
-          )}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.5rem 0.75rem',
+            borderRadius: '8px',
+            fontSize: '0.875rem',
+            textDecoration: 'none',
+            backgroundColor: pathname === `/projects/${projectId}` ? '#f5f5f5' : 'transparent',
+            color: pathname === `/projects/${projectId}` ? '#171717' : '#737373',
+          }}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
           </svg>
           Project Dashboard

@@ -3,7 +3,7 @@
 import { use } from 'react';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
-import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
+import { Button, Badge } from '@/components/ui';
 import { WorkflowSidebar } from '@/components/layout';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime } from '@/lib/utils';
 
@@ -26,10 +26,10 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   
   if (loading || !project) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
-          <p className="text-[var(--muted-foreground)]">Loading project...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 64px)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '3rem', height: '3rem', border: '4px solid #e5e5e5', borderTopColor: '#3b82f6', borderRadius: '9999px', animation: 'spin 1s linear infinite' }} />
+          <p style={{ color: '#737373' }}>Loading project...</p>
         </div>
       </div>
     );
@@ -37,9 +37,9 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
-        <div className="text-center">
-          <p className="text-[var(--destructive)] mb-4">{error}</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 64px)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</p>
           <Link href="/projects">
             <Button variant="secondary">Back to Projects</Button>
           </Link>
@@ -62,7 +62,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   // Note: This would need to be populated from chapter versions in a real implementation
   
   return (
-    <div className="flex h-[calc(100vh-var(--header-height))]">
+    <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
       {/* Sidebar */}
       <WorkflowSidebar
         projectId={project.id}
@@ -73,16 +73,16 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
       />
       
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-8 lg:p-12">
-        <div className="max-w-5xl mx-auto">
+      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem 3rem' }}>
+        <div style={{ maxWidth: '900px', marginLeft: 'auto', marginRight: 'auto' }}>
           {/* Header */}
-          <div className="mb-10 lg:mb-12">
-            <div className="flex items-start justify-between mb-4">
+          <div style={{ marginBottom: '2.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <div>
-                <h1 className="text-3xl font-bold tracking-tight mb-2">
+                <h1 style={{ fontSize: '1.875rem', fontWeight: 700, letterSpacing: '-0.025em', marginBottom: '0.5rem', color: '#171717' }}>
                   {project.title}
                 </h1>
-                <p className="text-[var(--muted-foreground)]">
+                <p style={{ color: '#737373' }}>
                   {project.genre} • Created {formatDate(project.createdAt)}
                 </p>
               </div>
@@ -92,170 +92,137 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
             </div>
             
             {/* Progress bar */}
-            <div className="bg-[var(--muted)] rounded-full h-2 overflow-hidden">
+            <div style={{ backgroundColor: '#f5f5f5', borderRadius: '9999px', height: '0.5rem', overflow: 'hidden' }}>
               <div
-                className="h-full bg-[var(--accent)] transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
+                style={{ height: '100%', backgroundColor: '#3b82f6', transition: 'all 0.5s', width: `${progressPercent}%` }}
               />
             </div>
-            <p className="text-sm text-[var(--muted-foreground)] mt-2">
+            <p style={{ fontSize: '0.875rem', color: '#737373', marginTop: '0.5rem' }}>
               Stage {currentStageIndex + 1} of {totalStages}: {STAGE_NAMES[project.currentStage]}
             </p>
           </div>
           
           {/* Stats grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10 lg:mb-12">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-[var(--foreground)]">
-                  {totalWordCount.toLocaleString()}
-                </div>
-                <p className="text-sm text-[var(--muted-foreground)]">Total Words</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-[var(--foreground)]">
-                  {approvedChapters}/{chapters.length}
-                </div>
-                <p className="text-sm text-[var(--muted-foreground)]">Chapters Approved</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-[var(--foreground)]">
-                  {approvedDocs.length}
-                </div>
-                <p className="text-sm text-[var(--muted-foreground)]">Reference Docs</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold text-[var(--foreground)]">
-                  {openIssues}
-                </div>
-                <p className="text-sm text-[var(--muted-foreground)]">Open Issues</p>
-              </CardContent>
-            </Card>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
+            {[
+              { value: totalWordCount.toLocaleString(), label: 'Total Words' },
+              { value: `${approvedChapters}/${chapters.length}`, label: 'Chapters Approved' },
+              { value: approvedDocs.length, label: 'Reference Docs' },
+              { value: openIssues, label: 'Open Issues' },
+            ].map((stat, i) => (
+              <div key={i} style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#171717' }}>{stat.value}</div>
+                <p style={{ fontSize: '0.875rem', color: '#737373' }}>{stat.label}</p>
+              </div>
+            ))}
           </div>
           
           {/* Continue CTA */}
-          <Card className="mb-10 lg:mb-12 bg-gradient-to-r from-[var(--primary)] to-[var(--color-neutral-700)] text-[var(--primary-foreground)]">
-            <CardContent className="py-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold mb-2 text-[var(--primary-foreground)]">Continue Your Story</h2>
-                  <p className="opacity-80">
-                    Pick up where you left off at {STAGE_NAMES[project.currentStage]}
-                  </p>
-                </div>
-                <Link href={`/projects/${project.id}/stage/${project.currentStage}`}>
-                  <Button
-                    variant="secondary"
-                    size="lg"
-                    className="bg-[var(--primary-foreground)] text-[var(--primary)] hover:opacity-90"
-                  >
-                    Continue
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Button>
-                </Link>
+          <div style={{ 
+            marginBottom: '2.5rem', 
+            background: 'linear-gradient(to right, #171717, #404040)', 
+            borderRadius: '12px', 
+            padding: '2rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem', color: '#ffffff' }}>Continue Your Story</h2>
+                <p style={{ color: '#d4d4d4' }}>
+                  Pick up where you left off at {STAGE_NAMES[project.currentStage]}
+                </p>
               </div>
-            </CardContent>
-          </Card>
+              <Link href={`/projects/${project.id}/stage/${project.currentStage}`}>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                >
+                  Continue
+                  <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Button>
+              </Link>
+            </div>
+          </div>
           
           {/* Premise */}
-          <Card className="mb-10 lg:mb-12">
-            <CardHeader>
-              <CardTitle>Premise</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-[var(--foreground)] whitespace-pre-wrap">{project.premise}</p>
-            </CardContent>
-          </Card>
+          {project.premise && (
+            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem', marginBottom: '2.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', color: '#171717' }}>Premise</h3>
+              <p style={{ color: '#171717', whiteSpace: 'pre-wrap' }}>{project.premise}</p>
+            </div>
+          )}
           
           {/* Reference Documents */}
           {approvedDocs.length > 0 && (
-            <Card className="mb-10 lg:mb-12">
-              <CardHeader>
-                <CardTitle>Reference Documents</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {approvedDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-3 bg-[var(--muted)] rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-[var(--status-approved)] bg-opacity-20 flex items-center justify-center">
-                          <svg className="w-4 h-4 text-[var(--status-approved)]" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="font-medium text-[var(--foreground)] capitalize">
-                            Reference – {doc.type}
-                          </p>
-                          <p className="text-xs text-[var(--muted-foreground)]">
-                            v{doc.version} • {formatRelativeTime(doc.updatedAt)}
-                          </p>
-                        </div>
+            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem', marginBottom: '2.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', color: '#171717' }}>Reference Documents</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {approvedDocs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#f5f5f5', borderRadius: '8px' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ width: '2rem', height: '2rem', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg style={{ width: '1rem', height: '1rem', color: '#10b981' }} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
                       </div>
-                      <Link href={`/projects/${project.id}/stage/${doc.type}`}>
-                        <Button variant="ghost" size="sm">View</Button>
-                      </Link>
+                      <div>
+                        <p style={{ fontWeight: 500, color: '#171717', textTransform: 'capitalize' }}>
+                          Reference – {doc.type}
+                        </p>
+                        <p style={{ fontSize: '0.75rem', color: '#737373' }}>
+                          v{doc.version} • {formatRelativeTime(doc.updatedAt)}
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <Link href={`/projects/${project.id}/stage/${doc.type}`}>
+                      <Button variant="ghost" size="sm">View</Button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
           
           {/* Chapters */}
           {chapters.length > 0 && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Chapters</CardTitle>
-                  <Link href={`/projects/${project.id}/stage/chapters`}>
-                    <Button variant="ghost" size="sm">View All</Button>
+            <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#171717' }}>Chapters</h3>
+                <Link href={`/projects/${project.id}/stage/chapters`}>
+                  <Button variant="ghost" size="sm">View All</Button>
+                </Link>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {chapters.slice(0, 5).map((chapter) => (
+                  <Link
+                    key={chapter.id}
+                    href={`/projects/${project.id}/chapter/${chapter.id}`}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#f5f5f5', borderRadius: '8px', textDecoration: 'none' }}
+                  >
+                    <div>
+                      <p style={{ fontWeight: 500, color: '#171717' }}>
+                        Chapter {chapter.chapterNumber}: {chapter.title}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: '#737373' }}>
+                        {chapter.beatReference}
+                      </p>
+                    </div>
+                    <svg style={{ width: '1.25rem', height: '1.25rem', color: '#737373' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {chapters.slice(0, 5).map((chapter) => (
-                    <Link
-                      key={chapter.id}
-                      href={`/projects/${project.id}/chapter/${chapter.id}`}
-                      className="flex items-center justify-between p-3 bg-[var(--muted)] rounded-lg hover:bg-opacity-80 transition-colors"
-                    >
-                      <div>
-                        <p className="font-medium text-[var(--foreground)]">
-                          Chapter {chapter.chapterNumber}: {chapter.title}
-                        </p>
-                        <p className="text-xs text-[var(--muted-foreground)]">
-                          {chapter.beatReference}
-                        </p>
-                      </div>
-                      <svg className="w-5 h-5 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  ))}
-                  {chapters.length > 5 && (
-                    <p className="text-sm text-[var(--muted-foreground)] text-center pt-2">
-                      +{chapters.length - 5} more chapters
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                ))}
+                {chapters.length > 5 && (
+                  <p style={{ fontSize: '0.875rem', color: '#737373', textAlign: 'center', paddingTop: '0.5rem' }}>
+                    +{chapters.length - 5} more chapters
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </main>

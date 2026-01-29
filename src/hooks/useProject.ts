@@ -111,7 +111,7 @@ export function useProject(projectId: string | null) {
     revisionTasks,
     loading,
     error,
-    updateProject: (data: Partial<{ title: string; genre: string; premise: string; research: string }>) => 
+    updateProject: (data: Partial<{ title: string; genre: string; premise?: string; research?: string }>) => 
       currentProject && updateProject(currentProject.id, data),
     advanceStage: (newStage: WorkflowStage) => 
       currentProject && advanceStage(currentProject.id, newStage),

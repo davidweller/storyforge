@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, ReactNode } from 'react';
-import { cn } from '@/lib/utils';
 
 interface ContextDrawerProps {
   children: ReactNode;
@@ -16,17 +15,34 @@ export function ContextDrawer({ children, defaultOpen = true }: ContextDrawerPro
       {/* Toggle button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          'fixed right-0 top-1/2 -translate-y-1/2 z-20',
-          'w-6 h-16 bg-[var(--card)] border border-r-0 border-[var(--border)] rounded-l-lg',
-          'flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
-          'transition-all duration-300',
-          isOpen && 'right-[var(--context-drawer-width)]'
-        )}
+        style={{
+          position: 'fixed',
+          right: isOpen ? '320px' : 0,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          zIndex: 20,
+          width: '24px',
+          height: '64px',
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e5e5',
+          borderRight: 'none',
+          borderRadius: '8px 0 0 8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#737373',
+          cursor: 'pointer',
+          transition: 'all 0.3s',
+        }}
         aria-label={isOpen ? 'Close context panel' : 'Open context panel'}
       >
         <svg
-          className={cn('w-4 h-4 transition-transform', isOpen && 'rotate-180')}
+          style={{ 
+            width: '1rem', 
+            height: '1rem', 
+            transition: 'transform 0.3s',
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -37,13 +53,19 @@ export function ContextDrawer({ children, defaultOpen = true }: ContextDrawerPro
       
       {/* Drawer */}
       <aside
-        className={cn(
-          'fixed right-0 top-0 h-screen w-[var(--context-drawer-width)]',
-          'bg-[var(--card)] border-l border-[var(--border)]',
-          'transform transition-transform duration-300 ease-in-out',
-          'overflow-y-auto z-10',
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        )}
+        style={{
+          position: 'fixed',
+          right: 0,
+          top: 0,
+          height: '100vh',
+          width: '320px',
+          backgroundColor: '#ffffff',
+          borderLeft: '1px solid #e5e5e5',
+          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s ease-in-out',
+          overflowY: 'auto',
+          zIndex: 10,
+        }}
       >
         {children}
       </aside>
@@ -61,14 +83,30 @@ export function ContextSection({ title, children, defaultExpanded = true }: Cont
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   
   return (
-    <div className="border-b border-[var(--border)] border-opacity-30">
+    <div style={{ borderBottom: '1px solid #e5e5e5' }}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-5 text-left hover:bg-[var(--muted)] hover:bg-opacity-50 transition-colors"
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '1.25rem',
+          textAlign: 'left',
+          backgroundColor: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+        }}
       >
-        <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
+        <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#171717' }}>{title}</h3>
         <svg
-          className={cn('w-4 h-4 text-[var(--muted-foreground)] transition-transform', isExpanded && 'rotate-180')}
+          style={{ 
+            width: '1rem', 
+            height: '1rem', 
+            color: '#737373',
+            transition: 'transform 0.2s',
+            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -77,7 +115,7 @@ export function ContextSection({ title, children, defaultExpanded = true }: Cont
         </svg>
       </button>
       {isExpanded && (
-        <div className="px-5 pb-5">
+        <div style={{ padding: '0 1.25rem 1.25rem' }}>
           {children}
         </div>
       )}

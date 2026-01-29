@@ -37,7 +37,7 @@ export interface Project {
   userId: string;
   title: string;
   genre: string;
-  premise: string;
+  premise?: string;
   research?: string;
   status: 'active' | 'completed' | 'archived';
   currentStage: WorkflowStage;
@@ -139,7 +139,7 @@ export interface EndingOption {
 export interface ProjectFormData {
   title: string;
   genre: string;
-  premise: string;
+  premise?: string;
   research?: string;
 }
 

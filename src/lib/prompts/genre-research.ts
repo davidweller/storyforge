@@ -9,7 +9,7 @@ You provide structured, data-driven analysis while being encouraging and practic
 Always be specific and actionable in your recommendations.`;
 
 export function buildGenreResearchPrompt(params: {
-  premise: string;
+  premise?: string;
   genre: string;
   research?: string;
 }): string {
@@ -17,8 +17,17 @@ export function buildGenreResearchPrompt(params: {
   
   let prompt = `Analyze the market opportunity for the following novel concept:
 
-**Genre:** ${genre}
-**Premise:** ${premise}
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  } else {
+    prompt += `
+**Premise:** (Not yet provided - focus on general ${genre} market opportunities)`;
+  }
+  
+  prompt += `
 `;
 
   if (research) {

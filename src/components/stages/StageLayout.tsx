@@ -1,10 +1,10 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { WorkflowSidebar, ContextDrawer, ContextSection } from '@/components/layout';
+import { WorkflowSidebar, ContextDrawer } from '@/components/layout';
 import { Badge } from '@/components/ui';
 import { STAGE_NAMES, STAGE_DESCRIPTIONS, STAGE_MODELS } from '@/lib/utils';
-import type { WorkflowStage, Chapter, ProjectDocument } from '@/types';
+import type { WorkflowStage, Chapter } from '@/types';
 
 interface StageLayoutProps {
   projectId: string;
@@ -30,7 +30,7 @@ export function StageLayout({
   const model = STAGE_MODELS[activeStage];
   
   return (
-    <div className="flex h-[calc(100vh-var(--header-height))]">
+    <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
       {/* Sidebar */}
       <WorkflowSidebar
         projectId={projectId}
@@ -41,27 +41,31 @@ export function StageLayout({
       />
       
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main style={{ flex: 1, overflowY: 'auto' }}>
         {/* Stage header */}
-        <div className="border-b border-[var(--border)] border-opacity-30 bg-[var(--card)] px-8 py-8 lg:px-12 lg:py-10">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold tracking-tight">
+        <div style={{ 
+          borderBottom: '1px solid #e5e5e5', 
+          backgroundColor: '#ffffff', 
+          padding: '2rem 3rem',
+        }}>
+          <div style={{ maxWidth: '800px', marginLeft: 'auto', marginRight: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.025em', color: '#171717' }}>
                 {STAGE_NAMES[activeStage]}
               </h1>
               <Badge variant={model === 'claude' ? 'info' : 'default'}>
                 {model === 'claude' ? 'Claude' : 'GPT-4'}
               </Badge>
             </div>
-            <p className="text-[var(--muted-foreground)]">
+            <p style={{ color: '#737373' }}>
               {STAGE_DESCRIPTIONS[activeStage]}
             </p>
           </div>
         </div>
         
         {/* Stage content */}
-        <div className="p-8 lg:p-12">
-          <div className="max-w-3xl mx-auto">
+        <div style={{ padding: '2rem 3rem' }}>
+          <div style={{ maxWidth: '800px', marginLeft: 'auto', marginRight: 'auto' }}>
             {children}
           </div>
         </div>
