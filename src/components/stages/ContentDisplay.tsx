@@ -4,16 +4,19 @@ interface ContentDisplayProps {
   content: string;
   isEditing?: boolean;
   onContentChange?: (content: string) => void;
+  className?: string;
 }
 
 export function ContentDisplay({
   content,
   isEditing = false,
   onContentChange,
+  className,
 }: ContentDisplayProps) {
   if (isEditing && onContentChange) {
     return (
       <textarea
+        className={className}
         value={content}
         onChange={(e) => onContentChange(e.target.value)}
         style={{
@@ -37,6 +40,7 @@ export function ContentDisplay({
   
   return (
     <div
+      className={className}
       style={{
         backgroundColor: '#ffffff',
         border: '1px solid #e5e5e5',
