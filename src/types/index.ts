@@ -7,10 +7,11 @@ export type WorkflowStage =
   | 'ending'          // Stage 3
   | 'characters'      // Stage 4
   | 'structure'       // Stage 5
-  | 'chapters'        // Stage 6
-  | 'compilation'     // Stage 7
-  | 'editorial'       // Stage 8
-  | 'revision';       // Stage 9
+  | 'chapter-outlines' // Stage 6
+  | 'chapters'        // Stage 7
+  | 'compilation'     // Stage 8
+  | 'editorial'       // Stage 9
+  | 'revision';       // Stage 10
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 
@@ -20,6 +21,7 @@ export type DocumentType =
   | 'ending'
   | 'characters'
   | 'structure'
+  | 'chapter-outlines'
   | 'editorial';
 
 export type EditorialCategory = 

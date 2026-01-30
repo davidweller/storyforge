@@ -16,6 +16,12 @@ service cloud.firestore {
       return userId == 'dev-user-123';
     }
     
+    // Check if project is a dev project (allows unauthenticated access)
+    function isDevProject(projectId) {
+      return exists(/databases/$(database)/documents/projects/$(projectId)) &&
+             isDevUser(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
+    }
+    
     // Projects collection
     match /projects/{projectId} {
       allow read: if isOwner(resource.data.userId) || isDevUser(resource.data.userId);
@@ -47,18 +53,15 @@ service cloud.firestore {
       allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
         get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+        isDevProject(resource.data.projectId);
       allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
         get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+        isDevProject(request.resource.data.projectId);
       allow update, delete: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
         get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+        isDevProject(resource.data.projectId);
     }
     
     // Chapter versions collection
@@ -66,18 +69,15 @@ service cloud.firestore {
       allow read: if (isAuthenticated() && 
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
         get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+        isDevProject(resource.data.projectId);
       allow create: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
         get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        isDevUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId));
+        isDevProject(request.resource.data.projectId);
       allow update: if (isAuthenticated() &&
         exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
         get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        isDevUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId));
+        isDevProject(resource.data.projectId);
       allow delete: if false; // Never delete versions, preserve history
     }
     

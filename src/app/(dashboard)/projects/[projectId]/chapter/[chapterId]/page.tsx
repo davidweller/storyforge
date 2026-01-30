@@ -15,6 +15,71 @@ interface ChapterPageProps {
   params: Promise<{ projectId: string; chapterId: string }>;
 }
 
+interface ChapterOutline {
+  chapterNumber: number;
+  title: string;
+  beatReference: string;
+  sceneGoal: string;
+  pov?: string;
+  wordTarget?: number;
+}
+
+// Parse chapter outlines from markdown table
+function parseChapterOutlines(content: string): ChapterOutline[] {
+  const outlines: ChapterOutline[] = [];
+  const lines = content.split('\n');
+  
+  // Find the table section
+  let inTable = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Look for table header
+    if (line.includes('| Ch #') || line.includes('| Ch#') || line.includes('| Chapter')) {
+      inTable = true;
+      continue; // Skip header
+    }
+    
+    // Skip separator line
+    if (inTable && line.match(/^\|[\s\-:]+\|/)) {
+      continue;
+    }
+    
+    // Parse table rows
+    if (inTable && line.startsWith('|')) {
+      const cells = line.split('|').map(c => c.trim()).filter(c => c);
+      
+      if (cells.length >= 4) {
+        const chapterNumber = parseInt(cells[0], 10);
+        if (!isNaN(chapterNumber)) {
+          const title = cells[1] || '';
+          const beatReference = cells[2] || '';
+          const sceneGoal = cells[3] || '';
+          const pov = cells[4] || undefined;
+          const wordTargetMatch = cells[5]?.match(/~?(\d+)/);
+          const wordTarget = wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined;
+          
+          outlines.push({
+            chapterNumber,
+            title,
+            beatReference,
+            sceneGoal,
+            pov,
+            wordTarget,
+          });
+        }
+      }
+    }
+    
+    // Stop at end of table or start of narrative section
+    if (inTable && (line.startsWith('##') || line.startsWith('**'))) {
+      break;
+    }
+  }
+  
+  return outlines;
+}
+
 export default function ChapterPage({ params }: ChapterPageProps) {
   const { projectId, chapterId } = use(params);
   const router = useRouter();
@@ -89,6 +154,26 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       const endingDoc = getDocumentByType('ending');
       const genreDoc = getDocumentByType('genre');
       const nicheDoc = getDocumentByType('niche');
+      const outlinesDoc = getDocumentByType('chapter-outlines');
+      
+      // Try to get chapter details from outlines first, fall back to chapter record
+      let chapterTitle = chapter.title;
+      let beatReference = chapter.beatReference;
+      let sceneGoal = chapter.sceneGoal;
+      let pov = chapter.pov;
+      let wordTarget = 3000;
+      
+      if (outlinesDoc) {
+        const outlines = parseChapterOutlines(outlinesDoc.content);
+        const outline = outlines.find(o => o.chapterNumber === chapter.chapterNumber);
+        if (outline) {
+          chapterTitle = outline.title || chapterTitle;
+          beatReference = outline.beatReference || beatReference;
+          sceneGoal = outline.sceneGoal || sceneGoal;
+          pov = outline.pov || pov;
+          wordTarget = outline.wordTarget || wordTarget;
+        }
+      }
       
       // Get previous chapter summary
       let previousChapterSummary: string | undefined;
@@ -102,17 +187,17 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       const result = await generate('chapters', {
         genre: project.genre,
         chapterNumber: chapter.chapterNumber,
-        chapterTitle: chapter.title,
-        beatReference: chapter.beatReference,
-        sceneGoal: chapter.sceneGoal,
-        pov: chapter.pov,
+        chapterTitle,
+        beatReference,
+        sceneGoal,
+        pov,
         charactersReference: charactersDoc?.content || '',
         endingReference: endingDoc?.content || '',
         previousChapterSummary,
         structureContext: structureDoc?.content || '',
         genreResearch: genreDoc?.content || '',
         nicheReference: nicheDoc?.content || '',
-        wordTarget: 3000,
+        wordTarget,
       });
       
       setContent(result.content);

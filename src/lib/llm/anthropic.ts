@@ -23,7 +23,7 @@ export async function generateWithClaude(
   options: AnthropicGenerateOptions = {}
 ): Promise<{ content: string; tokensUsed: number }> {
   const {
-    model = 'claude-3-5-sonnet-20241022',
+    model = 'claude-sonnet-4-5',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
@@ -48,7 +48,7 @@ export async function* streamWithClaude(
   options: AnthropicGenerateOptions = {}
 ): AsyncGenerator<string, { tokensUsed: number }, unknown> {
   const {
-    model = 'claude-3-5-sonnet-20241022',
+    model = 'claude-sonnet-4-5',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,

@@ -9,6 +9,113 @@ export const CHAPTERS_SYSTEM = `You are a skilled fiction writer with a gift for
 
 Write prose that transports readers and makes them feel deeply.`;
 
+export const CHAPTER_OUTLINES_SYSTEM = `You are a story architect who specializes in converting plot blueprints into detailed chapter outlines. You understand how to break down Save the Cat beats into specific, actionable chapter plans that guide the writing process.
+
+Your approach:
+- Analyze the Plot Blueprint to understand the story structure and beats
+- Map beats to appropriate chapter divisions (typically 20-30 chapters)
+- Create compelling chapter titles that hint at content
+- Define clear scene goals that advance plot and character development
+- Assign appropriate POV characters based on story needs
+- Ensure proper pacing and emotional arc progression
+- Reference character profiles, ending blueprint, and niche positioning
+
+Create chapter outlines that are specific, actionable, and aligned with the overall story structure.`;
+
+export function buildChapterOutlinesPrompt(params: {
+  premise?: string;
+  genre: string;
+  structureReference: string;
+  charactersReference: string;
+  endingReference: string;
+  genreResearch?: string;
+  nicheReference?: string;
+}): string {
+  const {
+    premise,
+    genre,
+    structureReference,
+    charactersReference,
+    endingReference,
+    genreResearch,
+    nicheReference,
+  } = params;
+
+  let prompt = `Create a complete Chapter Outlines document for this ${genre} novel based on the Plot Blueprint (Save the Cat beat sheet).
+
+**Genre:** ${genre}`;
+
+  if (premise) {
+    prompt += `
+**Premise:** ${premise}`;
+  }
+
+  prompt += `
+
+## Plot Blueprint (Story Structure)
+${structureReference}
+
+## Reference Materials
+
+${genreResearch ? `**Genre Research & Market Context:**
+${genreResearch}
+
+` : ''}${nicheReference ? `**Niche Positioning & Audience:**
+${nicheReference}
+
+` : ''}**Character Profiles:**
+${charactersReference}
+
+**Ending Blueprint:**
+${endingReference}
+
+## Task
+
+Convert the Plot Blueprint into detailed chapter outlines. For each chapter, provide:
+
+1. **Chapter Number** (sequential, starting from 1)
+2. **Chapter Title** - A compelling, specific title that hints at the chapter's content and fits the ${genre} genre
+3. **Story Beat(s)** - The specific Save the Cat beat(s) this chapter covers (e.g., "Catalyst - The inciting incident" or "Fun and Games - The promise of the premise")
+4. **Scene Goal** - A clear, specific description of what should happen in this chapter:
+   - What plot points need to be advanced?
+   - What character development should occur?
+   - What emotional beats should be hit?
+   - What information needs to be revealed or established?
+5. **POV Character** - Which character's point of view should this chapter be written from? Consider which perspective would be most effective for this beat.
+6. **Word Target** - Approximate word count target (typically 2500-4000 words, but can vary for pacing)
+7. **Key Plot Points** - 3-5 specific plot points or events that must occur in this chapter
+
+## Output Format
+
+Present the chapter outlines in a structured markdown table format:
+
+| Ch # | Title | Beat(s) | Scene Goal | POV | Word Target | Key Plot Points |
+|------|------|---------|------------|-----|-------------|----------------|
+| 1 | [Title] | [Beat name] | [Detailed goal] | [Character] | ~3000 | • Point 1<br>• Point 2<br>• Point 3 |
+| 2 | [Title] | [Beat name] | [Detailed goal] | [Character] | ~3000 | • Point 1<br>• Point 2<br>• Point 3 |
+| ... | ... | ... | ... | ... | ... | ... |
+
+After the table, provide a brief narrative overview explaining:
+- How the chapters flow from one to the next
+- How the pacing varies across the story
+- How character arcs progress through the chapters
+- How the emotional arc builds to the climax
+
+## Guidelines
+
+- Map beats to approximately 20-30 chapters (adjust based on story complexity)
+- Ensure each chapter has a clear purpose and advances the story
+- Vary chapter length for pacing (shorter chapters for tension, longer for development)
+- Balance action, character development, and world-building
+- Ensure continuity - each chapter should flow naturally from the previous
+- Consider the genre and niche expectations
+- Align with the ending blueprint - plant seeds early for later payoffs
+
+Generate the complete chapter outlines now.`;
+  
+  return prompt;
+}
+
 export function buildChapterPrompt(params: {
   genre: string;
   chapterNumber: number;

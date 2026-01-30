@@ -14,6 +14,8 @@ import {
   buildCharactersPrompt,
   STRUCTURE_SYSTEM,
   buildStructurePrompt,
+  CHAPTER_OUTLINES_SYSTEM,
+  buildChapterOutlinesPrompt,
   CHAPTERS_SYSTEM,
   buildChapterPrompt,
   EDITORIAL_SYSTEM,
@@ -124,6 +126,19 @@ export async function POST(request: NextRequest) {
           nicheReference: data.nicheReference as string,
           endingReference: data.endingReference as string,
           charactersReference: data.charactersReference as string,
+        });
+        break;
+        
+      case 'chapter-outlines':
+        systemPrompt = CHAPTER_OUTLINES_SYSTEM;
+        prompt = buildChapterOutlinesPrompt({
+          premise: data.premise as string | undefined,
+          genre: data.genre as string,
+          structureReference: data.structureReference as string,
+          charactersReference: data.charactersReference as string,
+          endingReference: data.endingReference as string,
+          genreResearch: data.genreResearch as string | undefined,
+          nicheReference: data.nicheReference as string | undefined,
         });
         break;
         

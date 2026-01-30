@@ -21,6 +21,7 @@ const stageToDocType: Record<string, DocumentType> = {
   'ending': 'ending',
   'characters': 'characters',
   'structure': 'structure',
+  'chapter-outlines': 'chapter-outlines',
 };
 
 export default function StagePage({ params }: StagePageProps) {
@@ -116,6 +117,17 @@ export default function StagePage({ params }: StagePageProps) {
         if (nicheDoc) data.nicheReference = nicheDoc.content;
         if (endingDoc) data.endingReference = endingDoc.content;
         if (charsDoc) data.charactersReference = charsDoc.content;
+      } else if (stage === 'chapter-outlines') {
+        const structureDoc = getDocumentByType('structure');
+        const nicheDoc = getDocumentByType('niche');
+        const endingDoc = getDocumentByType('ending');
+        const charsDoc = getDocumentByType('characters');
+        const genreDoc = getDocumentByType('genre');
+        if (structureDoc) data.structureReference = structureDoc.content;
+        if (nicheDoc) data.nicheReference = nicheDoc.content;
+        if (endingDoc) data.endingReference = endingDoc.content;
+        if (charsDoc) data.charactersReference = charsDoc.content;
+        if (genreDoc) data.genreResearch = genreDoc.content;
       }
       
       const result = await generate(stage, data);
@@ -199,7 +211,7 @@ export default function StagePage({ params }: StagePageProps) {
         </ContextSection>
       )}
       
-      {['ending', 'characters', 'structure'].includes(stage) && getDocumentByType('niche') && (
+      {['ending', 'characters', 'structure', 'chapter-outlines'].includes(stage) && getDocumentByType('niche') && (
         <ContextSection title="Niche Positioning" defaultExpanded={false}>
           <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
             {getDocumentByType('niche')?.content.slice(0, 500)}...
@@ -207,7 +219,7 @@ export default function StagePage({ params }: StagePageProps) {
         </ContextSection>
       )}
       
-      {['characters', 'structure'].includes(stage) && getDocumentByType('ending') && (
+      {['characters', 'structure', 'chapter-outlines'].includes(stage) && getDocumentByType('ending') && (
         <ContextSection title="Ending" defaultExpanded={false}>
           <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
             {getDocumentByType('ending')?.content.slice(0, 500)}...
@@ -215,10 +227,18 @@ export default function StagePage({ params }: StagePageProps) {
         </ContextSection>
       )}
       
-      {stage === 'structure' && getDocumentByType('characters') && (
+      {['structure', 'chapter-outlines'].includes(stage) && getDocumentByType('characters') && (
         <ContextSection title="Characters" defaultExpanded={false}>
           <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
             {getDocumentByType('characters')?.content.slice(0, 500)}...
+          </p>
+        </ContextSection>
+      )}
+      
+      {stage === 'chapter-outlines' && getDocumentByType('structure') && (
+        <ContextSection title="Plot Blueprint" defaultExpanded={false}>
+          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
+            {getDocumentByType('structure')?.content.slice(0, 500)}...
           </p>
         </ContextSection>
       )}

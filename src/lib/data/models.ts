@@ -45,29 +45,36 @@ export const OPENAI_MODELS: LLMModel[] = [
 ];
 
 // Anthropic Models
-// Using model aliases that always point to the latest versions
+// Using actual model IDs from Anthropic API
 export const ANTHROPIC_MODELS: LLMModel[] = [
   {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4',
+    id: 'claude-sonnet-4-5',
+    name: 'Claude Sonnet 4.5',
     provider: 'anthropic',
     description: 'Latest Claude model, excellent for creative writing',
     maxTokens: 16384,
     isDefault: true,
   },
   {
-    id: 'claude-3-5-sonnet-latest',
+    id: 'claude-3-5-sonnet-20241022',
     name: 'Claude 3.5 Sonnet',
     provider: 'anthropic',
-    description: 'Previous generation, balanced capability and speed',
+    description: 'Previous generation Claude model',
     maxTokens: 16384,
   },
   {
-    id: 'claude-3-5-haiku-latest',
+    id: 'claude-3-5-haiku-20241022',
     name: 'Claude 3.5 Haiku',
     provider: 'anthropic',
     description: 'Fastest Claude model, great for quick tasks',
     maxTokens: 8192,
+  },
+  {
+    id: 'claude-3-opus-20240229',
+    name: 'Claude 3 Opus',
+    provider: 'anthropic',
+    description: 'Most capable Claude 3 model',
+    maxTokens: 16384,
   },
 ];
 
@@ -98,6 +105,7 @@ export const STAGE_DEFAULT_PROVIDERS: Record<string, LLMProvider> = {
   'ending': 'anthropic',
   'characters': 'openai',
   'structure': 'openai',
+  'chapter-outlines': 'openai',
   'chapters': 'anthropic',
   'compilation': 'openai',
   'editorial': 'openai',
