@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import {
-  signInWithPopup,
-  GoogleAuthProvider,
   signOut as firebaseSignOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
@@ -14,7 +14,8 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   initialized: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -32,15 +33,78 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
   initialized: false,
 
-  signInWithGoogle: async () => {
+  signInWithEmail: async (email: string, password: string) => {
     set({ loading: true, error: null });
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithEmailAndPassword(auth, email, password);
       set({ user: mapFirebaseUser(result.user), loading: false });
     } catch (error) {
+      let errorMessage = 'Failed to sign in';
+      if (error instanceof Error) {
+        // Map Firebase auth errors to user-friendly messages
+        if (error.message.includes('user-not-found') || error.message.includes('wrong-password')) {
+          errorMessage = 'Invalid email or password';
+        } else if (error.message.includes('invalid-email')) {
+          errorMessage = 'Invalid email address';
+        } else if (error.message.includes('too-many-requests')) {
+          errorMessage = 'Too many failed attempts. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
       set({
-        error: error instanceof Error ? error.message : 'Failed to sign in',
+        error: errorMessage,
+        loading: false,
+      });
+    }
+  },
+
+  signUpWithEmail: async (email: string, password: string) => {
+    set({ loading: true, error: null });
+    try {
+      // First check if email is in allowlist
+      const allowlistResponse = await fetch('/api/auth/check-allowlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!allowlistResponse.ok) {
+        throw new Error('Failed to check email allowlist');
+      }
+
+      const { allowed } = await allowlistResponse.json();
+      if (!allowed) {
+        set({
+          error: 'This email address is not authorized to create an account.',
+          loading: false,
+        });
+        return;
+      }
+
+      // If email is allowed, create the account
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      set({ user: mapFirebaseUser(result.user), loading: false });
+    } catch (error) {
+      let errorMessage = 'Failed to create account';
+      if (error instanceof Error) {
+        // Map Firebase auth errors to user-friendly messages
+        if (error.message.includes('email-already-in-use')) {
+          errorMessage = 'An account with this email already exists';
+        } else if (error.message.includes('invalid-email')) {
+          errorMessage = 'Invalid email address';
+        } else if (error.message.includes('weak-password')) {
+          errorMessage = 'Password is too weak. Please use a stronger password.';
+        } else if (error.message.includes('not authorized')) {
+          errorMessage = error.message; // Already set above
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      set({
+        error: errorMessage,
         loading: false,
       });
     }
