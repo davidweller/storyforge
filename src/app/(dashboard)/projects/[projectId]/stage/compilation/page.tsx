@@ -92,7 +92,10 @@ export default function CompilationPage({ params }: CompilationPageProps) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${project.title.toLowerCase().replace(/\s+/g, '-')}.${format}`;
+      const filename = project.title 
+        ? `${project.title.toLowerCase().replace(/\s+/g, '-')}.${format}`
+        : `project-${projectId}.${format}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);

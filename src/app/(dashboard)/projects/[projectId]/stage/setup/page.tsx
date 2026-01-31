@@ -225,7 +225,7 @@ export default function SetupPage({ params }: SetupPageProps) {
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
           {hasChanges && (
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={handleSave}
               disabled={isSaving}
             >
