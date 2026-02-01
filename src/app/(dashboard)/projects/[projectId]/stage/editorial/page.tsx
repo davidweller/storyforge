@@ -48,12 +48,21 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     getOpenIssuesCount,
   } = useProject(projectId);
   
-  const { createDocument, updateDocument, approveDocument, loadEditorialIssues, createEditorialIssue, advanceStage } = useProjectStore();
+  const { createDocument, updateDocument, approveDocument, loadEditorialIssues, createEditorialIssue, advanceStage, loadChapterVersions } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [editorialContent, setEditorialContent] = useState('');
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<EditorialCategory | 'all'>('all');
+  
+  // Load versions for all chapters when chapters are available
+  useEffect(() => {
+    if (chapters.length > 0) {
+      chapters.forEach(ch => {
+        loadChapterVersions(ch.id);
+      });
+    }
+  }, [chapters, loadChapterVersions]);
   
   // Load existing editorial content
   useEffect(() => {
@@ -99,28 +108,73 @@ export default function EditorialPage({ params }: EditorialPageProps) {
   // Compile manuscript for editorial review
   const compileManuscript = (): string => {
     let manuscript = '';
+    let chapterCount = 0;
     
-    for (const chapter of chapters) {
+    // Sort chapters by chapter number
+    const sortedChapters = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+    
+    for (const chapter of sortedChapters) {
       const version = getApprovedChapterVersion(chapter.id);
-      if (version) {
-        manuscript += `\n\n## Chapter ${chapter.chapterNumber}: ${chapter.title}\n\n`;
-        manuscript += version.content;
+      if (version && version.content) {
+        // Strip HTML tags if present
+        const textContent = version.content.replace(/<[^>]+>/g, '').trim();
+        
+        if (textContent.length > 0) {
+          manuscript += `\n\n## Chapter ${chapter.chapterNumber}: ${chapter.title}\n\n`;
+          manuscript += textContent;
+          chapterCount++;
+        }
       }
     }
     
-    return manuscript;
+    console.log('Compiled manuscript:', {
+      chapterCount,
+      totalChapters: chapters.length,
+      manuscriptLength: manuscript.length,
+      hasContent: manuscript.trim().length > 0,
+    });
+    
+    if (manuscript.trim().length === 0) {
+      throw new Error('No approved chapter content found. Please approve at least one chapter before generating an editorial review.');
+    }
+    
+    return manuscript.trim();
   };
   
   // Handle generation
   const handleGenerate = async () => {
+    console.log('Re-analyze button clicked');
     clearError();
     
+    // Clear existing content when starting a new analysis
+    setEditorialContent('');
+    
     try {
+      // Ensure all chapter versions are loaded before compiling
+      console.log('Loading chapter versions...');
+      await Promise.all(chapters.map(ch => loadChapterVersions(ch.id)));
+      
+      console.log('Starting editorial review generation...');
       const manuscript = compileManuscript();
+      
+      // Validate manuscript
+      if (!manuscript || manuscript.trim().length === 0) {
+        throw new Error('Cannot generate editorial review: No manuscript content available. Please ensure you have approved chapters with content.');
+      }
+      
       const nicheDoc = getDocumentByType('niche');
       const charactersDoc = getDocumentByType('characters');
       const endingDoc = getDocumentByType('ending');
       const structureDoc = getDocumentByType('structure');
+      
+      console.log('Generating editorial review:', {
+        manuscriptLength: manuscript.length,
+        hasNiche: !!nicheDoc,
+        hasCharacters: !!charactersDoc,
+        hasEnding: !!endingDoc,
+        hasStructure: !!structureDoc,
+        genre: project.genre,
+      });
       
       const result = await generate('editorial', {
         manuscript,
@@ -154,7 +208,13 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       // This would normally parse the JSON response and create individual issues
       
     } catch (err) {
-      // Error handled by hook
+      console.error('Error generating editorial review:', err);
+      // Error is handled by hook and will be displayed in the error section
+      // Re-throw to ensure error state is set
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to generate editorial review');
     }
   };
   
@@ -301,10 +361,17 @@ export default function EditorialPage({ params }: EditorialPageProps) {
           
           {/* Actions */}
           <div className="flex items-center justify-between">
-            <Button variant="secondary" onClick={handleGenerate} disabled={isGenerating}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+            <Button 
+              variant="secondary" 
+              onClick={handleGenerate} 
+              disabled={isGenerating}
+              loading={isGenerating}
+            >
+              {!isGenerating && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
               Re-analyze
             </Button>
             
