@@ -29,14 +29,17 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     getApprovedChapterVersion,
     getLatestChapterVersion,
     getPendingRevisionTasksCount,
+    getDocumentByType,
   } = useProject(projectId);
   
-  const { loadRevisionTasks, createChapterVersion, approveChapterVersion, updateRevisionTask } = useProjectStore();
+  const { loadRevisionTasks, createChapterVersion, approveChapterVersion, updateRevisionTask, loadChapterVersions } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [revisedContent, setRevisedContent] = useState('');
   const [showDiff, setShowDiff] = useState(true);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
   // Load revision tasks
   useEffect(() => {
@@ -44,6 +47,22 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       loadRevisionTasks(projectId);
     }
   }, [projectId, loadRevisionTasks]);
+  
+  // Load chapter versions when chapters are available
+  useEffect(() => {
+    if (chapters.length > 0) {
+      chapters.forEach(ch => {
+        loadChapterVersions(ch.id);
+      });
+    }
+  }, [chapters, loadChapterVersions]);
+  
+  // Load chapter versions when a chapter is selected
+  useEffect(() => {
+    if (selectedChapterId) {
+      loadChapterVersions(selectedChapterId);
+    }
+  }, [selectedChapterId, loadChapterVersions]);
   
   if (projectLoading || !project) {
     return (
@@ -69,41 +88,175 @@ export default function RevisionPage({ params }: RevisionPageProps) {
   // Get selected chapter and its data
   const selectedChapter = chapters.find((c) => c.id === selectedChapterId);
   const originalVersion = selectedChapter ? getApprovedChapterVersion(selectedChapter.id) : null;
-  const chapterIssues = selectedChapter
-    ? editorialIssues.filter((i) => i.chapterNumber === selectedChapter.chapterNumber && i.status === 'open')
-    : [];
+  const selectedTask = selectedTaskId 
+    ? revisionTasks.find((t) => t.id === selectedTaskId)
+    : selectedChapter
+    ? revisionTasks.find((t) => t.chapterNumber === selectedChapter.chapterNumber)
+    : null;
   
-  // Handle revision generation
-  const handleGenerateRevision = async () => {
-    if (!selectedChapter || !originalVersion) return;
+  // Get revision tasks grouped by chapter
+  const tasksByChapter = new Map<number, typeof revisionTasks>();
+  for (const task of revisionTasks) {
+    if (!tasksByChapter.has(task.chapterNumber)) {
+      tasksByChapter.set(task.chapterNumber, []);
+    }
+    tasksByChapter.get(task.chapterNumber)!.push(task);
+  }
+  
+  // Handle Apply button click - show confirmation
+  const handleApplyClick = (task: typeof revisionTasks[0]) => {
+    const chapter = chapters.find((c) => c.chapterNumber === task.chapterNumber);
+    if (!chapter) return;
+    
+    setSelectedTaskId(task.id);
+    setSelectedChapterId(chapter.id);
+    setShowConfirmDialog(true);
+  };
+  
+  // Handle confirmed Apply - generate revision
+  const handleConfirmApply = async () => {
+    console.log('[Revision] handleConfirmApply called:', {
+      selectedChapterId,
+      selectedTaskId,
+      hasSelectedChapter: !!selectedChapter,
+      hasOriginalVersion: !!originalVersion,
+      hasSelectedTask: !!selectedTask,
+    });
+    
+    if (!selectedChapter) {
+      console.error('[Revision] No chapter selected');
+      throw new Error('No chapter selected. Please select a chapter first.');
+    }
+    
+    if (!originalVersion) {
+      console.error('[Revision] No approved version found for chapter:', selectedChapter.chapterNumber);
+      throw new Error(`No approved version found for Chapter ${selectedChapter.chapterNumber}. Please approve a chapter version first.`);
+    }
+    
+    if (!selectedTask) {
+      console.error('[Revision] No revision task selected');
+      throw new Error('No revision task selected. Please select a task first.');
+    }
+    
+    setShowConfirmDialog(false);
     clearError();
     
     try {
-      const { getDocumentByType } = useProject(projectId);
+      // Update task status to in_progress
+      await updateRevisionTask(selectedTask.id, { status: 'in_progress' });
       
-      // Build revision instructions from issues
-      const instructions = chapterIssues
-        .map((i) => `- ${i.category}: ${i.description}\n  Fix: ${i.recommendedFix}`)
-        .join('\n');
+      // Get document references
+      const charactersDoc = getDocumentByType('characters');
+      const endingDoc = getDocumentByType('ending');
+      const structureDoc = getDocumentByType('structure');
+      const nicheDoc = getDocumentByType('niche');
       
-      const result = await generate('revision' as any, {
+      console.log('[Revision] Generating revision for chapter', selectedChapter.chapterNumber, {
+        taskId: selectedTask.id,
+        hasInstructions: selectedTask.instructions.length > 0,
+        acceptanceCriteriaCount: selectedTask.acceptanceCriteria.length,
+        hasCharacters: !!charactersDoc,
+        hasEnding: !!endingDoc,
+        hasStructure: !!structureDoc,
+        hasNiche: !!nicheDoc,
+      });
+      
+      // Validate original content
+      if (!originalVersion.content || originalVersion.content.trim().length === 0) {
+        throw new Error('Original chapter content is empty. Cannot generate revision.');
+      }
+      
+      console.log('[Revision] Calling generate API with Sonnet 4.5:', {
+        stage: 'revision',
+        model: 'claude-sonnet-4-5',
+        originalContentLength: originalVersion.content.length,
+        instructionsLength: selectedTask.instructions.length,
+      });
+      
+      const result = await generate('revision', {
         genre: project.genre,
         chapterNumber: selectedChapter.chapterNumber,
         chapterTitle: selectedChapter.title,
         originalContent: originalVersion.content,
-        revisionInstructions: instructions,
-        acceptanceCriteria: chapterIssues.map((i) => i.recommendedFix),
+        revisionInstructions: selectedTask.instructions || 'Review the chapter for overall quality and consistency.',
+        acceptanceCriteria: selectedTask.acceptanceCriteria.length > 0
+          ? selectedTask.acceptanceCriteria
+          : ['The chapter should maintain consistency with established canon and character voices.'],
+        charactersReference: charactersDoc?.content || '',
+        endingReference: endingDoc?.content || '',
+        structureReference: structureDoc?.content || '',
+        nicheReference: nicheDoc?.content || '',
+      }, {
+        model: 'claude-sonnet-4-5', // Explicitly use Sonnet 4.5
+      });
+      
+      console.log('[Revision] API response received:', {
+        hasContent: !!result.content,
+        contentLength: result.content?.length || 0,
+        model: result.model,
+        provider: result.provider,
+        tokensUsed: result.tokensUsed,
+        isSonnet45: result.model === 'claude-sonnet-4-5',
+      });
+      
+      if (!result || !result.content) {
+        throw new Error('API returned invalid response: missing content field');
+      }
+      
+      if (result.content.trim().length === 0) {
+        throw new Error('API returned empty content. This may indicate an error with the LLM call.');
+      }
+      
+      // Verify Sonnet 4.5 was used
+      if (result.model !== 'claude-sonnet-4-5') {
+        console.warn('[Revision] Warning: Expected Sonnet 4.5 but got', result.model);
+      }
+      
+      // Check if content is suspiciously similar to original (might indicate no actual revision)
+      const originalLength = originalVersion.content.length;
+      const revisedLength = result.content.length;
+      const lengthDiff = Math.abs(originalLength - revisedLength);
+      const lengthSimilarity = lengthDiff / Math.max(originalLength, revisedLength);
+      
+      console.log('[Revision] Content comparison:', {
+        originalLength,
+        revisedLength,
+        lengthDiff,
+        lengthSimilarity: (lengthSimilarity * 100).toFixed(2) + '%',
       });
       
       setRevisedContent(result.content);
     } catch (err) {
-      // Error handled by hook
+      console.error('[Revision] Error generating revision:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[Revision] Error details:', {
+        message: errorMessage,
+        error: err,
+        stack: err instanceof Error ? err.stack : undefined,
+        selectedChapterId,
+        selectedTaskId,
+        hasSelectedChapter: !!selectedChapter,
+        hasOriginalVersion: !!originalVersion,
+        hasSelectedTask: !!selectedTask,
+      });
+      
+      // Re-open the dialog if it was a validation error (so user can try again)
+      if (errorMessage.includes('No chapter selected') || 
+          errorMessage.includes('No approved version') || 
+          errorMessage.includes('No revision task')) {
+        setShowConfirmDialog(true);
+      }
+      
+      // Error is also handled by hook, but we ensure it's logged
+      // The error state will be set by the useGenerate hook
+      // Re-throw to ensure the hook's error handling is triggered
+      throw err;
     }
   };
   
   // Handle approval of revision
   const handleApproveRevision = async () => {
-    if (!selectedChapter || !revisedContent) return;
+    if (!selectedChapter || !revisedContent || !selectedTask) return;
     
     try {
       // Create new version
@@ -125,16 +278,20 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         versionData.parentVersionId = latestVersion.id;
       }
       
-      const versionId = await createChapterVersion(versionData);
+      await createChapterVersion(versionData);
       
-      // Mark issues as resolved
-      // (In production, this would update the specific issues)
+      // Mark revision task as done
+      await updateRevisionTask(selectedTask.id, { status: 'done' });
+      
+      console.log('[Revision] Revision approved and task marked as done:', selectedTask.id);
       
       // Reset state
       setRevisedContent('');
       setSelectedChapterId(null);
+      setSelectedTaskId(null);
     } catch (err) {
-      // Handle error
+      console.error('[Revision] Error approving revision:', err);
+      throw err;
     }
   };
   
@@ -170,21 +327,31 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       <ContextSection title="Revision Progress">
         <div className="space-y-2 text-sm">
           <p><strong>Pending:</strong> {pendingCount} chapters</p>
-          <p><strong>Completed:</strong> {chapters.length - pendingCount} chapters</p>
+          <p><strong>Completed:</strong> {revisionTasks.filter((t) => t.status === 'done').length} chapters</p>
+          <p><strong>In Progress:</strong> {revisionTasks.filter((t) => t.status === 'in_progress').length} chapters</p>
         </div>
       </ContextSection>
       
-      {selectedChapter && (
-        <ContextSection title="Chapter Issues">
-          <div className="space-y-2">
-            {chapterIssues.map((issue) => (
-              <div key={issue.id} className="text-sm p-2 bg-[var(--muted)] rounded">
-                <Badge variant="warning" className="mb-1">{issue.category}</Badge>
-                <p className="text-[var(--foreground)]">{issue.description}</p>
+      {selectedTask && (
+        <ContextSection title="Revision Task">
+          <div className="space-y-2 text-sm">
+            <p className="text-[var(--foreground)]">
+              <strong>Status:</strong> {selectedTask.status === 'queued' ? 'Queued' : selectedTask.status === 'in_progress' ? 'In Progress' : 'Complete'}
+            </p>
+            {selectedTask.acceptanceCriteria.length > 0 && (
+              <div>
+                <p className="font-medium text-[var(--foreground)] mb-1">Acceptance Criteria:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs text-[var(--muted-foreground)]">
+                  {selectedTask.acceptanceCriteria.slice(0, 3).map((criterion, idx) => (
+                    <li key={idx}>{criterion}</li>
+                  ))}
+                  {selectedTask.acceptanceCriteria.length > 3 && (
+                    <li className="text-[var(--muted-foreground)]">
+                      +{selectedTask.acceptanceCriteria.length - 3} more
+                    </li>
+                  )}
+                </ul>
               </div>
-            ))}
-            {chapterIssues.length === 0 && (
-              <p className="text-sm text-[var(--muted-foreground)]">No open issues</p>
             )}
           </div>
         </ContextSection>
@@ -220,50 +387,102 @@ export default function RevisionPage({ params }: RevisionPageProps) {
             </CardHeader>
             <CardContent>
               <p className="text-[var(--muted-foreground)] mb-4">
-                Select a chapter to review and apply revisions based on editorial feedback.
+                Review and apply revisions by chapter. Click "Apply" to generate revisions using Sonnet 4.5.
               </p>
               
-              <div className="space-y-2">
-                {chapters.map((chapter) => {
-                  const issues = editorialIssues.filter(
-                    (i) => i.chapterNumber === chapter.chapterNumber && i.status === 'open'
-                  );
-                  const hasIssues = issues.length > 0;
-                  
-                  return (
-                    <button
-                      key={chapter.id}
-                      onClick={() => setSelectedChapterId(chapter.id)}
-                      className={cn(
-                        'w-full flex items-center justify-between p-4 rounded-lg transition-all text-left',
-                        hasIssues
-                          ? 'bg-[rgba(212,160,58,0.1)] hover:bg-[rgba(212,160,58,0.2)]'
-                          : 'bg-[rgba(92,124,92,0.1)] hover:bg-[rgba(92,124,92,0.2)]'
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
-                          hasIssues
-                            ? 'bg-[var(--status-in-progress)] text-white'
-                            : 'bg-[var(--status-approved)] text-white'
-                        )}>
-                          {chapter.chapterNumber}
+              {revisionTasks.length === 0 ? (
+                <div className="text-center py-8 text-[var(--muted-foreground)]">
+                  <p>No revision tasks found. Please create a revision queue from the editorial page.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Array.from(tasksByChapter.entries())
+                    .sort(([a], [b]) => a - b)
+                    .map(([chapterNumber, tasks]) => {
+                      const chapter = chapters.find((c) => c.chapterNumber === chapterNumber);
+                      if (!chapter) return null;
+                      
+                      const queuedTask = tasks.find((t) => t.status === 'queued');
+                      const inProgressTask = tasks.find((t) => t.status === 'in_progress');
+                      const doneTask = tasks.find((t) => t.status === 'done');
+                      const activeTask = inProgressTask || queuedTask;
+                      const isComplete = !queuedTask && !inProgressTask && doneTask;
+                      
+                      return (
+                        <div
+                          key={chapterNumber}
+                          className={cn(
+                            'p-4 rounded-lg border',
+                            isComplete
+                              ? 'bg-[rgba(92,124,92,0.1)] border-[var(--status-approved)]'
+                              : 'bg-[rgba(212,160,58,0.1)] border-[var(--status-in-progress)]'
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3 flex-1">
+                              <div className={cn(
+                                'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0',
+                                isComplete
+                                  ? 'bg-[var(--status-approved)] text-white'
+                                  : 'bg-[var(--status-in-progress)] text-white'
+                              )}>
+                                {chapterNumber}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-[var(--foreground)]">{chapter.title}</p>
+                                {activeTask && (
+                                  <div className="mt-2 space-y-1">
+                                    <p className="text-sm text-[var(--muted-foreground)]">
+                                      {activeTask.instructions.substring(0, 200)}
+                                      {activeTask.instructions.length > 200 ? '...' : ''}
+                                    </p>
+                                    {activeTask.acceptanceCriteria.length > 0 && (
+                                      <p className="text-xs text-[var(--muted-foreground)]">
+                                        {activeTask.acceptanceCriteria.length} acceptance criteria
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                                {isComplete && (
+                                  <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                                    Revision completed
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {activeTask && activeTask.status === 'queued' && (
+                                <Button
+                                  onClick={() => handleApplyClick(activeTask)}
+                                  size="sm"
+                                >
+                                  Apply
+                                </Button>
+                              )}
+                              {activeTask && activeTask.status === 'in_progress' && (
+                                <Button
+                                  onClick={() => {
+                                    setSelectedTaskId(activeTask.id);
+                                    setSelectedChapterId(chapter.id);
+                                  }}
+                                  variant="secondary"
+                                  size="sm"
+                                >
+                                  View Progress
+                                </Button>
+                              )}
+                              {isComplete && (
+                                <Badge variant="success" className="px-3 py-1">
+                                  Complete
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-[var(--foreground)]">{chapter.title}</p>
-                          <p className="text-sm text-[var(--muted-foreground)]">
-                            {issues.length} open issue{issues.length !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant={hasIssues ? 'warning' : 'success'}>
-                        {hasIssues ? 'Needs Revision' : 'Complete'}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                </div>
+              )}
             </CardContent>
           </Card>
           
@@ -308,46 +527,88 @@ export default function RevisionPage({ params }: RevisionPageProps) {
             </h2>
           </div>
           
-          {/* Issues checklist */}
-          {chapterIssues.length > 0 && (
+          {/* Revision task details */}
+          {selectedTask && (
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Issues to Address</CardTitle>
+                <CardTitle>Revision Instructions</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {chapterIssues.map((issue) => (
-                    <div key={issue.id} className="flex items-start gap-3 p-3 bg-[var(--muted)] rounded">
-                      <Badge variant="warning">{issue.category}</Badge>
-                      <div className="flex-1">
-                        <p className="text-sm text-[var(--foreground)]">{issue.description}</p>
-                        <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                          Recommended: {issue.recommendedFix}
-                        </p>
-                      </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--foreground)] mb-2">Instructions:</p>
+                    <p className="text-sm text-[var(--foreground)] whitespace-pre-wrap">
+                      {selectedTask.instructions}
+                    </p>
+                  </div>
+                  {selectedTask.acceptanceCriteria.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-[var(--foreground)] mb-2">Acceptance Criteria:</p>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-[var(--foreground)]">
+                        {selectedTask.acceptanceCriteria.map((criterion, idx) => (
+                          <li key={idx}>{criterion}</li>
+                        ))}
+                      </ul>
                     </div>
-                  ))}
+                  )}
+                  <div className="pt-2 border-t border-[var(--border)]">
+                    <Badge variant={selectedTask.status === 'queued' ? 'warning' : selectedTask.status === 'in_progress' ? 'info' : 'success'}>
+                      {selectedTask.status === 'queued' ? 'Queued' : selectedTask.status === 'in_progress' ? 'In Progress' : 'Complete'}
+                    </Badge>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
           
-          {/* Generate revision */}
-          {!revisedContent && (
+          {/* Confirmation dialog */}
+          {showConfirmDialog && selectedTask && (
+            <Card className="mb-6 border-[var(--accent)]">
+              <CardHeader>
+                <CardTitle>Confirm Apply Revision</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-[var(--foreground)] mb-4">
+                  Generate revision for Chapter {selectedChapter?.chapterNumber}: {selectedChapter?.title} using Sonnet 4.5?
+                </p>
+                <p className="text-xs text-[var(--muted-foreground)] mb-4">
+                  This will create a revised version of the chapter based on the revision instructions. You'll be able to review and approve the changes.
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={handleConfirmApply}
+                    loading={isGenerating}
+                    disabled={isGenerating}
+                  >
+                    Yes, Apply Revision
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setShowConfirmDialog(false);
+                      setSelectedTaskId(null);
+                      setSelectedChapterId(null);
+                    }}
+                    disabled={isGenerating}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
+          {/* Generate revision in progress */}
+          {!showConfirmDialog && !revisedContent && selectedTask && selectedTask.status === 'in_progress' && (
             <Card className="text-center py-12">
               <CardContent>
+                <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
-                  Generate Revised Chapter
+                  Generating Revision...
                 </h3>
                 <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
-                  AI will revise this chapter based on the editorial feedback while preserving your voice and style.
+                  Sonnet 4.5 is revising this chapter based on the revision instructions. This may take a minute.
                 </p>
-                <Button onClick={handleGenerateRevision} loading={isGenerating} size="lg">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Generate Revision
-                </Button>
               </CardContent>
             </Card>
           )}
@@ -413,18 +674,34 @@ export default function RevisionPage({ params }: RevisionPageProps) {
               {/* Actions */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Button variant="secondary" onClick={handleGenerateRevision} disabled={isGenerating}>
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => {
+                      if (selectedTask) {
+                        setShowConfirmDialog(true);
+                      }
+                    }} 
+                    disabled={isGenerating || !selectedTask}
+                  >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Regenerate
                   </Button>
-                  <Button variant="ghost" onClick={() => setRevisedContent('')}>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => {
+                      setRevisedContent('');
+                      if (selectedTask) {
+                        updateRevisionTask(selectedTask.id, { status: 'queued' });
+                      }
+                    }}
+                  >
                     Reject
                   </Button>
                 </div>
                 
-                <Button onClick={handleApproveRevision}>
+                <Button onClick={handleApproveRevision} disabled={!selectedTask}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>

@@ -29,18 +29,63 @@ export async function generateWithClaude(
     systemPrompt,
   } = options;
 
-  const response = await getAnthropic().messages.create({
-    model,
-    max_tokens: maxTokens,
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set in environment variables');
+  }
+
+  // Get model display name for logging
+  const modelDisplayName = model === 'claude-sonnet-4-5' ? 'Claude Sonnet 4.5' : model;
+  
+  console.log('[Anthropic] Calling API:', {
+    model: modelDisplayName,
+    modelId: model,
+    promptLength: prompt.length,
+    systemPromptLength: systemPrompt?.length || 0,
+    maxTokens,
     temperature,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: prompt }],
   });
 
-  const content = response.content[0].type === 'text' ? response.content[0].text : '';
-  const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+  try {
+    const response = await getAnthropic().messages.create({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: prompt }],
+    });
 
-  return { content, tokensUsed };
+    console.log('[Anthropic] Response received:', {
+      hasContent: response.content && response.content.length > 0,
+      contentType: response.content[0]?.type,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    });
+
+    if (!response.content || response.content.length === 0) {
+      throw new Error('Anthropic API returned empty content');
+    }
+
+    const content = response.content[0].type === 'text' ? response.content[0].text : '';
+    
+    if (!content || content.trim().length === 0) {
+      throw new Error('Anthropic API returned empty text content');
+    }
+
+    const tokensUsed = response.usage.input_tokens + response.usage.output_tokens;
+
+    console.log('[Anthropic] Content extracted:', {
+      contentLength: content.length,
+      tokensUsed,
+    });
+
+    return { content, tokensUsed };
+  } catch (error) {
+    console.error('[Anthropic] API Error:', error);
+    if (error instanceof Error) {
+      throw new Error(`Anthropic API error: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 export async function* streamWithClaude(

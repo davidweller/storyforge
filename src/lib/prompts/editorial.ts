@@ -26,12 +26,42 @@ export function buildEditorialPrompt(params: {
     structureReference,
   } = params;
   
-  let prompt = `Provide a comprehensive editorial review of this ${genre} manuscript:
+  // Validate manuscript is provided
+  if (!manuscript || manuscript.trim().length === 0) {
+    throw new Error('Manuscript content is required for editorial review');
+  }
+  
+  console.log('[Editorial Prompt] Building prompt:', {
+    manuscriptLength: manuscript.length,
+    genre,
+    hasNiche: !!nicheReference,
+    hasCharacters: !!charactersReference,
+    hasEnding: !!endingReference,
+    hasStructure: !!structureReference,
+  });
+  
+  let prompt = `Provide a comprehensive editorial review of this ${genre} manuscript.
 
-## Manuscript
+## CRITICAL: You MUST Reference the Actual Manuscript
+
+**IMPORTANT**: The complete manuscript text is provided below. You MUST:
+- Read and analyze the ACTUAL manuscript content provided
+- Reference specific passages, scenes, and lines from the manuscript in your feedback
+- Base ALL recommendations on what is actually written, not generic advice
+- Cite chapter numbers and approximate locations when identifying issues
+- Provide examples from the manuscript text to illustrate your points
+
+**DO NOT** provide generic editorial advice without referencing the actual manuscript content. Every issue you identify must be grounded in specific content from the manuscript below.
+
+## Manuscript Content
+
+The complete manuscript text is provided below. Review it thoroughly for continuity, character consistency, pacing, prose quality, and plot logic.
+
 ${manuscript}
 
 ## Reference Documents (Canon)
+
+The following reference documents provide context about the intended story, characters, and structure. Use these to check for consistency with the manuscript:
 `;
 
   if (nicheReference) {
@@ -74,42 +104,42 @@ Provide your feedback in the following structured format:
 - Commercial viability assessment
 
 ### 2. Continuity Issues
-List any continuity errors or inconsistencies:
-| Chapter | Location | Issue | Recommended Fix |
-|---------|----------|-------|-----------------|
+List any continuity errors or inconsistencies. **MUST cite specific passages from the manuscript**:
+| Chapter | Location | Issue | Specific Example from Manuscript | Recommended Fix |
+|---------|----------|-------|----------------------------------|-----------------|
 
 ### 3. Character Issues
-Identify problems with character consistency, development, or voice:
-| Character | Chapter | Issue Type | Description | Recommended Fix |
-|-----------|---------|------------|-------------|-----------------|
+Identify problems with character consistency, development, or voice. **MUST reference specific dialogue or actions from the manuscript**:
+| Character | Chapter | Issue Type | Description | Specific Example from Manuscript | Recommended Fix |
+|-----------|---------|------------|-------------|----------------------------------|-----------------|
 
 Issue types: voice_inconsistency, motivation_unclear, arc_problem, relationship_issue
 
 ### 4. Pacing Issues
-Identify sections with pacing problems:
-| Chapters | Issue | Description | Recommended Fix |
-|----------|-------|-------------|-----------------|
+Identify sections with pacing problems. **MUST reference specific chapters and scenes**:
+| Chapters | Issue | Description | Specific Scene/Passage Reference | Recommended Fix |
+|----------|-------|-------------|----------------------------------|-----------------|
 
 Issue types: too_slow, too_fast, tension_drops, missing_beats
 
 ### 5. Prose & Style Issues
-Note recurring prose-level issues:
-| Issue Type | Frequency | Examples | Recommendation |
-|------------|-----------|----------|----------------|
+Note recurring prose-level issues. **MUST provide actual examples from the manuscript**:
+| Issue Type | Frequency | Actual Examples from Manuscript | Recommendation |
+|------------|-----------|--------------------------------|----------------|
 
 Issue types: telling_not_showing, weak_verbs, repetitive_phrases, dialogue_tags, filter_words
 
 ### 6. Logic & Plot Issues
-Identify plot holes or logical inconsistencies:
-| Chapter | Issue | Description | Recommended Fix |
-|---------|-------|-------------|-----------------|
+Identify plot holes or logical inconsistencies. **MUST reference specific plot points from the manuscript**:
+| Chapter | Issue | Description | Specific Plot Point Reference | Recommended Fix |
+|---------|-------|-------------|-------------------------------|-----------------|
 
 ### 7. Chapter-by-Chapter Notes
-For each chapter, provide:
+For each chapter, provide detailed analysis based on the actual manuscript content:
 - Chapter #: [Title]
-- Strengths:
-- Issues to Address:
-- Specific Line Notes (if any):
+- Strengths: [Cite specific scenes, lines, or passages that work well]
+- Issues to Address: [Reference specific problems with examples from the chapter]
+- Specific Line Notes (if any): [Quote or reference exact problematic passages]
 
 ### 8. Revision Priority List
 Rank the top 10 issues by importance:
@@ -117,7 +147,16 @@ Rank the top 10 issues by importance:
 ...
 
 ### 9. Positive Highlights
-List 5-10 specific things that work well and should be preserved.
+List 5-10 specific things that work well and should be preserved. **MUST reference actual passages, scenes, or lines from the manuscript**.
+
+## Validation Checklist
+
+Before submitting your review, verify:
+- [ ] Every issue references specific content from the manuscript
+- [ ] Chapter numbers and approximate locations are provided for all issues
+- [ ] Examples are actual quotes or references from the manuscript text
+- [ ] No generic advice without manuscript context
+- [ ] All recommendations are actionable and specific to this manuscript
 
 Be thorough but constructive. The goal is to help the author improve, not discourage them.`;
 

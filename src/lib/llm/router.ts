@@ -84,6 +84,14 @@ export async function generateForStage(
   const modelConfig = getModelById(modelId);
   const maxTokens = options.maxTokens || modelConfig?.maxTokens || STAGE_MAX_TOKENS[stage];
   
+  console.log('[Router] Using model:', {
+    modelId,
+    modelName: modelConfig?.name || 'Unknown',
+    provider,
+    stage,
+    maxTokens,
+  });
+  
   const mergedOptions = {
     ...options,
     maxTokens,
@@ -179,7 +187,7 @@ export async function generate(
 ): Promise<GenerateResult> {
   // Get default model for provider if not specified
   const modelId = options.model || (provider === 'openai' 
-    ? OPENAI_MODELS.find((m) => m.isDefault)?.id || 'o3-mini'
+    ? OPENAI_MODELS.find((m) => m.isDefault)?.id || 'gpt-5.2'
     : ANTHROPIC_MODELS.find((m) => m.isDefault)?.id || 'claude-sonnet-4-5');
   
   if (provider === 'openai') {

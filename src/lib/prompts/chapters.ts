@@ -233,6 +233,8 @@ export function buildChapterRevisionPrompt(params: {
   acceptanceCriteria: string[];
   charactersReference: string;
   endingReference: string;
+  structureReference?: string;
+  nicheReference?: string;
 }): string {
   const {
     originalChapter,
@@ -240,35 +242,65 @@ export function buildChapterRevisionPrompt(params: {
     acceptanceCriteria,
     charactersReference,
     endingReference,
+    structureReference,
+    nicheReference,
   } = params;
   
-  return `Revise the following chapter according to the editorial feedback:
+  return `Revise the following chapter according to the revision instructions provided below.
 
 ## Original Chapter
+
+The complete original chapter text is provided below. Review it carefully before making revisions.
+
 ${originalChapter}
 
 ## Revision Instructions
+
+**CRITICAL**: You must address ALL of the following revision instructions. These are specific issues identified in the editorial review that need to be fixed:
+
 ${revisionInstructions}
 
 ## Acceptance Criteria
-The revised chapter must:
-${acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
-## Reference Materials (for consistency)
+The revised chapter MUST meet all of the following criteria. Verify each one before completing your revision:
 
-**Characters:**
+${acceptanceCriteria.length > 0 
+  ? acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
+  : '1. The chapter maintains consistency with established canon and character voices.\n2. All revision instructions have been addressed.\n3. The narrative voice and style remain consistent with the original.'}
+
+## Reference Materials (Canon - Use for Consistency)
+
+These reference documents define the established canon. Ensure your revisions align with these:
+
+${charactersReference ? `**Character Profiles:**
 ${charactersReference}
 
-**Ending Constraints:**
+` : ''}${endingReference ? `**Ending Constraints:**
 ${endingReference}
 
-## Revision Guidelines
+` : ''}${structureReference ? `**Story Structure:**
+${structureReference}
 
-1. **Preserve What Works**: Keep strong elements from the original
-2. **Address All Issues**: Ensure every point in the revision instructions is addressed
-3. **Maintain Voice**: Keep the narrative voice consistent
-4. **No New Plot Threads**: Don't introduce new subplots or characters unless specifically requested
-5. **Canon Compliance**: Ensure all changes align with established canon
+` : ''}${nicheReference ? `**Target Audience & Positioning:**
+${nicheReference}
 
-Write the complete revised chapter. Make targeted improvements while preserving the chapter's strengths.`;
+` : ''}## Revision Guidelines
+
+1. **Address ALL Instructions**: Every point in the revision instructions must be addressed. Do not skip any issues.
+
+2. **Preserve What Works**: Keep strong elements from the original chapter. Only change what needs to be fixed according to the instructions.
+
+3. **Maintain Voice**: Keep the narrative voice, tone, and style consistent with the original and with the rest of the manuscript.
+
+4. **Canon Compliance**: All changes must align with the reference materials above. Do not introduce contradictions.
+
+5. **No New Plot Threads**: Don't introduce new subplots, characters, or major plot elements unless specifically requested in the revision instructions.
+
+6. **Targeted Improvements**: Make focused, specific changes. Avoid over-revising areas that don't need changes.
+
+7. **Complete Chapter**: Output the complete revised chapter, not just the changed sections.
+
+## Output
+
+Write the complete revised chapter now. Ensure it addresses all revision instructions while maintaining consistency with canon and preserving the chapter's strengths.`;
 }

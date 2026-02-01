@@ -7,18 +7,20 @@ export interface LLMModel {
   name: string;
   provider: LLMProvider;
   description: string;
-  maxTokens: number;
+  maxTokens: number; // Max OUTPUT tokens
+  maxContextTokens?: number; // Max INPUT context window
   isDefault?: boolean;
 }
 
 // OpenAI Models
 export const OPENAI_MODELS: LLMModel[] = [
   {
-    id: 'o3-mini',
+    id: 'gpt-5.2',
     name: 'GPT-5.2 Thinking',
     provider: 'openai',
     description: 'Advanced reasoning model with deep thinking capabilities',
-    maxTokens: 16384,
+    maxTokens: 16384, // Output limit
+    maxContextTokens: 128000, // Input context window (128k tokens)
     isDefault: true,
   },
   {
@@ -52,7 +54,8 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
     name: 'Claude Sonnet 4.5',
     provider: 'anthropic',
     description: 'Latest Claude model, excellent for creative writing',
-    maxTokens: 16384,
+    maxTokens: 16384, // Output limit
+    maxContextTokens: 200000, // Input context window (200k tokens)
     isDefault: true,
   },
   {
@@ -61,6 +64,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
     provider: 'anthropic',
     description: 'Previous generation Claude model',
     maxTokens: 16384,
+    maxContextTokens: 200000, // 200k context window
   },
   {
     id: 'claude-3-5-haiku-20241022',

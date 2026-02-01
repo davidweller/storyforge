@@ -20,7 +20,7 @@ export interface OpenAIGenerateOptions {
 }
 
 // Models that use max_completion_tokens instead of max_tokens
-const REASONING_MODELS = ['o3-mini', 'o3', 'o1', 'o1-mini', 'o1-preview'];
+const REASONING_MODELS = ['gpt-5.2', 'o3-mini', 'o3', 'o1', 'o1-mini', 'o1-preview'];
 
 function isReasoningModel(model: string): boolean {
   return REASONING_MODELS.some(m => model.startsWith(m));
@@ -38,6 +38,10 @@ export async function generateWithOpenAI(
     jsonMode = false,
   } = options;
 
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set in environment variables');
+  }
+
   const messages: OpenAI.ChatCompletionMessageParam[] = [];
   
   if (systemPrompt) {
@@ -49,23 +53,59 @@ export async function generateWithOpenAI(
   // Reasoning models (o3-mini, o1, etc.) use different parameters
   const isReasoning = isReasoningModel(model);
   
-  const response = await getOpenAI().chat.completions.create({
-    model,
-    messages,
-    // Reasoning models don't support temperature
-    ...(isReasoning ? {} : { temperature }),
-    // Use max_completion_tokens for reasoning models, max_tokens for others
-    ...(isReasoning 
-      ? { max_completion_tokens: maxTokens }
-      : { max_tokens: maxTokens }
-    ),
-    response_format: jsonMode ? { type: 'json_object' } : undefined,
+  // Get model display name for logging
+  const modelDisplayName = model === 'gpt-5.2' ? 'GPT-5.2 Thinking' : model;
+  
+  console.log('[OpenAI] Calling API:', {
+    model: modelDisplayName,
+    modelId: model,
+    promptLength: prompt.length,
+    systemPromptLength: systemPrompt?.length || 0,
+    maxTokens,
+    temperature: isReasoning ? 'N/A (reasoning model)' : temperature,
+    isReasoning,
   });
 
-  const content = response.choices[0]?.message?.content || '';
-  const tokensUsed = response.usage?.total_tokens || 0;
+  try {
+    const response = await getOpenAI().chat.completions.create({
+      model,
+      messages,
+      // Reasoning models don't support temperature
+      ...(isReasoning ? {} : { temperature }),
+      // Use max_completion_tokens for reasoning models, max_tokens for others
+      ...(isReasoning 
+        ? { max_completion_tokens: maxTokens }
+        : { max_tokens: maxTokens }
+      ),
+      response_format: jsonMode ? { type: 'json_object' } : undefined,
+    });
 
-  return { content, tokensUsed };
+    console.log('[OpenAI] Response received:', {
+      hasChoices: response.choices && response.choices.length > 0,
+      hasContent: !!response.choices[0]?.message?.content,
+      tokensUsed: response.usage?.total_tokens || 0,
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+    const tokensUsed = response.usage?.total_tokens || 0;
+
+    if (!content || content.trim().length === 0) {
+      throw new Error('OpenAI API returned empty content');
+    }
+
+    console.log('[OpenAI] Content extracted:', {
+      contentLength: content.length,
+      tokensUsed,
+    });
+
+    return { content, tokensUsed };
+  } catch (error) {
+    console.error('[OpenAI] API Error:', error);
+    if (error instanceof Error) {
+      throw new Error(`OpenAI API error: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 export async function* streamWithOpenAI(

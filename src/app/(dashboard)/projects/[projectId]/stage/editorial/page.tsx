@@ -48,12 +48,13 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     getOpenIssuesCount,
   } = useProject(projectId);
   
-  const { createDocument, updateDocument, approveDocument, loadEditorialIssues, createEditorialIssue, advanceStage, loadChapterVersions } = useProjectStore();
+  const { createDocument, updateDocument, approveDocument, loadEditorialIssues, createEditorialIssue, advanceStage, loadChapterVersions, createRevisionTask } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [editorialContent, setEditorialContent] = useState('');
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<EditorialCategory | 'all'>('all');
+  const [modelSwitchMessage, setModelSwitchMessage] = useState<string | null>(null);
   
   // Load versions for all chapters when chapters are available
   useEffect(() => {
@@ -157,9 +158,94 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       console.log('Starting editorial review generation...');
       const manuscript = compileManuscript();
       
-      // Validate manuscript
+      // Validate manuscript with detailed checks
       if (!manuscript || manuscript.trim().length === 0) {
         throw new Error('Cannot generate editorial review: No manuscript content available. Please ensure you have approved chapters with content.');
+      }
+      
+      // Validate manuscript has substantial content (at least 1000 characters)
+      if (manuscript.trim().length < 1000) {
+        console.warn('Manuscript is very short:', manuscript.length, 'characters');
+      }
+      
+      // Count chapters in manuscript
+      const chapterMatches = manuscript.match(/## Chapter \d+:/g);
+      const chapterCount = chapterMatches ? chapterMatches.length : 0;
+      
+      // Estimate token count (rough: 1 token ≈ 4 characters)
+      const estimatedManuscriptTokens = Math.ceil(manuscript.length / 4);
+      const referenceDocsLength = [
+        getDocumentByType('niche')?.content,
+        getDocumentByType('characters')?.content,
+        getDocumentByType('ending')?.content,
+        getDocumentByType('structure')?.content,
+      ].filter(Boolean).reduce((sum, doc) => sum + (doc?.length || 0), 0);
+      const estimatedReferenceTokens = Math.ceil(referenceDocsLength / 4);
+      const estimatedPromptOverhead = 2000; // System prompt + instructions
+      const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
+      
+      // Model context limits
+      const gpt52MaxTokens = 128000; // GPT-5.2 Thinking context limit
+      const claude45MaxTokens = 200000; // Claude Sonnet 4.5 context limit (fallback)
+      
+      console.log('[Editorial] Manuscript validation:', {
+        totalLength: manuscript.length,
+        trimmedLength: manuscript.trim().length,
+        chapterCount,
+        wordCount: manuscript.split(/\s+/).length,
+        estimatedManuscriptTokens,
+        estimatedReferenceTokens,
+        estimatedTotalTokens,
+        gpt52MaxTokens,
+        claude45MaxTokens,
+        willExceedGPT52: estimatedTotalTokens > gpt52MaxTokens,
+        willExceedClaude45: estimatedTotalTokens > claude45MaxTokens,
+        first100Chars: manuscript.substring(0, 100),
+        last100Chars: manuscript.substring(Math.max(0, manuscript.length - 100)),
+      });
+      
+      // Verify manuscript contains actual chapter content
+      if (chapterCount === 0) {
+        throw new Error('Manuscript does not contain any chapters. Please ensure chapters are properly formatted.');
+      }
+      
+      // Only block if it exceeds Claude's limit (since API will auto-switch to Claude if needed)
+      if (estimatedTotalTokens > claude45MaxTokens) {
+        const manuscriptWordCount = Math.ceil(manuscript.length / 5);
+        const maxWords = Math.floor((claude45MaxTokens - estimatedReferenceTokens - estimatedPromptOverhead) * 0.8);
+        throw new Error(
+          `Manuscript is too long for editorial review.\n\n` +
+          `• Your manuscript: ~${manuscriptWordCount.toLocaleString()} words (${estimatedTotalTokens.toLocaleString()} tokens)\n` +
+          `• Maximum supported: ~${maxWords.toLocaleString()} words (${claude45MaxTokens.toLocaleString()} tokens)\n\n` +
+          `Even with Claude Sonnet 4.5's larger context window (200k tokens), your manuscript exceeds the limit. Please consider reviewing in batches or focusing on specific sections.`
+        );
+      }
+      
+      // Log if model switching will occur (but don't block - let API handle it)
+      if (estimatedTotalTokens > gpt52MaxTokens) {
+        console.log('[Editorial] Manuscript exceeds GPT-5.2 limit, API will switch to Claude Sonnet 4.5:', {
+          estimatedTotalTokens,
+          gpt52MaxTokens,
+          claude45MaxTokens,
+        });
+      }
+      
+      // Warn if approaching GPT-5.2 limit (will trigger switch)
+      if (estimatedTotalTokens > gpt52MaxTokens * 0.8 && estimatedTotalTokens <= gpt52MaxTokens) {
+        console.warn('[Editorial] Manuscript approaching GPT-5.2 context limit:', {
+          estimatedTotalTokens,
+          gpt52MaxTokens,
+          percentage: ((estimatedTotalTokens / gpt52MaxTokens) * 100).toFixed(1) + '%',
+        });
+      }
+      
+      // Warn if approaching Claude limit (after switch)
+      if (estimatedTotalTokens > gpt52MaxTokens && estimatedTotalTokens > claude45MaxTokens * 0.8) {
+        console.warn('[Editorial] Manuscript approaching Claude Sonnet 4.5 context limit:', {
+          estimatedTotalTokens,
+          claude45MaxTokens,
+          percentage: ((estimatedTotalTokens / claude45MaxTokens) * 100).toFixed(1) + '%',
+        });
       }
       
       const nicheDoc = getDocumentByType('niche');
@@ -167,14 +253,23 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       const endingDoc = getDocumentByType('ending');
       const structureDoc = getDocumentByType('structure');
       
-      console.log('Generating editorial review:', {
+      console.log('[Editorial] Generating review with:', {
         manuscriptLength: manuscript.length,
+        manuscriptWordCount: manuscript.split(/\s+/).length,
+        chapterCount,
         hasNiche: !!nicheDoc,
+        nicheLength: nicheDoc?.content?.length || 0,
         hasCharacters: !!charactersDoc,
+        charactersLength: charactersDoc?.content?.length || 0,
         hasEnding: !!endingDoc,
+        endingLength: endingDoc?.content?.length || 0,
         hasStructure: !!structureDoc,
+        structureLength: structureDoc?.content?.length || 0,
         genre: project.genre,
       });
+      
+      // Log that manuscript will be included in prompt
+      console.log('[Editorial] Manuscript will be included in prompt. First 200 chars:', manuscript.substring(0, 200));
       
       const result = await generate('editorial', {
         manuscript,
@@ -184,6 +279,14 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         endingReference: endingDoc?.content,
         structureReference: structureDoc?.content,
       });
+      
+      // Check if model was switched (the API will return this in the response)
+      const resultWithSwitch = result as any;
+      if (resultWithSwitch.modelSwitched && resultWithSwitch.switchMessage) {
+        setModelSwitchMessage(resultWithSwitch.switchMessage);
+      } else {
+        setModelSwitchMessage(null);
+      }
       
       setEditorialContent(result.content);
       
@@ -221,18 +324,112 @@ export default function EditorialPage({ params }: EditorialPageProps) {
   // Handle continue to revision
   const handleContinueToRevision = async () => {
     try {
+      clearError();
+      
+      // Ensure editorial content exists
+      if (!editorialContent || editorialContent.trim().length === 0) {
+        throw new Error('No editorial review available. Please generate an editorial review first.');
+      }
+      
+      // Approve editorial document if not already approved
       if (currentDocId && !isApproved) {
         await approveDocument(currentDocId);
       }
       
+      console.log('[Editorial] Creating revision queue from editorial report...');
+      
+      // Generate revision queue from editorial report
+      const result = await generate('editorial', {
+        createQueue: true,
+        editorialReport: editorialContent,
+        chapterCount: chapters.length,
+      });
+      
+      console.log('[Editorial] Revision queue response received:', {
+        contentLength: result.content?.length || 0,
+        hasContent: !!result.content,
+      });
+      
+      // Parse JSON response
+      let revisionQueueData: {
+        revisionTasks: Array<{
+          chapterNumber: number;
+          issueCount: number;
+          priority: string;
+          summary: string;
+          issues: Array<{
+            category: string;
+            description: string;
+            location: string;
+            fix: string;
+          }>;
+          acceptanceCriteria: string[];
+          preserveElements: string[];
+        }>;
+      };
+      
+      try {
+        // Extract JSON from markdown code blocks if present
+        let jsonContent = result.content;
+        const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+        if (jsonMatch) {
+          jsonContent = jsonMatch[1];
+        }
+        
+        revisionQueueData = JSON.parse(jsonContent);
+      } catch (parseError) {
+        console.error('[Editorial] Failed to parse revision queue JSON:', parseError);
+        console.error('[Editorial] Raw response:', result.content);
+        throw new Error('Failed to parse revision queue. The AI response was not in the expected format.');
+      }
+      
+      if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
+        throw new Error('Invalid revision queue format. Expected revisionTasks array.');
+      }
+      
+      console.log('[Editorial] Creating revision tasks:', {
+        taskCount: revisionQueueData.revisionTasks.length,
+      });
+      
+      // Create revision tasks in Firestore
+      for (const taskData of revisionQueueData.revisionTasks) {
+        // Build instructions from issues
+        const instructions = taskData.issues
+          .map((issue) => `${issue.category}: ${issue.description}\nLocation: ${issue.location}\nFix: ${issue.fix}`)
+          .join('\n\n');
+        
+        // If no issues, use summary as instructions
+        const finalInstructions = taskData.issueCount > 0 
+          ? instructions 
+          : taskData.summary || 'Review chapter for overall quality and consistency.';
+        
+        await createRevisionTask({
+          projectId,
+          chapterNumber: taskData.chapterNumber,
+          issueIds: [], // Will be linked later if needed
+          instructions: finalInstructions,
+          acceptanceCriteria: taskData.acceptanceCriteria || [],
+          status: taskData.issueCount > 0 ? 'queued' : 'done',
+        });
+        
+        console.log('[Editorial] Created revision task for chapter', taskData.chapterNumber);
+      }
+      
+      console.log('[Editorial] All revision tasks created successfully');
+      
+      // Advance to revision stage
       const nextStage = getNextStage('editorial');
       if (nextStage && project.currentStage === 'editorial') {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
       
+      // Navigate to revision page
       router.push(`/projects/${projectId}/stage/revision`);
     } catch (err) {
-      // Handle error
+      console.error('[Editorial] Error creating revision queue:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create revision queue';
+      // Error will be displayed by the error handling in the component
+      throw err;
     }
   };
   
@@ -294,6 +491,21 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
           <p className="text-sm text-[var(--destructive)]">{projectError || generateError}</p>
+        </div>
+      )}
+      
+      {/* Model Switch Message */}
+      {modelSwitchMessage && (
+        <div className="mb-6 p-4 bg-[rgba(59,130,246,0.1)] border border-blue-500 rounded-lg">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-blue-700 mb-1">Model Automatically Switched</p>
+              <p className="text-sm text-blue-600 whitespace-pre-line">{modelSwitchMessage}</p>
+            </div>
+          </div>
         </div>
       )}
       
