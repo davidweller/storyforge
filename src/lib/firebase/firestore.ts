@@ -208,15 +208,24 @@ export async function createChapterVersion(
 }
 
 export async function getChapterVersions(chapterId: string): Promise<ChapterVersion[]> {
-  const q = query(
-    collection(db, 'chapter_versions'),
-    where('chapterId', '==', chapterId),
-    orderBy('version', 'desc')
-  );
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(
-    (doc) => convertTimestamps({ id: doc.id, ...doc.data() }) as ChapterVersion
-  );
+  try {
+    const q = query(
+      collection(db, 'chapter_versions'),
+      where('chapterId', '==', chapterId),
+      orderBy('version', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(
+      (doc) => convertTimestamps({ id: doc.id, ...doc.data() }) as ChapterVersion
+    );
+  } catch (error) {
+    console.error('Error fetching chapter versions:', error);
+    // If it's a permissions error, provide more context
+    if (error instanceof Error && error.message.includes('permission')) {
+      throw new Error(`Permission denied: Unable to read chapter versions. Please check that the chapter belongs to an accessible project. ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 export async function getLatestChapterVersion(chapterId: string): Promise<ChapterVersion | null> {

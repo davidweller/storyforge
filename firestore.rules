@@ -66,18 +66,40 @@ service cloud.firestore {
     
     // Chapter versions collection
     match /chapter_versions/{versionId} {
-      allow read: if (isAuthenticated() && 
-        exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
-        isDevProject(resource.data.projectId);
-      allow create: if (isAuthenticated() &&
-        exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.userId == request.auth.uid) ||
-        isDevProject(request.resource.data.projectId);
-      allow update: if (isAuthenticated() &&
-        exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.userId == request.auth.uid) ||
-        isDevProject(resource.data.projectId);
+      // Helper to check if user can access a project
+      function canAccessProject(projectId) {
+        return projectId != null && (
+          (isAuthenticated() && 
+           exists(/databases/$(database)/documents/projects/$(projectId)) &&
+           get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid) ||
+          isDevProject(projectId)
+        );
+      }
+      
+      // Helper to check access via chapter's projectId (for queries by chapterId)
+      // This allows access even when querying by chapterId if the chapter belongs to an accessible project
+      function canAccessViaChapter() {
+        return resource.data.chapterId != null &&
+               exists(/databases/$(database)/documents/chapters/$(resource.data.chapterId)) &&
+               canAccessProject(get(/databases/$(database)/documents/chapters/$(resource.data.chapterId)).data.projectId);
+      }
+      
+      // Allow read if:
+      // 1. The version has a projectId and user can access that project, OR
+      // 2. The version has a chapterId and that chapter belongs to an accessible project
+      allow read: if (resource.data.projectId != null && canAccessProject(resource.data.projectId)) ||
+                   (resource.data.chapterId != null && canAccessViaChapter());
+      
+      // Allow create if the projectId is accessible, or if chapterId points to an accessible project
+      allow create: if (request.resource.data.projectId != null && canAccessProject(request.resource.data.projectId)) ||
+                   (request.resource.data.chapterId != null &&
+                    exists(/databases/$(database)/documents/chapters/$(request.resource.data.chapterId)) &&
+                    canAccessProject(get(/databases/$(database)/documents/chapters/$(request.resource.data.chapterId)).data.projectId));
+      
+      // Allow update if the version's projectId is accessible, or if chapterId points to an accessible project
+      allow update: if (resource.data.projectId != null && canAccessProject(resource.data.projectId)) ||
+                     (resource.data.chapterId != null && canAccessViaChapter());
+      
       allow delete: if false; // Never delete versions, preserve history
     }
     

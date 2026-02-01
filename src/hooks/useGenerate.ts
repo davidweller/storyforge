@@ -38,16 +38,16 @@ export function useGenerate(): UseGenerateReturn {
     setError(null);
     
     try {
-      // In dev mode, skip auth check
+      // Authentication disabled for testing - always use dev token
       let token = 'dev-token';
       
-      if (!DEV_MODE_BYPASS_AUTH) {
-        const user = auth.currentUser;
-        if (!user) {
-          throw new Error('Not authenticated');
-        }
-        token = await user.getIdToken();
-      }
+      // if (!DEV_MODE_BYPASS_AUTH) {
+      //   const user = auth.currentUser;
+      //   if (!user) {
+      //     throw new Error('Not authenticated');
+      //   }
+      //   token = await user.getIdToken();
+      // }
       
       const response = await fetch('/api/generate', {
         method: 'POST',

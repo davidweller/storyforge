@@ -74,12 +74,24 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
   ),
 };
 
-function getStageStatus(stage: WorkflowStage, currentStage: WorkflowStage): StageStatus {
+function getStageStatus(
+  stage: WorkflowStage, 
+  currentStage: WorkflowStage, 
+  chapters?: Chapter[], 
+  approvedChapterIds?: Set<string>
+): StageStatus {
   const stageIndex = getStageIndex(stage);
   const currentIndex = getStageIndex(currentStage);
   
   if (stageIndex < currentIndex) return 'approved';
   if (stageIndex === currentIndex) return 'in_progress';
+  
+  // Special case: allow access to compilation if all chapters are approved, even if currentStage is 'chapters'
+  if (stage === 'compilation' && currentStage === 'chapters' && chapters && approvedChapterIds) {
+    const allApproved = chapters.length > 0 && chapters.every(ch => approvedChapterIds.has(ch.id));
+    if (allApproved) return 'not_started';
+  }
+  
   if (isStageAccessible(currentStage, stage)) return 'not_started';
   return 'locked';
 }
@@ -153,7 +165,7 @@ export function WorkflowSidebar({
   };
   
   const renderStageItem = (stage: WorkflowStage) => {
-    const status = getStageStatus(stage, currentStage);
+    const status = getStageStatus(stage, currentStage, chapters, approvedChapterIds);
     const isActive = pathname.includes(`/stage/${stage}`);
     const isLocked = status === 'locked';
     

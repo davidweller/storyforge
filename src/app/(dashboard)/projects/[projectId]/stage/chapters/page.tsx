@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useMemo } from 'react';
+import { use, useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
@@ -96,7 +96,16 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     getApprovedChaptersCount,
   } = useProject(projectId);
   
-  const { createChapter } = useProjectStore();
+  const { createChapter, loadChapterVersions } = useProjectStore();
+  
+  // Load versions for all chapters when chapters are available
+  useEffect(() => {
+    if (chapters.length > 0) {
+      chapters.forEach(ch => {
+        loadChapterVersions(ch.id);
+      });
+    }
+  }, [chapters, loadChapterVersions]);
   
   // Parse chapter outlines (use latest version, not just approved)
   const chapterOutlines = useMemo(() => {

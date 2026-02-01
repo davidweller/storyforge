@@ -8,13 +8,50 @@ let adminAuth: Auth;
 
 function getAdminApp(): App {
   if (getApps().length === 0) {
-    adminApp = initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
+    // Check if admin credentials are available
+    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    let privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+    
+    // Clean up private key if present
+    if (privateKey) {
+      // Remove surrounding quotes if present
+      privateKey = privateKey.replace(/^["']|["']$/g, '');
+      // Replace escaped newlines with actual newlines
+      privateKey = privateKey.replace(/\\n/g, '\n');
+    }
+    
+    // Debug logging (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Firebase Admin Config Check:', {
+        hasProjectId: !!projectId,
+        hasClientEmail: !!clientEmail,
+        hasPrivateKey: !!privateKey,
+        privateKeyLength: privateKey?.length || 0,
+        privateKeyStart: privateKey?.substring(0, 30) || 'N/A',
+      });
+    }
+    
+    // If credentials are missing or invalid, throw a helpful error
+    if (!projectId || !clientEmail || !privateKey || privateKey.includes('YOUR_PRIVATE_KEY') || privateKey.trim().length < 50) {
+      throw new Error(
+        'Firebase Admin credentials not configured. Please set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY in your environment variables.'
+      );
+    }
+    
+    try {
+      adminApp = initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to initialize Firebase Admin: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your FIREBASE_ADMIN_PRIVATE_KEY is correctly formatted.`
+      );
+    }
   } else {
     adminApp = getApps()[0];
   }

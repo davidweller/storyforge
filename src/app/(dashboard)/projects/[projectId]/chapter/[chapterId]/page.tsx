@@ -10,6 +10,7 @@ import { TipTapEditor } from '@/components/editor';
 import { WorkflowSidebar, ContextDrawer, ContextSection } from '@/components/layout';
 import { Button, Badge } from '@/components/ui';
 import { countWords } from '@/lib/utils';
+import type { ChapterVersion } from '@/types';
 
 interface ChapterPageProps {
   params: Promise<{ projectId: string; chapterId: string }>;
@@ -88,6 +89,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     project,
     documents,
     chapters,
+    chapterVersions,
     loading: projectLoading,
     error: projectError,
     getDocumentByType,
@@ -96,7 +98,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     getApprovedChapterVersion,
   } = useProject(projectId);
   
-  const { loadChapterVersions, createChapterVersion, approveChapterVersion } = useProjectStore();
+  const { loadChapterVersions, createChapterVersion, approveChapterVersion, error: storeError } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [content, setContent] = useState('');
@@ -114,15 +116,30 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     }
   }, [chapterId, loadChapterVersions]);
   
-  // Load latest version content
+  // Load version content - prefer approved, fallback to latest
   useEffect(() => {
-    const latestVersion = getLatestChapterVersion(chapterId);
-    if (latestVersion) {
-      setContent(latestVersion.content);
-      setCurrentVersionId(latestVersion.id);
-      setNotes(latestVersion.notes || '');
+    if (!chapterId) return;
+    
+    // Get versions for this chapter
+    const versions = getChapterVersions(chapterId);
+    
+    if (versions.length > 0) {
+      // Prefer approved version, otherwise use latest (first in array, already sorted desc)
+      const approvedVersion = versions.find(v => v.approved);
+      const versionToUse = approvedVersion || versions[0];
+      
+      if (versionToUse) {
+        setContent(versionToUse.content);
+        setCurrentVersionId(versionToUse.id);
+        setNotes(versionToUse.notes || '');
+      }
+    } else {
+      // No versions yet - clear content to show generate screen
+      setContent('');
+      setCurrentVersionId(null);
+      setNotes('');
     }
-  }, [chapterId, getLatestChapterVersion]);
+  }, [chapterId, getChapterVersions, chapterVersions]);
   
   if (projectLoading || !project || !chapter) {
     return (
@@ -206,7 +223,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       const latestVersion = getLatestChapterVersion(chapterId);
       const newVersion = (latestVersion?.version || 0) + 1;
       
-      const versionId = await createChapterVersion({
+      const versionData: Omit<ChapterVersion, 'id' | 'createdAt'> = {
         chapterId,
         projectId,
         chapterNumber: chapter.chapterNumber,
@@ -214,8 +231,14 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         content: result.content,
         wordCount: countWords(result.content),
         approved: false,
-        parentVersionId: latestVersion?.id,
-      });
+      };
+      
+      // Only include parentVersionId if it exists (Firestore doesn't allow undefined)
+      if (latestVersion?.id) {
+        versionData.parentVersionId = latestVersion.id;
+      }
+      
+      const versionId = await createChapterVersion(versionData);
       
       setCurrentVersionId(versionId);
     } catch (err) {
@@ -361,9 +384,9 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         </div>
         
         {/* Error display */}
-        {(projectError || generateError) && (
+        {(projectError || generateError || storeError) && (
           <div style={{ margin: '1rem 3rem 0', padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
-            <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{projectError || generateError}</p>
+            <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{projectError || generateError || storeError}</p>
           </div>
         )}
         

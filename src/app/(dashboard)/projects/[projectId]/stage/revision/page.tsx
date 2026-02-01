@@ -10,6 +10,7 @@ import { ContextSection } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import * as Diff from 'diff';
+import type { ChapterVersion } from '@/types';
 
 interface RevisionPageProps {
   params: Promise<{ projectId: string }>;
@@ -109,7 +110,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       const latestVersion = getLatestChapterVersion(selectedChapter.id);
       const newVersion = (latestVersion?.version || 0) + 1;
       
-      const versionId = await createChapterVersion({
+      const versionData: Omit<ChapterVersion, 'id' | 'createdAt'> = {
         chapterId: selectedChapter.id,
         projectId,
         chapterNumber: selectedChapter.chapterNumber,
@@ -117,8 +118,14 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         content: revisedContent,
         wordCount: revisedContent.split(/\s+/).length,
         approved: true,
-        parentVersionId: latestVersion?.id,
-      });
+      };
+      
+      // Only include parentVersionId if it exists (Firestore doesn't allow undefined)
+      if (latestVersion?.id) {
+        versionData.parentVersionId = latestVersion.id;
+      }
+      
+      const versionId = await createChapterVersion(versionData);
       
       // Mark issues as resolved
       // (In production, this would update the specific issues)
