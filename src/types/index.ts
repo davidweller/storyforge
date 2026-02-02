@@ -10,8 +10,10 @@ export type WorkflowStage =
   | 'chapter-outlines' // Stage 6
   | 'chapters'        // Stage 7
   | 'compilation'     // Stage 8
-  | 'editorial'       // Stage 9
-  | 'revision';       // Stage 10
+  | 'export-draft'    // Stage 9
+  | 'editorial'       // Stage 10
+  | 'revision'        // Stage 11
+  | 'export-final';   // Stage 12
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 
@@ -44,6 +46,7 @@ export interface Project {
   research?: string;
   status: 'active' | 'completed' | 'archived';
   currentStage: WorkflowStage;
+  finalExportedAt?: Date;  // Timestamp when final export was completed
   createdAt: Date;
   updatedAt: Date;
 }

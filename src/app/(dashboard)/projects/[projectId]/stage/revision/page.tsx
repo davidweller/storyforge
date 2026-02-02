@@ -32,7 +32,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     getDocumentByType,
   } = useProject(projectId);
   
-  const { loadRevisionTasks, createChapterVersion, approveChapterVersion, updateRevisionTask, loadChapterVersions } = useProjectStore();
+  const { loadRevisionTasks, createChapterVersion, approveChapterVersion, updateRevisionTask, loadChapterVersions, advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
@@ -47,6 +47,16 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       loadRevisionTasks(projectId);
     }
   }, [projectId, loadRevisionTasks]);
+  
+  // Auto-advance to export-final when all revisions are complete
+  useEffect(() => {
+    if (project && revisionTasks.length > 0) {
+      const allComplete = revisionTasks.every(task => task.status === 'done');
+      if (allComplete && project.currentStage === 'revision') {
+        advanceStage(projectId, 'export-final');
+      }
+    }
+  }, [project, revisionTasks, projectId, advanceStage]);
   
   // Load chapter versions when chapters are available
   useEffect(() => {
@@ -369,6 +379,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       activeStage="revision"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
+      revisionTasks={revisionTasks}
       contextContent={contextContent}
     >
       {/* Error */}
@@ -498,9 +509,9 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                 <p className="text-[var(--muted-foreground)] mb-4">
                   Your manuscript has been revised. You can now export the final version.
                 </p>
-                <Link href={`/projects/${projectId}/stage/compilation`}>
+                <Link href={`/projects/${projectId}/stage/export-final`}>
                   <Button>
-                    Go to Export
+                    Go to Export Final
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>

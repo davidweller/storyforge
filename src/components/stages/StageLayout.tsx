@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import { WorkflowSidebar, ContextDrawer } from '@/components/layout';
 import { ModelSelector } from './ModelSelector';
 import { STAGE_NAMES, STAGE_DESCRIPTIONS } from '@/lib/utils';
-import type { WorkflowStage, Chapter } from '@/types';
+import type { WorkflowStage, Chapter, RevisionTask } from '@/types';
 
 interface StageLayoutProps {
   projectId: string;
@@ -15,6 +15,8 @@ interface StageLayoutProps {
   activeStage: WorkflowStage;
   chapters?: Chapter[];
   approvedChapterIds?: Set<string>;
+  revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
+  finalExportedAt?: Date;  // Optional - timestamp when final export was completed
   contextContent?: ReactNode;
   children: ReactNode;
 }
@@ -28,6 +30,8 @@ export function StageLayout({
   activeStage,
   chapters = [],
   approvedChapterIds = new Set(),
+  revisionTasks = [],
+  finalExportedAt,
   contextContent,
   children,
 }: StageLayoutProps) {
@@ -45,6 +49,8 @@ export function StageLayout({
         currentStage={currentStage}
         chapters={chapters}
         approvedChapterIds={approvedChapterIds}
+        revisionTasks={revisionTasks}
+        finalExportedAt={finalExportedAt}
       />
       
       {/* Main content */}

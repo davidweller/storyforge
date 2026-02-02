@@ -8,7 +8,6 @@ import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout } from '@/components/stages';
 import { ContextSection } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
-import { auth } from '@/lib/firebase/config';
 import { cn, getNextStage, isStageAccessible } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
 
@@ -32,10 +31,6 @@ export default function CompilationPage({ params }: CompilationPageProps) {
   
   const { advanceStage, loadChapterVersions } = useProjectStore();
   
-  const [includeFrontMatter, setIncludeFrontMatter] = useState(true);
-  const [includeBackMatter, setIncludeBackMatter] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
   
   // Load versions for all chapters when chapters are available
   useEffect(() => {
@@ -106,83 +101,13 @@ export default function CompilationPage({ params }: CompilationPageProps) {
     }
   }
   
-  const handleExport = async (format: 'docx' | 'txt') => {
-    setIsExporting(true);
-    setExportError(null);
-    
-    try {
-      // Authentication disabled for testing
-      // const user = auth.currentUser;
-      // if (!user) throw new Error('Not authenticated');
-      // const token = await user.getIdToken();
-      
-      const response = await fetch('/api/export', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          projectId,
-          format,
-          includeFrontMatter,
-          includeBackMatter,
-        }),
-      });
-      
-      if (!response.ok) {
-        let errorMessage = 'Export failed';
-        try {
-          const data = await response.json();
-          errorMessage = data.error || errorMessage;
-        } catch {
-          // If response is not JSON, try to get text
-          try {
-            const text = await response.text();
-            errorMessage = text || errorMessage;
-          } catch {
-            errorMessage = `Export failed with status ${response.status}`;
-          }
-        }
-        throw new Error(errorMessage);
-      }
-      
-      // Check if response is actually a file (blob) or an error
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        // It's an error response, not a file
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Export failed');
-      }
-      
-      // Download the file
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const filename = project.title 
-        ? `${project.title.toLowerCase().replace(/\s+/g, '-')}.${format}`
-        : `project-${projectId}.${format}`;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-  
-  const handleContinueToEditorial = async () => {
+  const handleContinueToExportDraft = async () => {
     try {
       const nextStage = getNextStage('compilation');
       if (nextStage && project.currentStage === 'compilation') {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
-      router.push(`/projects/${projectId}/stage/editorial`);
+      router.push(`/projects/${projectId}/stage/export-draft`);
     } catch (err) {
       // Handle error
     }
@@ -214,9 +139,9 @@ export default function CompilationPage({ params }: CompilationPageProps) {
       contextContent={contextContent}
     >
       {/* Error */}
-      {(error || exportError) && (
+      {error && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
-          <p className="text-sm text-[var(--destructive)]">{error || exportError}</p>
+          <p className="text-sm text-[var(--destructive)]">{error}</p>
         </div>
       )}
       
@@ -294,94 +219,23 @@ export default function CompilationPage({ params }: CompilationPageProps) {
         </CardContent>
       </Card>
       
-      {/* Export options */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Export Options</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeFrontMatter}
-                onChange={(e) => setIncludeFrontMatter(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)]"
-              />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">Include Front Matter</p>
-                <p className="text-sm text-[var(--muted-foreground)]">Title page with book title and genre</p>
-              </div>
-            </label>
-            
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeBackMatter}
-                onChange={(e) => setIncludeBackMatter(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)]"
-              />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">Include Back Matter</p>
-                <p className="text-sm text-[var(--muted-foreground)]">&quot;The End&quot; marker</p>
-              </div>
-            </label>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Export buttons */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <Button
-          variant="secondary"
-          size="lg"
-          onClick={() => handleExport('docx')}
-          disabled={isExporting || approvedCount === 0}
-          className="h-auto py-6"
-        >
-          <div className="flex flex-col items-center gap-2">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="font-semibold">Export as .docx</span>
-            <span className="text-xs text-[var(--muted-foreground)]">Microsoft Word format</span>
-          </div>
-        </Button>
-        
-        <Button
-          variant="secondary"
-          size="lg"
-          onClick={() => handleExport('txt')}
-          disabled={isExporting || approvedCount === 0}
-          className="h-auto py-6"
-        >
-          <div className="flex flex-col items-center gap-2">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="font-semibold">Export as .txt</span>
-            <span className="text-xs text-[var(--muted-foreground)]">Plain text format</span>
-          </div>
-        </Button>
-      </div>
-      
-      {/* Continue to editorial */}
+      {/* Continue to export draft */}
       <Card className="bg-gradient-to-r from-[var(--primary)] to-[var(--color-ink-light)] text-[var(--primary-foreground)]">
         <CardContent className="py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold mb-2">Ready for Editorial Review?</h2>
+              <h2 className="text-xl font-semibold mb-2">Ready to Export Your Draft?</h2>
               <p className="opacity-80">
-                Get AI-powered feedback on your manuscript to identify areas for improvement.
+                Export your manuscript in multiple formats for review or sharing before editorial analysis.
               </p>
             </div>
             <Button
               variant="secondary"
               size="lg"
-              onClick={handleContinueToEditorial}
+              onClick={handleContinueToExportDraft}
               className="bg-[var(--primary-foreground)] text-[var(--primary)] hover:opacity-90"
             >
-              Continue to Editorial
+              Go to Export Draft
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>

@@ -63,8 +63,10 @@ export const STAGE_ORDER = [
   'chapter-outlines',
   'chapters',
   'compilation',
+  'export-draft',
   'editorial',
   'revision',
+  'export-final',
 ] as const;
 
 // Get stage index
@@ -97,8 +99,10 @@ export const STAGE_NAMES: Record<string, string> = {
   'chapter-outlines': 'Chapter Outlines',
   'chapters': 'Write Chapters',
   'compilation': 'Manuscript Assembly',
+  'export-draft': 'Export Draft',
   'editorial': 'Editorial Analysis',
   'revision': 'Apply Revisions',
+  'export-final': 'Export Final',
 };
 
 // Stage descriptions
@@ -111,9 +115,11 @@ export const STAGE_DESCRIPTIONS: Record<string, string> = {
   'structure': 'Build your story structure using the Save the Cat beat sheet. AI generates a scene-by-scene breakdown to guide your chapter writing.',
   'chapter-outlines': 'Convert your Plot Blueprint beats into detailed chapter outlines. Each chapter includes title, story beat, scene goals, POV, and key plot points needed for writing.',
   'chapters': 'Draft your novel chapter by chapter. Each chapter is generated based on your chapter outlines, characters, and ending.',
-  'compilation': 'Compile all approved chapters into a complete manuscript. Preview and export your novel in multiple formats.',
+  'compilation': 'Compile all approved chapters into a complete manuscript. Preview your draft manuscript before export.',
+  'export-draft': 'Export your draft manuscript in multiple formats. Download your work-in-progress for review or sharing.',
   'editorial': 'AI performs a comprehensive editorial review, identifying issues with continuity, pacing, character consistency, and prose.',
   'revision': 'Work through editorial suggestions chapter by chapter. AI helps you implement fixes while maintaining your voice.',
+  'export-final': 'Export your final manuscript after revisions. Download the polished version ready for publication or submission.',
 };
 
 // Model used per stage - re-exported from models.ts for backwards compatibility

@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, isStageAccessible } from '@/lib/utils';
-import type { WorkflowStage, StageStatus, Chapter } from '@/types';
+import type { WorkflowStage, StageStatus, Chapter, RevisionTask } from '@/types';
 
 interface WorkflowSidebarProps {
   projectId: string;
@@ -14,6 +14,8 @@ interface WorkflowSidebarProps {
   currentStage: WorkflowStage;
   chapters?: Chapter[];
   approvedChapterIds?: Set<string>;
+  revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
+  finalExportedAt?: Date;  // Optional - timestamp when final export was completed
 }
 
 const stageIcons: Record<WorkflowStage, React.ReactNode> = {
@@ -72,24 +74,53 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   ),
+  'export-draft': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  'export-final': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
 };
 
 function getStageStatus(
   stage: WorkflowStage, 
   currentStage: WorkflowStage, 
   chapters?: Chapter[], 
-  approvedChapterIds?: Set<string>
+  approvedChapterIds?: Set<string>,
+  revisionTasks?: RevisionTask[],
+  finalExportedAt?: Date
 ): StageStatus {
   const stageIndex = getStageIndex(stage);
   const currentIndex = getStageIndex(currentStage);
   
   if (stageIndex < currentIndex) return 'approved';
-  if (stageIndex === currentIndex) return 'in_progress';
+  if (stageIndex === currentIndex) {
+    // Special case: mark revision as approved if all revision tasks are done
+    if (stage === 'revision' && revisionTasks && revisionTasks.length > 0) {
+      const allComplete = revisionTasks.every(task => task.status === 'done');
+      if (allComplete) return 'approved';
+    }
+    // Special case: mark export-final as approved if it has been exported
+    if (stage === 'export-final' && finalExportedAt) {
+      return 'approved';
+    }
+    return 'in_progress';
+  }
   
   // Special case: allow access to compilation if all chapters are approved, even if currentStage is 'chapters'
   if (stage === 'compilation' && currentStage === 'chapters' && chapters && approvedChapterIds) {
     const allApproved = chapters.length > 0 && chapters.every(ch => approvedChapterIds.has(ch.id));
     if (allApproved) return 'not_started';
+  }
+  
+  // Special case: allow access to export-final if all revision tasks are done, even if currentStage is 'revision'
+  if (stage === 'export-final' && currentStage === 'revision' && revisionTasks && revisionTasks.length > 0) {
+    const allComplete = revisionTasks.every(task => task.status === 'done');
+    if (allComplete) return 'not_started';
   }
   
   if (isStageAccessible(currentStage, stage)) return 'not_started';
@@ -128,16 +159,18 @@ export function WorkflowSidebar({
   currentStage,
   chapters = [],
   approvedChapterIds = new Set(),
+  revisionTasks = [],
+  finalExportedAt,
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
   
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
   
-  // Group stages: planning (0-5), writing (6-7), editing (8-9)
+  // Group stages: planning (0-5), writing (6-7), editing (8+)
   const planningStages = STAGE_ORDER.slice(0, 6);
   const writingStages = STAGE_ORDER.slice(6, 8); // chapter-outlines, chapters
-  const editingStages = STAGE_ORDER.slice(8);
+  const editingStages = STAGE_ORDER.slice(8); // compilation, export-draft, editorial, revision, export-final
   
   const getStatusStyle = (status: StageStatus, isActive: boolean) => {
     const baseStyle: React.CSSProperties = {
@@ -165,7 +198,7 @@ export function WorkflowSidebar({
   };
   
   const renderStageItem = (stage: WorkflowStage) => {
-    const status = getStageStatus(stage, currentStage, chapters, approvedChapterIds);
+    const status = getStageStatus(stage, currentStage, chapters, approvedChapterIds, revisionTasks, finalExportedAt);
     const isActive = pathname.includes(`/stage/${stage}`);
     const isLocked = status === 'locked';
     
