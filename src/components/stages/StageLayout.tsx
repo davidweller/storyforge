@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { WorkflowSidebar, ContextDrawer } from '@/components/layout';
+import { WorkflowSidebar } from '@/components/layout';
 import { ModelSelector } from './ModelSelector';
 import { STAGE_NAMES, STAGE_DESCRIPTIONS } from '@/lib/utils';
 import type { WorkflowStage, Chapter, RevisionTask } from '@/types';
@@ -17,7 +17,6 @@ interface StageLayoutProps {
   approvedChapterIds?: Set<string>;
   revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
   finalExportedAt?: Date;  // Optional - timestamp when final export was completed
-  contextContent?: ReactNode;
   children: ReactNode;
 }
 
@@ -32,7 +31,6 @@ export function StageLayout({
   approvedChapterIds = new Set(),
   revisionTasks = [],
   finalExportedAt,
-  contextContent,
   children,
 }: StageLayoutProps) {
   // Don't show model selector for setup stage (no generation)
@@ -83,13 +81,6 @@ export function StageLayout({
           </div>
         </div>
       </main>
-      
-      {/* Context drawer */}
-      {contextContent && (
-        <ContextDrawer>
-          {contextContent}
-        </ContextDrawer>
-      )}
     </div>
   );
 }

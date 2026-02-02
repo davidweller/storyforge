@@ -44,7 +44,6 @@ module.exports = {
       },
       spacing: {
         'sidebar-width': 'var(--sidebar-width)',
-        'context-drawer-width': 'var(--context-drawer-width)',
         'header-height': 'var(--header-height)',
         'content-width-narrow': 'var(--content-width-narrow)',
         'content-width-medium': 'var(--content-width-medium)',

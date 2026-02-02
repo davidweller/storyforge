@@ -6,7 +6,6 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { Button, Card, CardContent, Input } from '@/components/ui';
 import { getNextStage, cn } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
@@ -243,35 +242,6 @@ export default function EndingPage({ params }: EndingPageProps) {
     handleApprove(projectTitle);
   };
   
-  // Build context content
-  const contextContent = (
-    <>
-      <ContextSection title="Project Info">
-        <div className="space-y-2 text-sm">
-          <p><strong>Genre:</strong> {project.genre}{project.niche && ` • ${project.niche}`}</p>
-          <p><strong>Premise:</strong> {project.premise || 'Not provided yet'}</p>
-        </div>
-      </ContextSection>
-      
-      {getDocumentByType('niche') && (
-        <ContextSection title="Niche Positioning" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
-            {getDocumentByType('niche')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      {selectedConcept && phase === 'concepts' && (
-        <ContextSection title="Selected Ending">
-          <div className="space-y-2 text-sm">
-            <p><strong>{selectedConcept.title}</strong></p>
-            <p className="text-[var(--muted-foreground)]">{selectedConcept.summary}</p>
-          </div>
-        </ContextSection>
-      )}
-    </>
-  );
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -281,7 +251,6 @@ export default function EndingPage({ params }: EndingPageProps) {
       currentStage={project.currentStage}
       activeStage="ending"
       chapters={chapters}
-      contextContent={contextContent}
     >
       {/* Title Modal */}
       {showTitleModal && (

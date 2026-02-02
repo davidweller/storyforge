@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, EmptyContent } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
 import { cn, countWords } from '@/lib/utils';
 
@@ -189,40 +188,6 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     }
   };
   
-  // Context content
-  const contextContent = (
-    <>
-      <ContextSection title="Progress">
-        <div className="space-y-3">
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span>Chapters</span>
-              <span>{approvedCount}/{totalChapters}</span>
-            </div>
-            <div className="h-2 bg-[var(--muted)] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[var(--status-approved)]"
-                style={{ width: `${totalChapters > 0 ? (approvedCount / totalChapters) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-          <div className="text-sm">
-            <span className="text-[var(--muted-foreground)]">Total words: </span>
-            <span className="font-medium">{totalWordCount.toLocaleString()}</span>
-          </div>
-        </div>
-      </ContextSection>
-      
-      {getLatestDocumentByType('chapter-outlines') && (
-        <ContextSection title="Chapter Outlines" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-10">
-            {getLatestDocumentByType('chapter-outlines')?.content.slice(0, 800)}...
-          </p>
-        </ContextSection>
-      )}
-    </>
-  );
-  
   // Check if chapter outlines exist
   const hasOutlines = chapterOutlines.length > 0;
   
@@ -236,7 +201,6 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
       activeStage="chapters"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
-      contextContent={contextContent}
     >
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">

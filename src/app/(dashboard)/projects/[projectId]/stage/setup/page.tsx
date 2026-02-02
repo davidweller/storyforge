@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { Button, Input, Textarea } from '@/components/ui';
 import { getNextStage } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
@@ -103,32 +102,6 @@ export default function SetupPage({ params }: SetupPageProps) {
     }
   };
   
-  // Build context content for the drawer
-  const contextContent = (
-    <>
-      <ContextSection title="Project Info">
-        <div className="space-y-2 text-sm">
-          <p><strong>Genre:</strong> {project.genre}</p>
-          {project.niche && <p><strong>Niche:</strong> {project.niche}</p>}
-        </div>
-      </ContextSection>
-      
-      <ContextSection title="What's Next?" defaultExpanded={true}>
-        <div className="space-y-2 text-sm text-[var(--muted-foreground)]">
-          <p>After setup, you'll move through the following stages:</p>
-          <ol className="list-decimal list-inside space-y-1 mt-2">
-            <li><strong>Market Analysis</strong> - AI researches your genre</li>
-            <li><strong>Reader Targeting</strong> - Define your ideal reader</li>
-            <li><strong>Choose Your Ending</strong> - Select from AI-generated endings</li>
-            <li><strong>Cast of Characters</strong> - Create your characters</li>
-            <li><strong>Plot Blueprint</strong> - Build your story structure</li>
-            <li><strong>Write Chapters</strong> - Draft your novel</li>
-          </ol>
-        </div>
-      </ContextSection>
-    </>
-  );
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -138,7 +111,6 @@ export default function SetupPage({ params }: SetupPageProps) {
       currentStage={project.currentStage}
       activeStage="setup"
       chapters={chapters}
-      contextContent={contextContent}
     >
       {/* Error display */}
       {projectError && (

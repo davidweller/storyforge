@@ -7,7 +7,7 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { TipTapEditor } from '@/components/editor';
-import { WorkflowSidebar, ContextDrawer, ContextSection } from '@/components/layout';
+import { WorkflowSidebar } from '@/components/layout';
 import { Button, Badge } from '@/components/ui';
 import { countWords } from '@/lib/utils';
 import type { ChapterVersion } from '@/types';
@@ -104,7 +104,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   const [content, setContent] = useState('');
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
-  const [showNotes, setShowNotes] = useState(false);
   
   // Find the current chapter
   const chapter = chapters.find((c) => c.id === chapterId);
@@ -270,54 +269,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     // In a real app, implement debounced auto-save here
   };
   
-  // Build context content
-  const contextContent = (
-    <>
-      <ContextSection title="Chapter Info">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
-          <p><strong>Beat:</strong> {chapter.beatReference}</p>
-          <p><strong>Scene Goal:</strong> {chapter.sceneGoal}</p>
-          {chapter.pov && <p><strong>POV:</strong> {chapter.pov}</p>}
-        </div>
-      </ContextSection>
-      
-      {getDocumentByType('characters') && (
-        <ContextSection title="Characters" defaultExpanded={false}>
-          <p style={{ fontSize: '0.875rem', color: '#737373', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical' }}>
-            {getDocumentByType('characters')?.content.slice(0, 800)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      {getDocumentByType('ending') && (
-        <ContextSection title="Ending Reminder" defaultExpanded={false}>
-          <p style={{ fontSize: '0.875rem', color: '#737373', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 6, WebkitBoxOrient: 'vertical' }}>
-            {getDocumentByType('ending')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      <ContextSection title="Notes">
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Add notes for this chapter..."
-          style={{
-            width: '100%',
-            padding: '0.5rem',
-            fontSize: '0.875rem',
-            backgroundColor: '#fafafa',
-            border: '1px solid #e5e5e5',
-            borderRadius: '4px',
-            resize: 'vertical',
-            minHeight: '100px',
-            outline: 'none',
-          }}
-        />
-      </ContextSection>
-    </>
-  );
-  
   // Get approved chapter IDs for sidebar
   const approvedChapterIds = new Set<string>();
   for (const ch of chapters) {
@@ -391,7 +342,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         )}
         
         {/* Editor */}
-        <div style={{ flex: 1, padding: '2rem 3rem' }}>
+        <div style={{ flex: 1, padding: '2rem 3rem', display: 'flex', flexDirection: 'column' }}>
           {isGenerating ? (
             <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '3rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
@@ -446,19 +397,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                   </svg>
                   Regenerate
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowNotes(!showNotes)}
-                  style={{ position: 'relative' }}
-                >
-                  <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                  </svg>
-                  Notes
-                  {notes.trim().length > 0 && (
-                    <span style={{ position: 'absolute', top: '-0.25rem', right: '-0.25rem', width: '0.625rem', height: '0.625rem', backgroundColor: '#3b82f6', borderRadius: '9999px' }} />
-                  )}
-                </Button>
               </div>
               
               {/* Visual separator */}
@@ -484,11 +422,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
           </div>
         )}
       </main>
-      
-      {/* Context drawer */}
-      <ContextDrawer>
-        {contextContent}
-      </ContextDrawer>
     </div>
   );
 }

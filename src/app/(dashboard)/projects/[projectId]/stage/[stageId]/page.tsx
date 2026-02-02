@@ -6,7 +6,6 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { getNextStage, isStageAccessible } from '@/lib/utils';
 import type { WorkflowStage, DocumentType } from '@/types';
 
@@ -193,58 +192,6 @@ export default function StagePage({ params }: StagePageProps) {
     }
   };
   
-  // Build context content for the drawer
-  const contextContent = (
-    <>
-      <ContextSection title="Project Info">
-        <div className="space-y-2 text-sm">
-          <p><strong>Genre:</strong> {project.genre}{project.niche && ` • ${project.niche}`}</p>
-          <p><strong>Premise:</strong> {project.premise || 'Not provided yet'}</p>
-        </div>
-      </ContextSection>
-      
-      {stage !== 'genre-research' && getDocumentByType('genre') && (
-        <ContextSection title="Genre Research" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
-            {getDocumentByType('genre')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      {['ending', 'characters', 'structure', 'chapter-outlines'].includes(stage) && getDocumentByType('niche') && (
-        <ContextSection title="Niche Positioning" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
-            {getDocumentByType('niche')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      {['characters', 'structure', 'chapter-outlines'].includes(stage) && getDocumentByType('ending') && (
-        <ContextSection title="Ending" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
-            {getDocumentByType('ending')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      {['structure', 'chapter-outlines'].includes(stage) && getDocumentByType('characters') && (
-        <ContextSection title="Characters" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
-            {getDocumentByType('characters')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-      
-      {stage === 'chapter-outlines' && getDocumentByType('structure') && (
-        <ContextSection title="Plot Blueprint" defaultExpanded={false}>
-          <p className="text-sm text-[var(--muted-foreground)] line-clamp-6">
-            {getDocumentByType('structure')?.content.slice(0, 500)}...
-          </p>
-        </ContextSection>
-      )}
-    </>
-  );
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -254,7 +201,6 @@ export default function StagePage({ params }: StagePageProps) {
       currentStage={project.currentStage}
       activeStage={stage}
       chapters={chapters}
-      contextContent={contextContent}
     >
       {/* Error display */}
       {(projectError || generateError) && (

@@ -6,7 +6,6 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn, getNextStage } from '@/lib/utils';
 import type { WorkflowStage, EditorialCategory } from '@/types';
@@ -448,33 +447,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     issuesByChapter.get(key)!.push(issue);
   }
   
-  // Context content
-  const contextContent = (
-    <>
-      <ContextSection title="Issue Summary">
-        <div className="space-y-2 text-sm">
-          <p><strong>Total Issues:</strong> {editorialIssues.length}</p>
-          <p><strong>Open:</strong> {openIssuesCount}</p>
-          <p><strong>Resolved:</strong> {editorialIssues.length - openIssuesCount}</p>
-        </div>
-      </ContextSection>
-      
-      <ContextSection title="By Category">
-        <div className="space-y-1">
-          {(Object.keys(categoryLabels) as EditorialCategory[]).map((cat) => {
-            const count = editorialIssues.filter((i) => i.category === cat).length;
-            return (
-              <div key={cat} className="flex justify-between text-sm">
-                <span>{categoryLabels[cat]}</span>
-                <span className="font-medium">{count}</span>
-              </div>
-            );
-          })}
-        </div>
-      </ContextSection>
-    </>
-  );
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -485,7 +457,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       activeStage="editorial"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
-      contextContent={contextContent}
     >
       {/* Error */}
       {(projectError || generateError) && (

@@ -6,7 +6,6 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import * as Diff from 'diff';
@@ -331,44 +330,6 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     );
   };
   
-  // Context content
-  const contextContent = (
-    <>
-      <ContextSection title="Revision Progress">
-        <div className="space-y-2 text-sm">
-          <p><strong>Pending:</strong> {pendingCount} chapters</p>
-          <p><strong>Completed:</strong> {revisionTasks.filter((t) => t.status === 'done').length} chapters</p>
-          <p><strong>In Progress:</strong> {revisionTasks.filter((t) => t.status === 'in_progress').length} chapters</p>
-        </div>
-      </ContextSection>
-      
-      {selectedTask && (
-        <ContextSection title="Revision Task">
-          <div className="space-y-2 text-sm">
-            <p className="text-[var(--foreground)]">
-              <strong>Status:</strong> {selectedTask.status === 'queued' ? 'Queued' : selectedTask.status === 'in_progress' ? 'In Progress' : 'Complete'}
-            </p>
-            {selectedTask.acceptanceCriteria.length > 0 && (
-              <div>
-                <p className="font-medium text-[var(--foreground)] mb-1">Acceptance Criteria:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs text-[var(--muted-foreground)]">
-                  {selectedTask.acceptanceCriteria.slice(0, 3).map((criterion, idx) => (
-                    <li key={idx}>{criterion}</li>
-                  ))}
-                  {selectedTask.acceptanceCriteria.length > 3 && (
-                    <li className="text-[var(--muted-foreground)]">
-                      +{selectedTask.acceptanceCriteria.length - 3} more
-                    </li>
-                  )}
-                </ul>
-              </div>
-            )}
-          </div>
-        </ContextSection>
-      )}
-    </>
-  );
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -380,7 +341,6 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
       revisionTasks={revisionTasks}
-      contextContent={contextContent}
     >
       {/* Error */}
       {(projectError || generateError) && (

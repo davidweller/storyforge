@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout } from '@/components/stages';
-import { ContextSection } from '@/components/layout';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn, getNextStage, isStageAccessible } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
@@ -113,19 +112,6 @@ export default function CompilationPage({ params }: CompilationPageProps) {
     }
   };
   
-  // Context content
-  const contextContent = (
-    <>
-      <ContextSection title="Manuscript Stats">
-        <div className="space-y-2 text-sm">
-          <p><strong>Chapters:</strong> {approvedCount}</p>
-          <p><strong>Total Words:</strong> {totalWordCount.toLocaleString()}</p>
-          <p><strong>Est. Pages:</strong> ~{Math.ceil(totalWordCount / 250)}</p>
-        </div>
-      </ContextSection>
-    </>
-  );
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -136,7 +122,6 @@ export default function CompilationPage({ params }: CompilationPageProps) {
       activeStage="compilation"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
-      contextContent={contextContent}
     >
       {/* Error */}
       {error && (
