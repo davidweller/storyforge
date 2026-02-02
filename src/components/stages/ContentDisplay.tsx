@@ -57,23 +57,149 @@ export function ContentDisplay({
   );
 }
 
-// Simple markdown formatter
+// Enhanced markdown formatter
 function formatMarkdown(text: string): string {
+  if (!text) return '';
+  
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+  let inList = false;
+  let listType: 'ul' | 'ol' | null = null;
+  let listItems: string[] = [];
+  
+  function flushList() {
+    if (listItems.length > 0 && listType) {
+      const tag = listType === 'ul' ? 'ul' : 'ol';
+      const listClass = listType === 'ul' ? 'list-disc' : 'list-decimal';
+      result.push(`<${tag} class="my-2 space-y-1 ml-6 ${listClass}">`);
+      result.push(listItems.join(''));
+      result.push(`</${tag}>`);
+      listItems = [];
+      listType = null;
+      inList = false;
+    }
+  }
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Handle code blocks
+    if (trimmed.startsWith('```')) {
+      flushList();
+      if (inCodeBlock) {
+        result.push('</code></pre>');
+        inCodeBlock = false;
+      } else {
+        result.push('<pre class="bg-[var(--muted)] p-4 rounded-lg my-4 overflow-x-auto"><code>');
+        inCodeBlock = true;
+      }
+      continue;
+    }
+    
+    if (inCodeBlock) {
+      result.push(line + '\n');
+      continue;
+    }
+    
+    // Handle horizontal rules
+    if (trimmed === '---' || trimmed === '***') {
+      flushList();
+      result.push('<hr class="my-6 border-[var(--border)]" />');
+      continue;
+    }
+    
+    // Handle headers
+    if (trimmed.startsWith('### ')) {
+      flushList();
+      result.push(`<h3 class="text-lg font-semibold mt-6 mb-3 text-[var(--foreground)]">${escapeHtml(trimmed.substring(4))}</h3>`);
+      continue;
+    }
+    if (trimmed.startsWith('## ')) {
+      flushList();
+      result.push(`<h2 class="text-xl font-semibold mt-8 mb-4 text-[var(--foreground)]">${escapeHtml(trimmed.substring(3))}</h2>`);
+      continue;
+    }
+    if (trimmed.startsWith('# ')) {
+      flushList();
+      result.push(`<h1 class="text-2xl font-bold mt-8 mb-4 text-[var(--foreground)]">${escapeHtml(trimmed.substring(2))}</h1>`);
+      continue;
+    }
+    
+    // Handle blockquotes
+    if (trimmed.startsWith('> ')) {
+      flushList();
+      result.push(`<blockquote class="border-l-4 border-[var(--border)] pl-4 my-4 italic text-[var(--muted-foreground)]">${formatInline(trimmed.substring(2))}</blockquote>`);
+      continue;
+    }
+    
+    // Handle lists
+    const unorderedMatch = trimmed.match(/^-\s+(.+)$/);
+    const orderedMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    
+    if (unorderedMatch || orderedMatch) {
+      const content = unorderedMatch ? unorderedMatch[1] : orderedMatch![1];
+      const currentListType = unorderedMatch ? 'ul' : 'ol';
+      
+      if (!inList || listType !== currentListType) {
+        flushList();
+        inList = true;
+        listType = currentListType;
+      }
+      
+      listItems.push(`<li class="mb-1">${formatInline(content)}</li>`);
+      continue;
+    }
+    
+    // If we hit a non-list line while in a list, flush it
+    if (inList && trimmed) {
+      flushList();
+    }
+    
+    // Handle empty lines
+    if (!trimmed) {
+      if (!inList) {
+        result.push('<br />');
+      }
+      continue;
+    }
+    
+    // Regular paragraph content
+    result.push(`<p class="mb-4 leading-relaxed">${formatInline(trimmed)}</p>`);
+  }
+  
+  flushList();
+  if (inCodeBlock) {
+    result.push('</code></pre>');
+  }
+  
+  return result.join('\n');
+}
+
+function escapeHtml(text: string): string {
   return text
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-6 mb-3 text-[var(--foreground)]">$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-8 mb-4 text-[var(--foreground)]">$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-8 mb-4 text-[var(--foreground)]">$1</h1>')
-    // Bold
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-    // Italic
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Lists
-    .replace(/^\- (.*$)/gim, '<li class="ml-4">$1</li>')
-    .replace(/^\d+\. (.*$)/gim, '<li class="ml-4 list-decimal">$1</li>')
-    // Line breaks
-    .replace(/\n\n/g, '</p><p class="mb-4">')
-    .replace(/\n/g, '<br />');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function formatInline(text: string): string {
+  let html = escapeHtml(text);
+  
+  // Process inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-[var(--muted)] px-1.5 py-0.5 rounded text-sm">$1</code>');
+  
+  // Process links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-[var(--accent)] underline hover:text-[var(--accent-foreground)]" target="_blank" rel="noopener noreferrer">$1</a>');
+  
+  // Process bold (must be before italic)
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>');
+  
+  // Process italic (avoid conflicts with bold)
+  html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+  
+  return html;
 }
 
 interface LoadingContentProps {

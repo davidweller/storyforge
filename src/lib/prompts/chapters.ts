@@ -87,15 +87,21 @@ Convert the Plot Blueprint into detailed chapter outlines. For each chapter, pro
 
 ## Output Format
 
-Present the chapter outlines in a structured markdown table format:
+Present the chapter outlines in markdown format. For each chapter, use the following structure:
 
-| Ch # | Title | Beat(s) | Scene Goal | POV | Word Target | Key Plot Points |
-|------|------|---------|------------|-----|-------------|----------------|
-| 1 | [Title] | [Beat name] | [Detailed goal] | [Character] | ~3000 | • Point 1<br>• Point 2<br>• Point 3 |
-| 2 | [Title] | [Beat name] | [Detailed goal] | [Character] | ~3000 | • Point 1<br>• Point 2<br>• Point 3 |
-| ... | ... | ... | ... | ... | ... | ... |
+**Chapter [Number]: [Title]**
+- **Story Beat(s)**: [Beat name(s) this chapter covers]
+- **Scene Goal**: [Detailed goal description]
+- **POV Character**: [Character name]
+- **Word Target**: ~[number] words
+- **Key Plot Points**:
+  - [Point 1]
+  - [Point 2]
+  - [Point 3]
+  - [Point 4]
+  - [Point 5]
 
-After the table, provide a brief narrative overview explaining:
+After all chapter outlines, provide a brief narrative overview explaining:
 - How the chapters flow from one to the next
 - How the pacing varies across the story
 - How character arcs progress through the chapters

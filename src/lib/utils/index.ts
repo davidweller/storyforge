@@ -124,3 +124,41 @@ export const STAGE_DESCRIPTIONS: Record<string, string> = {
 
 // Model used per stage - re-exported from models.ts for backwards compatibility
 export { STAGE_DEFAULT_PROVIDERS as STAGE_MODELS } from '@/lib/data/models';
+
+/**
+ * Convert plain text to HTML with proper paragraph formatting
+ * Handles double newlines as paragraph breaks and single newlines as line breaks
+ */
+export function textToHtml(text: string): string {
+  if (!text) return '';
+  
+  // Check if content is already HTML (contains HTML tags)
+  const isHtml = /<[a-z][\s\S]*>/i.test(text);
+  if (isHtml) {
+    return text;
+  }
+  
+  // Escape HTML entities
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  
+  // Split by double newlines (paragraph breaks)
+  const paragraphs = html.split(/\n\n+/);
+  
+  // Convert each paragraph
+  const formattedParagraphs = paragraphs
+    .map((para) => {
+      const trimmed = para.trim();
+      if (!trimmed) return '';
+      
+      // Replace single newlines with <br> tags within paragraphs
+      const withBreaks = trimmed.replace(/\n/g, '<br />');
+      
+      return `<p style="margin-bottom: 1rem; line-height: 1.75;">${withBreaks}</p>`;
+    })
+    .filter((p) => p);
+  
+  return formattedParagraphs.join('\n');
+}

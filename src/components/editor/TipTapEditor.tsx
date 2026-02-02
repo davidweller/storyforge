@@ -3,8 +3,8 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import { useEffect } from 'react';
-import { cn } from '@/lib/utils';
+import { useEffect, useMemo } from 'react';
+import { cn, textToHtml } from '@/lib/utils';
 
 interface TipTapEditorProps {
   content: string;
@@ -21,6 +21,12 @@ export function TipTapEditor({
   editable = true,
   className,
 }: TipTapEditorProps) {
+  // Convert plain text to HTML if needed
+  const htmlContent = useMemo(() => {
+    if (!content) return '';
+    return textToHtml(content);
+  }, [content]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -32,7 +38,7 @@ export function TipTapEditor({
         placeholder,
       }),
     ],
-    content,
+    content: htmlContent,
     editable,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
@@ -47,10 +53,10 @@ export function TipTapEditor({
 
   // Update content when it changes externally
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+    if (editor && htmlContent !== editor.getHTML()) {
+      editor.commands.setContent(htmlContent);
     }
-  }, [content, editor]);
+  }, [htmlContent, editor]);
 
   // Update editable state
   useEffect(() => {

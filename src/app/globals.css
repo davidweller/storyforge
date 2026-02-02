@@ -248,7 +248,13 @@ label, .label {
 }
 
 .ProseMirror p {
-  margin-bottom: 1em;
+  margin-bottom: 1rem;
+  line-height: 1.75;
+  color: var(--foreground);
+}
+
+.ProseMirror p:last-child {
+  margin-bottom: 0;
 }
 
 .ProseMirror h1 {

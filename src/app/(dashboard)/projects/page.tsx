@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useProjects } from '@/hooks/useProject';
+import { useProjectStore } from '@/stores/projectStore';
 import { Button, Badge } from '@/components/ui';
 import { formatRelativeTime, STAGE_NAMES } from '@/lib/utils';
 
@@ -34,14 +36,41 @@ function SkeletonCard() {
 }
 
 export default function ProjectsPage() {
-  const { projects, loading, error } = useProjects();
+  const { projects, loading, error, refresh } = useProjects();
+  const { deleteProject } = useProjectStore();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   
   const filteredProjects = projects.filter((project) =>
     (project.title?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
     project.genre.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (project.niche?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
+
+  const handleDeleteClick = (e: React.MouseEvent, projectId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConfirmDeleteId(projectId);
+  };
+
+  const handleConfirmDelete = async (projectId: string) => {
+    setDeletingProjectId(projectId);
+    setConfirmDeleteId(null);
+    try {
+      await deleteProject(projectId);
+      await refresh();
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+    } finally {
+      setDeletingProjectId(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmDeleteId(null);
+  };
   
   // Show skeleton loading state
   if (loading && projects.length === 0) {
@@ -217,19 +246,16 @@ export default function ProjectsPage() {
           gap: '1.5rem'
         }}>
           {filteredProjects.map((project) => (
-            <Link
+            <div
               key={project.id}
-              href={`/projects/${project.id}`}
-              style={{ textDecoration: 'none' }}
-            >
-              <div style={{
+              style={{
+                position: 'relative',
                 backgroundColor: '#ffffff',
                 borderRadius: '12px',
                 padding: '1.5rem',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                 height: '100%',
                 transition: 'all 0.2s',
-                cursor: 'pointer',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
@@ -239,8 +265,63 @@ export default function ProjectsPage() {
                 e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
+            >
+              {/* Delete button */}
+              <button
+                onClick={(e) => handleDeleteClick(e, project.id)}
+                disabled={deletingProjectId === project.id}
+                style={{
+                  position: 'absolute',
+                  top: '1rem',
+                  right: '1rem',
+                  width: '2rem',
+                  height: '2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '6px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: '#737373',
+                  cursor: deletingProjectId === project.id ? 'not-allowed' : 'pointer',
+                  opacity: deletingProjectId === project.id ? 0.5 : 1,
+                  transition: 'all 0.2s',
+                  zIndex: 10,
+                }}
+                onMouseEnter={(e) => {
+                  if (deletingProjectId !== project.id) {
+                    e.currentTarget.style.backgroundColor = '#fef2f2';
+                    e.currentTarget.style.color = '#dc2626';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#737373';
+                }}
+                title="Delete project"
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                {deletingProjectId === project.id ? (
+                  <div style={{
+                    width: '1rem',
+                    height: '1rem',
+                    border: '2px solid currentColor',
+                    borderTopColor: 'transparent',
+                    borderRadius: '9999px',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                ) : (
+                  <svg style={{ width: '1.125rem', height: '1.125rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Project content - clickable link */}
+              <Link
+                href={`/projects/${project.id}`}
+                style={{ textDecoration: 'none', display: 'block' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem', paddingRight: '2.5rem' }}>
                   <h3 style={{ 
                     fontSize: '1.125rem', 
                     fontWeight: 600, 
@@ -281,9 +362,75 @@ export default function ProjectsPage() {
                   </span>
                   <span>{formatRelativeTime(project.updatedAt)}</span>
                 </div>
-              </div>
-            </Link>
+              </Link>
+            </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {confirmDeleteId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={handleCancelDelete}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '28rem',
+              width: '90%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#171717', marginBottom: '0.75rem' }}>
+              Delete Project?
+            </h3>
+            <p style={{ color: '#737373', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              Are you sure you want to delete this project? This action cannot be undone and will permanently delete all associated data including chapters, documents, and versions.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                onClick={handleCancelDelete}
+                disabled={deletingProjectId === confirmDeleteId}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleConfirmDelete(confirmDeleteId)}
+                disabled={deletingProjectId === confirmDeleteId}
+              >
+                {deletingProjectId === confirmDeleteId ? (
+                  <>
+                    <div style={{
+                      width: '1rem',
+                      height: '1rem',
+                      border: '2px solid currentColor',
+                      borderTopColor: 'transparent',
+                      borderRadius: '9999px',
+                      animation: 'spin 1s linear infinite',
+                      marginRight: '0.5rem',
+                    }} />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
       

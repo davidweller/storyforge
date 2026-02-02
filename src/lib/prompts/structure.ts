@@ -99,17 +99,13 @@ The "after" snapshot - show how the protagonist has changed.
 
 ## Part 2: Chapter Outline
 
-Map the beats to approximately 20-30 chapters:
+Map the beats to approximately 20-30 chapters. For each chapter, provide the following in markdown format:
 
-| Ch # | Title | Beat(s) | POV | Summary | Word Target |
-|------|-------|---------|-----|---------|-------------|
-
-For each chapter, include:
-- Chapter number and working title
-- Which beat(s) it covers
-- POV character (if multiple)
-- 2-3 sentence summary of events
-- Approximate word count target
+**Chapter [Number]: [Title]**
+- **Beat(s)**: [Which beat(s) this chapter covers]
+- **POV**: [POV character, if multiple]
+- **Summary**: [2-3 sentence summary of events]
+- **Word Target**: [Approximate word count target]
 
 ## Part 3: Emotional Arc Graph
 

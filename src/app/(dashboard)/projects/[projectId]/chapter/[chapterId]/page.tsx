@@ -25,57 +25,56 @@ interface ChapterOutline {
   wordTarget?: number;
 }
 
-// Parse chapter outlines from markdown table
+// Parse chapter outlines from markdown format
 function parseChapterOutlines(content: string): ChapterOutline[] {
   const outlines: ChapterOutline[] = [];
-  const lines = content.split('\n');
   
-  // Find the table section
-  let inTable = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  // Match chapter blocks: **Chapter [Number]: [Title]**
+  const chapterRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
+  const matches: Array<{ index: number; number: number; title: string; endIndex: number }> = [];
+  
+  // Collect all matches first
+  let match;
+  while ((match = chapterRegex.exec(content)) !== null) {
+    matches.push({
+      index: match.index,
+      number: parseInt(match[1], 10),
+      title: match[2]?.trim() || '',
+      endIndex: match.index + match[0].length,
+    });
+  }
+  
+  // Process each match
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i];
+    const next = matches[i + 1];
     
-    // Look for table header
-    if (line.includes('| Ch #') || line.includes('| Ch#') || line.includes('| Chapter')) {
-      inTable = true;
-      continue; // Skip header
-    }
+    // Get content between this chapter header and the next (or end of string)
+    const startIndex = current.endIndex;
+    const endIndex = next ? next.index : content.length;
+    const chapterContent = content.substring(startIndex, endIndex);
     
-    // Skip separator line
-    if (inTable && line.match(/^\|[\s\-:]+\|/)) {
-      continue;
-    }
+    if (isNaN(current.number)) continue;
     
-    // Parse table rows
-    if (inTable && line.startsWith('|')) {
-      const cells = line.split('|').map(c => c.trim()).filter(c => c);
-      
-      if (cells.length >= 4) {
-        const chapterNumber = parseInt(cells[0], 10);
-        if (!isNaN(chapterNumber)) {
-          const title = cells[1] || '';
-          const beatReference = cells[2] || '';
-          const sceneGoal = cells[3] || '';
-          const pov = cells[4] || undefined;
-          const wordTargetMatch = cells[5]?.match(/~?(\d+)/);
-          const wordTarget = wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined;
-          
-          outlines.push({
-            chapterNumber,
-            title,
-            beatReference,
-            sceneGoal,
-            pov,
-            wordTarget,
-          });
-        }
-      }
-    }
+    // Extract fields from the chapter content
+    const beatMatch = chapterContent.match(/\*\*Story Beat\(s\)\*\*:\s*(.+?)(?:\n|$)/i);
+    const sceneGoalMatch = chapterContent.match(/\*\*Scene Goal\*\*:\s*(.+?)(?:\n|$)/i);
+    const povMatch = chapterContent.match(/\*\*POV Character\*\*:\s*(.+?)(?:\n|$)/i);
+    const wordTargetMatch = chapterContent.match(/\*\*Word Target\*\*:\s*~?(\d+)/i);
     
-    // Stop at end of table or start of narrative section
-    if (inTable && (line.startsWith('##') || line.startsWith('**'))) {
-      break;
-    }
+    const beatReference = beatMatch?.[1]?.trim() || '';
+    const sceneGoal = sceneGoalMatch?.[1]?.trim() || '';
+    const pov = povMatch?.[1]?.trim() || undefined;
+    const wordTarget = wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined;
+    
+    outlines.push({
+      chapterNumber: current.number,
+      title: current.title,
+      beatReference,
+      sceneGoal,
+      pov,
+      wordTarget,
+    });
   }
   
   return outlines;

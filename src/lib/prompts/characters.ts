@@ -39,10 +39,12 @@ ${endingReference}
 ## Required Output:
 
 ### 1. Character List
-First, provide a quick reference list of all characters:
-| Name | Role | One-Line Description |
-|------|------|---------------------|
-(Include 5-10 significant characters)
+First, provide a quick reference list of all characters in markdown format:
+
+For each character (include 5-10 significant characters), list:
+- **Name**: [Character name]
+- **Role**: [Their role in the story]
+- **One-Line Description**: [Brief description]
 
 ### 2. Protagonist Profile
 
