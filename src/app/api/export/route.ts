@@ -132,18 +132,17 @@ export async function POST(request: NextRequest) {
       if (includeFrontMatter) {
         children.push(
           new Paragraph({
-            text: project?.title || 'Untitled',
+            children: [createTextRun({ text: project?.title || 'Untitled' })],
             heading: HeadingLevel.TITLE,
             alignment: AlignmentType.CENTER,
             spacing: { after: 400 },
           }),
           new Paragraph({
-            text: `Genre: ${project?.genre || ''}`,
+            children: [createTextRun({ text: `Genre: ${project?.genre || ''}` })],
             alignment: AlignmentType.CENTER,
             spacing: { after: 800 },
           }),
           new Paragraph({
-            text: '',
             spacing: { after: 400 },
           })
         );
@@ -158,7 +157,7 @@ export async function POST(request: NextRequest) {
         children.push(
           new Paragraph({
             children: [
-              new TextRun({
+              createTextRun({
                 text: chapter.title || 'Untitled',
                 size: 40, // 20pt matching example (twips: 20 * 2 = 40)
                 color: '0F4761', // Dark blue matching example
@@ -186,7 +185,7 @@ export async function POST(request: NextRequest) {
           if (plainText.trim()) {
             children.push(
               new Paragraph({
-                children: [new TextRun(plainText)],
+                children: [createTextRun({ text: plainText })],
                 spacing: {
                   before: 180, // 9pt matching BodyText style
                   after: 180, // 9pt matching BodyText style
@@ -202,7 +201,7 @@ export async function POST(request: NextRequest) {
       if (includeBackMatter) {
         children.push(
           new Paragraph({
-            text: 'THE END',
+            children: [createTextRun({ text: 'THE END' })],
             alignment: 'center' as const,
             spacing: { before: 800 },
           })
@@ -213,7 +212,7 @@ export async function POST(request: NextRequest) {
       if (children.length === 0) {
         children.push(
           new Paragraph({
-            text: 'No content available',
+            children: [createTextRun({ text: 'No content available' })],
           })
         );
       }
@@ -263,6 +262,31 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Default font settings
+const DEFAULT_FONT = 'Arial';
+const DEFAULT_FONT_SIZE = 22; // 11pt in twips (1pt = 2 twips)
+
+/**
+ * Helper function to create a TextRun with default Arial 11pt font
+ */
+function createTextRun(options: {
+  text: string;
+  bold?: boolean;
+  italics?: boolean;
+  font?: string;
+  size?: number;
+  color?: string;
+}): TextRun {
+  return new TextRun({
+    text: options.text,
+    bold: options.bold || undefined,
+    italics: options.italics || undefined,
+    font: options.font || DEFAULT_FONT,
+    size: options.size || DEFAULT_FONT_SIZE,
+    color: options.color,
+  });
 }
 
 function stripHtml(html: string): string {
@@ -438,15 +462,55 @@ function parseHtmlToParagraphs(html: string, isFirstParagraph: boolean = false):
     }
   }
   
-  // Convert markdown to HTML first if content looks like markdown
-  // Check for markdown patterns: # headers, * or _ for italics, ** or __ for bold
-  // Also check if content doesn't look like HTML or JSON
-  const looksLikeMarkdown = html.match(/^#+\s|^\*\*|^\*[^*\n]|^_[^_\n]/m) || 
-                            (!html.includes('<') && !html.trim().startsWith('{') && 
-                             (html.includes('*') || html.includes('#')));
+  // Always convert markdown formatting (even if content is HTML)
+  // This handles cases where HTML contains markdown asterisks like <p>*example text*</p>
+  // First check if it's pure markdown (no HTML tags)
+  const isPureMarkdown = !html.includes('<') && !html.trim().startsWith('{');
   
-  if (looksLikeMarkdown) {
+  if (isPureMarkdown) {
+    // Pure markdown - convert everything
     html = convertMarkdownToHtml(html);
+  } else {
+    // HTML with potential markdown inside - convert markdown patterns within text content
+    // Strategy: Process text nodes separately from HTML tags
+    // Split by HTML tags, process text parts, then reassemble
+    const parts: string[] = [];
+    let lastIndex = 0;
+    const tagRegex = /<[^>]+>/g;
+    let match;
+    
+    while ((match = tagRegex.exec(html)) !== null) {
+      // Add text before tag (with markdown conversion)
+      if (match.index > lastIndex) {
+        const textBefore = html.substring(lastIndex, match.index);
+        // Convert markdown in this text segment
+        let converted = textBefore;
+        // Convert bold first (to avoid conflicts with italics)
+        converted = converted.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+        converted = converted.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
+        // Then convert italics (single asterisks not part of **)
+        converted = converted.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+        converted = converted.replace(/(?<!_)_([^_\n]+?)_(?!_)/g, '<em>$1</em>');
+        parts.push(converted);
+      }
+      // Add the HTML tag as-is
+      parts.push(match[0]);
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Add remaining text after last tag
+    if (lastIndex < html.length) {
+      const textAfter = html.substring(lastIndex);
+      let converted = textAfter;
+      // Convert markdown in this text segment
+      converted = converted.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+      converted = converted.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
+      converted = converted.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+      converted = converted.replace(/(?<!_)_([^_\n]+?)_(?!_)/g, '<em>$1</em>');
+      parts.push(converted);
+    }
+    
+    html = parts.join('');
   }
   
   // Normalize the HTML
@@ -544,7 +608,7 @@ function parseHtmlToParagraphs(html: string, isFirstParagraph: boolean = false):
         paragraphs.push(
           new Paragraph({
             spacing: { before: 180, after: 180 },
-            children: [new TextRun('* * *')],
+            children: [createTextRun({ text: '* * *' })],
           })
         );
         paragraphs.push(
@@ -637,7 +701,7 @@ function parseHtmlToParagraphs(html: string, isFirstParagraph: boolean = false):
                 before: 180,
                 after: 180,
               },
-              children: [new TextRun('* * *')],
+              children: [createTextRun({ text: '* * *' })],
             })
           );
           // Add empty paragraph after scene break
@@ -837,10 +901,10 @@ function parseInlineFormatting(html: string): TextRun[] {
     if (textRuns.length === 0) {
       // First segment
       textRuns.push(
-        new TextRun({
+        createTextRun({
           text: segment.text,
-          bold: segment.bold || undefined,
-          italics: segment.italic || undefined,
+          bold: segment.bold,
+          italics: segment.italic,
         })
       );
     } else {
@@ -850,17 +914,17 @@ function parseInlineFormatting(html: string): TextRun[] {
       
       // Merge if formatting matches
       if (lastBold === segment.bold && lastItalic === segment.italic) {
-        textRuns[textRuns.length - 1] = new TextRun({
+        textRuns[textRuns.length - 1] = createTextRun({
           text: lastRun.text + segment.text,
-          bold: segment.bold || undefined,
-          italics: segment.italic || undefined,
+          bold: segment.bold,
+          italics: segment.italic,
         });
       } else {
         textRuns.push(
-          new TextRun({
+          createTextRun({
             text: segment.text,
-            bold: segment.bold || undefined,
-            italics: segment.italic || undefined,
+            bold: segment.bold,
+            italics: segment.italic,
           })
         );
       }
@@ -871,7 +935,7 @@ function parseInlineFormatting(html: string): TextRun[] {
   if (textRuns.length === 0) {
     const plainText = decodedHtml.replace(/<[^>]+>/g, '').trim();
     if (plainText) {
-      textRuns.push(new TextRun(plainText));
+      textRuns.push(createTextRun({ text: plainText }));
     }
   }
   
@@ -912,7 +976,7 @@ function parseProseMirrorToParagraphs(node: any, isFirstParagraph: boolean = fal
                   before: 180,
                   after: 180,
                 },
-                children: [new TextRun('* * *')],
+                children: [createTextRun({ text: '* * *' })],
               })
             );
             paragraphs.push(
@@ -1001,7 +1065,7 @@ function parseProseMirrorNodeToTextRuns(node: any): TextRun[] {
     
     if (text) {
       textRuns.push(
-        new TextRun({
+        createTextRun({
           text,
           bold,
           italics: italic,
