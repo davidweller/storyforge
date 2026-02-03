@@ -42,6 +42,7 @@ export interface Project {
   title?: string;  // Optional - deferred until after ending stage
   genre: string;
   niche?: string;  // Selected niche/subgenre
+  microniche?: string;  // Selected microniche (optional)
   premise?: string;
   research?: string;
   status: 'active' | 'completed' | 'archived';
@@ -146,6 +147,7 @@ export interface ProjectFormData {
   title?: string;  // Optional - deferred until after ending stage
   genre: string;
   niche?: string;  // Selected niche/subgenre
+  microniche?: string;  // Selected microniche (optional)
   premise?: string;
   research?: string;
 }

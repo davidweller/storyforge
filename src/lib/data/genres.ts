@@ -1,11 +1,18 @@
 // Comprehensive genre and niche data for novel creation
 // Focuses on underserved and emerging niches alongside traditional genres
 
+export interface Microniche {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface Niche {
   id: string;
   name: string;
   description: string;
   keywords: string[];
+  microniches?: Microniche[];
 }
 
 export interface Genre {
@@ -614,4 +621,21 @@ export function getGenreNicheDisplay(genreId: string, nicheId?: string): string 
   if (!niche) return genre.name;
   
   return `${genre.name} • ${niche.name}`;
+}
+
+// Helper function to get microniches for a niche by niche ID
+// This matches the niche name from our structure to the microniche data
+export function getMicronichesByNicheId(genreId: string, nicheId: string): Microniche[] {
+  const niche = getNicheById(nicheId);
+  if (!niche) return [];
+  
+  // Import microniches data - using dynamic import to avoid circular dependencies
+  // We'll match by niche name
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getMicronichesByNicheName } = require('./microniches');
+    return getMicronichesByNicheName(genreId, niche.name);
+  } catch {
+    return [];
+  }
 }
