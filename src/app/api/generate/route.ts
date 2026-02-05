@@ -15,6 +15,8 @@ import {
   buildCharactersPrompt,
   STRUCTURE_SYSTEM,
   buildStructurePrompt,
+  TITLE_IDEAS_SYSTEM,
+  buildTitleIdeasPrompt,
   CHAPTER_OUTLINES_SYSTEM,
   buildChapterOutlinesPrompt,
   CHAPTERS_SYSTEM,
@@ -136,6 +138,18 @@ export async function POST(request: NextRequest) {
           nicheReference: data.nicheReference as string,
           endingReference: data.endingReference as string,
           charactersReference: data.charactersReference as string,
+        });
+        break;
+        
+      case 'title':
+        systemPrompt = TITLE_IDEAS_SYSTEM;
+        prompt = buildTitleIdeasPrompt({
+          genre: data.genre as string,
+          premise: data.premise as string | undefined,
+          nicheReference: data.nicheReference as string | undefined,
+          structureReference: data.structureReference as string | undefined,
+          endingReference: data.endingReference as string | undefined,
+          charactersReference: data.charactersReference as string | undefined,
         });
         break;
         

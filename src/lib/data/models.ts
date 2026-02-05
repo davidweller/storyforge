@@ -109,6 +109,7 @@ export const STAGE_DEFAULT_PROVIDERS: Record<string, LLMProvider> = {
   'ending': 'anthropic',
   'characters': 'openai',
   'structure': 'openai',
+  'title': 'openai',
   'chapter-outlines': 'openai',
   'chapters': 'anthropic',
   'compilation': 'openai',

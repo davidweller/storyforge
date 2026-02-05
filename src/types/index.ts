@@ -7,13 +7,14 @@ export type WorkflowStage =
   | 'ending'          // Stage 3
   | 'characters'      // Stage 4
   | 'structure'       // Stage 5
-  | 'chapter-outlines' // Stage 6
-  | 'chapters'        // Stage 7
-  | 'compilation'     // Stage 8
-  | 'export-draft'    // Stage 9
-  | 'editorial'       // Stage 10
-  | 'revision'        // Stage 11
-  | 'export-final';   // Stage 12
+  | 'title'           // Stage 6
+  | 'chapter-outlines' // Stage 7
+  | 'chapters'        // Stage 8
+  | 'compilation'     // Stage 9
+  | 'export-draft'    // Stage 10
+  | 'editorial'       // Stage 11
+  | 'revision'        // Stage 12
+  | 'export-final';   // Stage 13
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 

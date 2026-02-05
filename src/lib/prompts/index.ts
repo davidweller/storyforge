@@ -3,5 +3,6 @@ export { NICHE_SYSTEM, buildNichePrompt } from './niche';
 export { ENDING_SYSTEM, buildEndingConceptsPrompt, buildEndingExpansionPrompt } from './ending';
 export { CHARACTERS_SYSTEM, buildCharactersPrompt } from './characters';
 export { STRUCTURE_SYSTEM, buildStructurePrompt } from './structure';
+export { TITLE_IDEAS_SYSTEM, buildTitleIdeasPrompt } from './title';
 export { CHAPTERS_SYSTEM, CHAPTER_OUTLINES_SYSTEM, buildChapterPrompt, buildChapterOutlinesPrompt, buildChapterRevisionPrompt } from './chapters';
 export { EDITORIAL_SYSTEM, buildEditorialPrompt, buildRevisionQueuePrompt } from './editorial';

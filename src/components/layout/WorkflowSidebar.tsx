@@ -49,6 +49,11 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
     </svg>
   ),
+  'title': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h2l2 2h4a2 2 0 012 2v2a2 2 0 01-2 2h-2l-2 2z" />
+    </svg>
+  ),
   'chapter-outlines': (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -167,10 +172,10 @@ export function WorkflowSidebar({
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
   
-  // Group stages: planning (0-5), writing (6-7), editing (8+)
-  const planningStages = STAGE_ORDER.slice(0, 6);
-  const writingStages = STAGE_ORDER.slice(6, 8); // chapter-outlines, chapters
-  const editingStages = STAGE_ORDER.slice(8); // compilation, export-draft, editorial, revision, export-final
+  // Group stages: planning (0-6), writing (7-8), editing (9+)
+  const planningStages = STAGE_ORDER.slice(0, 7); // setup through title
+  const writingStages = STAGE_ORDER.slice(7, 9); // chapter-outlines, chapters
+  const editingStages = STAGE_ORDER.slice(9); // compilation, export-draft, editorial, revision, export-final
   
   const getStatusStyle = (status: StageStatus, isActive: boolean) => {
     const baseStyle: React.CSSProperties = {
