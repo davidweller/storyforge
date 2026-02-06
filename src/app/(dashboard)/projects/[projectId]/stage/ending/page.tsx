@@ -23,34 +23,37 @@ interface EndingConcept {
   thematicStatement: string;
 }
 
-// Parse ending concepts from generated content
+// Parse ending concepts from generated content (primary: numbered + bold title; fallback: numbered sections)
 function parseEndingConcepts(content: string): EndingConcept[] {
   const concepts: EndingConcept[] = [];
-  
-  // Split by numbered sections (1., 2., etc.)
-  const sections = content.split(/(?=\d+\.\s+\*\*)/);
-  
+  // Split by numbered sections: "1. **Title**" or fallback "1. Title"
+  const sections = content.split(/(?=\d+\.\s)/).filter((s) => s.trim());
+  if (sections.length <= 1) return concepts;
+
   for (const section of sections) {
-    if (!section.trim()) continue;
-    
-    const titleMatch = section.match(/\*\*([^*]+)\*\*/);
-    const summaryMatch = section.match(/Summary[:\s]*([^\n]+(?:\n(?!\d+\.\s|\*\*)[^\n]+)*)/i);
-    const emotionalMatch = section.match(/Emotional[^:]*[:\s]*([^\n]+)/i);
-    const characterMatch = section.match(/Character[^:]*[:\s]*([^\n]+)/i);
-    const thematicMatch = section.match(/Thematic[^:]*[:\s]*([^\n]+)/i);
-    
-    if (titleMatch) {
-      concepts.push({
-        id: `ending-${concepts.length + 1}`,
-        title: titleMatch[1].trim(),
-        summary: summaryMatch?.[1]?.trim() || section.slice(0, 200),
-        emotionalPayoff: emotionalMatch?.[1]?.trim() || '',
-        characterResolution: characterMatch?.[1]?.trim() || '',
-        thematicStatement: thematicMatch?.[1]?.trim() || '',
-      });
-    }
+    const trimmed = section.trim();
+    if (!trimmed || !/^\d+\.\s/.test(trimmed)) continue;
+
+    const titleMatch = trimmed.match(/\*\*([^*]+)\*\*/);
+    const firstLine = trimmed.split(/\n/)[0]?.replace(/^\d+\.\s*/, '').trim() || '';
+    const title = titleMatch ? titleMatch[1].trim() : (firstLine || trimmed.slice(0, 80));
+    if (!title) continue;
+
+    const summaryMatch = trimmed.match(/Summary[:\s]*([^\n]+(?:\n(?!\d+\.\s|\*\*)[^\n]+)*)/i);
+    const emotionalMatch = trimmed.match(/Emotional[^:]*[:\s]*([^\n]+)/i);
+    const characterMatch = trimmed.match(/Character[^:]*[:\s]*([^\n]+)/i);
+    const thematicMatch = trimmed.match(/Thematic[^:]*[:\s]*([^\n]+)/i);
+
+    concepts.push({
+      id: `ending-${concepts.length + 1}`,
+      title,
+      summary: summaryMatch?.[1]?.trim() || trimmed.slice(title.length, 200 + title.length).trim() || trimmed.slice(0, 200),
+      emotionalPayoff: emotionalMatch?.[1]?.trim() || '',
+      characterResolution: characterMatch?.[1]?.trim() || '',
+      thematicStatement: thematicMatch?.[1]?.trim() || '',
+    });
   }
-  
+
   return concepts;
 }
 
@@ -85,19 +88,23 @@ export default function EndingPage({ params }: EndingPageProps) {
   const [projectTitle, setProjectTitle] = useState('');
   const [titleError, setTitleError] = useState('');
   
-  // Load existing content
+  // Load existing content: use parsing to decide concepts vs expanded (not length alone)
   useEffect(() => {
     if (documents.length > 0) {
       const doc = getLatestDocumentByType('ending');
       if (doc) {
-        // Check if it's expanded content (longer) or concepts
-        if (doc.content.length > 3000) {
+        const parsed = parseEndingConcepts(doc.content);
+        if (parsed.length >= 2) {
+          setPhase('concepts');
+          setConceptsContent(doc.content);
+          setConcepts(parsed);
+        } else if (parsed.length <= 1 && doc.content.length > 3000) {
           setPhase('expanded');
           setExpandedContent(doc.content);
         } else {
           setPhase('concepts');
           setConceptsContent(doc.content);
-          setConcepts(parseEndingConcepts(doc.content));
+          setConcepts(parsed);
         }
         setCurrentDocId(doc.id);
       }
@@ -396,8 +403,8 @@ export default function EndingPage({ params }: EndingPageProps) {
         />
       )}
       
-      {/* Concepts phase */}
-      {!isGenerating && phase === 'concepts' && concepts.length === 0 && (
+      {/* Concepts phase: empty state */}
+      {!isGenerating && phase === 'concepts' && concepts.length === 0 && !conceptsContent && (
         <EmptyContent
           title="Generate Ending Concepts"
           description="We'll generate 8-10 potential endings for your story. You'll then select one to develop further."
@@ -405,6 +412,26 @@ export default function EndingPage({ params }: EndingPageProps) {
           onAction={handleGenerateConcepts}
           isLoading={isGenerating}
         />
+      )}
+
+      {/* Concepts phase: parsing failed but we have content — show read-only + Regenerate */}
+      {!isGenerating && phase === 'concepts' && concepts.length === 0 && conceptsContent && !isApproved && (
+        <>
+          <div className="mb-6 p-4 rounded-lg bg-[var(--muted)] border border-[var(--border)]">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              We couldn&apos;t split this into selectable cards. Regenerate to get clear ending options you can choose from.
+            </p>
+          </div>
+          <ContentDisplay content={conceptsContent} className="mb-6" />
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={handleGenerateConcepts} disabled={isGenerating}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Regenerate Concepts
+            </Button>
+          </div>
+        </>
       )}
       
       {!isGenerating && phase === 'concepts' && concepts.length > 0 && !isApproved && (
@@ -418,12 +445,12 @@ export default function EndingPage({ params }: EndingPageProps) {
             </p>
           </div>
           
-          <div className="grid gap-4 mb-6">
+          <div className="w-full flex flex-col gap-4 mb-6">
             {concepts.map((concept) => (
               <Card
                 key={concept.id}
                 className={cn(
-                  'cursor-pointer transition-all duration-200',
+                  'w-full cursor-pointer transition-all duration-200',
                   selectedConcept?.id === concept.id
                     ? 'ring-2 ring-[var(--ring)] bg-[var(--muted)]'
                     : 'hover:border-[var(--ring)]'
@@ -444,7 +471,7 @@ export default function EndingPage({ params }: EndingPageProps) {
                         </svg>
                       )}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-[var(--foreground)] mb-2">{concept.title}</h3>
                       <p className="text-sm text-[var(--muted-foreground)] mb-3">{concept.summary}</p>
                       {concept.emotionalPayoff && (

@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
             data.charactersReference,
             data.endingReference,
             data.structureReference,
-          ].filter(Boolean).reduce((sum, doc) => sum + (doc as string).length, 0);
+          ].filter(Boolean).reduce((sum: number, doc) => sum + (doc as string).length, 0);
           const estimatedReferenceTokens = Math.ceil(referenceDocsLength / 4);
           const estimatedPromptOverhead = 2000; // System prompt + instructions
           const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
     });
     
     // Use JSON mode for revision queue generation
-    const useJsonMode = stage === 'editorial' && data.createQueue;
+    const useJsonMode = stage === 'editorial' && !!data.createQueue;
     
     const result = await generateForStage(stage, prompt, {
       systemPrompt,

@@ -391,7 +391,7 @@ function convertMarkdownToHtml(markdown: string): string {
  */
 function parseHtmlParagraphsOnly(html: string): Paragraph[] {
   const paragraphs: Paragraph[] = [];
-  const paragraphRegex = /<p[^>]*>(.*?)<\/p>/gis;
+  const paragraphRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   let match;
   
   while ((match = paragraphRegex.exec(html)) !== null) {
@@ -651,7 +651,7 @@ function parseHtmlToParagraphs(html: string, isFirstParagraph: boolean = false):
   
   // Extract paragraphs using regex to preserve structure
   // Match both <p>...</p> and handle any remaining content
-  const paragraphRegex = /<p[^>]*>(.*?)<\/p>/gis;
+  const paragraphRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   let match;
   let paragraphIndex = 0;
   let lastIndex = 0;
@@ -896,39 +896,28 @@ function parseInlineFormatting(html: string): TextRun[] {
     segments.push({ text: currentText, bold, italic });
   }
   
-  // Build text runs, merging adjacent segments with same formatting
+  // Merge adjacent segments with same formatting, then build TextRuns
+  const merged: Array<{ text: string; bold: boolean; italic: boolean }> = [];
   for (const segment of segments) {
-    if (textRuns.length === 0) {
-      // First segment
-      textRuns.push(
-        createTextRun({
-          text: segment.text,
-          bold: segment.bold,
-          italics: segment.italic,
-        })
-      );
+    if (merged.length === 0) {
+      merged.push({ ...segment });
     } else {
-      const lastRun = textRuns[textRuns.length - 1];
-      const lastBold = (lastRun as any).bold || false;
-      const lastItalic = (lastRun as any).italics || false;
-      
-      // Merge if formatting matches
-      if (lastBold === segment.bold && lastItalic === segment.italic) {
-        textRuns[textRuns.length - 1] = createTextRun({
-          text: lastRun.text + segment.text,
-          bold: segment.bold,
-          italics: segment.italic,
-        });
+      const last = merged[merged.length - 1];
+      if (last.bold === segment.bold && last.italic === segment.italic) {
+        last.text += segment.text;
       } else {
-        textRuns.push(
-          createTextRun({
-            text: segment.text,
-            bold: segment.bold,
-            italics: segment.italic,
-          })
-        );
+        merged.push({ ...segment });
       }
     }
+  }
+  for (const seg of merged) {
+    textRuns.push(
+      createTextRun({
+        text: seg.text,
+        bold: seg.bold,
+        italics: seg.italic,
+      })
+    );
   }
   
   // If no formatting was found, return plain text
@@ -958,8 +947,8 @@ function parseProseMirrorToParagraphs(node: any, isFirstParagraph: boolean = fal
       if (child.type === 'paragraph') {
         const textRuns = parseProseMirrorNodeToTextRuns(child);
         if (textRuns.length > 0) {
-          // Check for scene breaks
-          const text = textRuns.map(r => r.text).join('');
+          // Check for scene breaks (get plain text from node to avoid depending on TextRun API)
+          const text = getTextFromProseMirrorNode(child);
           if (text.trim() === '* * *' || text.trim() === '***') {
             paragraphs.push(
               new Paragraph({
@@ -1035,6 +1024,18 @@ function parseProseMirrorToParagraphs(node: any, isFirstParagraph: boolean = fal
   }
   
   return paragraphs;
+}
+
+/**
+ * Get plain text from a ProseMirror node (for scene-break checks etc.)
+ */
+function getTextFromProseMirrorNode(node: any): string {
+  if (!node || typeof node !== 'object') return '';
+  if (node.type === 'text') return node.text || '';
+  if (node.content && Array.isArray(node.content)) {
+    return node.content.map((c: any) => getTextFromProseMirrorNode(c)).join('');
+  }
+  return '';
 }
 
 /**

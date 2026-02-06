@@ -35,11 +35,14 @@ const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
   'ending': 8192,
   'characters': 8192,
   'structure': 8192,
+  'title': 4096,
   'chapter-outlines': 8192,
   'chapters': 16384,
   'compilation': 2048,
+  'export-draft': 2048,
   'editorial': 8192,
   'revision': 16384,
+  'export-final': 2048,
 };
 
 /**

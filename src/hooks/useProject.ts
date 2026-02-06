@@ -114,6 +114,7 @@ export function useProject(projectId: string | null) {
     project: currentProject,
     documents,
     chapters,
+    chapterVersions,
     editorialIssues,
     revisionTasks,
     loading,
