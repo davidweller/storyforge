@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -168,6 +169,7 @@ export function WorkflowSidebar({
   finalExportedAt,
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
+  const [isChaptersExpanded, setIsChaptersExpanded] = useState(true);
   
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
@@ -206,6 +208,61 @@ export function WorkflowSidebar({
     const status = getStageStatus(stage, currentStage, chapters, approvedChapterIds, revisionTasks, finalExportedAt);
     const isActive = pathname.includes(`/stage/${stage}`);
     const isLocked = status === 'locked';
+    const isChaptersStage = stage === 'chapters';
+    const hasChapters = chapters.length > 0 && getStageIndex(currentStage) >= getStageIndex('chapters');
+    
+    // Special handling for chapters stage - make it collapsible
+    if (isChaptersStage && hasChapters) {
+      return (
+        <div key={stage} style={{ position: 'relative' }}>
+          <Link
+            href={isLocked ? '#' : `/projects/${projectId}/stage/${stage}`}
+            style={getStatusStyle(status, isActive)}
+            onClick={(e) => isLocked && e.preventDefault()}
+          >
+            <span style={{ flexShrink: 0 }}>{stageIcons[stage]}</span>
+            <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {STAGE_NAMES[stage]}
+            </span>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsChaptersExpanded(!isChaptersExpanded);
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '0.25rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                marginLeft: '0.25rem',
+              }}
+              title={isChaptersExpanded ? 'Collapse chapters' : 'Expand chapters'}
+            >
+              <svg
+                style={{
+                  width: '0.875rem',
+                  height: '0.875rem',
+                  transition: 'transform 0.2s',
+                  transform: isChaptersExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                  color: 'inherit',
+                }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {statusIndicators[status]}
+          </Link>
+        </div>
+      );
+    }
     
     return (
       <Link
@@ -285,7 +342,7 @@ export function WorkflowSidebar({
           </div>
           
           {/* Chapters list (nested under Writing) */}
-          {chapters.length > 0 && getStageIndex(currentStage) >= getStageIndex('chapters') && (
+          {chapters.length > 0 && getStageIndex(currentStage) >= getStageIndex('chapters') && isChaptersExpanded && (
             <div style={{ marginTop: '0.5rem', marginLeft: '1rem', paddingLeft: '0.75rem', borderLeft: '1px solid #e5e5e5' }}>
               {chapters.map((chapter) => {
                 const isApproved = approvedChapterIds.has(chapter.id);

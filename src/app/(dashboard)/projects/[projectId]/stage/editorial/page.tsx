@@ -6,29 +6,14 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
-import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
-import { cn, getNextStage } from '@/lib/utils';
-import type { WorkflowStage, EditorialCategory } from '@/types';
+import { Button } from '@/components/ui';
+import { getNextStage } from '@/lib/utils';
+import type { WorkflowStage } from '@/types';
 
 interface EditorialPageProps {
   params: Promise<{ projectId: string }>;
 }
 
-const categoryLabels: Record<EditorialCategory, string> = {
-  continuity: 'Continuity',
-  character: 'Character',
-  pacing: 'Pacing',
-  prose: 'Prose & Style',
-  logic: 'Logic & Plot',
-};
-
-const categoryColors: Record<EditorialCategory, string> = {
-  continuity: 'bg-blue-100 text-blue-800',
-  character: 'bg-purple-100 text-purple-800',
-  pacing: 'bg-yellow-100 text-yellow-800',
-  prose: 'bg-green-100 text-green-800',
-  logic: 'bg-red-100 text-red-800',
-};
 
 export default function EditorialPage({ params }: EditorialPageProps) {
   const { projectId } = use(params);
@@ -52,7 +37,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
   
   const [editorialContent, setEditorialContent] = useState('');
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<EditorialCategory | 'all'>('all');
   const [modelSwitchMessage, setModelSwitchMessage] = useState<string | null>(null);
   
   // Load versions for all chapters when chapters are available
@@ -432,21 +416,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     }
   };
   
-  // Filter issues by category
-  const filteredIssues = selectedCategory === 'all'
-    ? editorialIssues
-    : editorialIssues.filter((i) => i.category === selectedCategory);
-  
-  // Group issues by chapter
-  const issuesByChapter = new Map<number | undefined, typeof editorialIssues>();
-  for (const issue of filteredIssues) {
-    const key = issue.chapterNumber;
-    if (!issuesByChapter.has(key)) {
-      issuesByChapter.set(key, []);
-    }
-    issuesByChapter.get(key)!.push(issue);
-  }
-  
   return (
     <StageLayout
       projectId={projectId}
@@ -499,46 +468,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       {/* Editorial content */}
       {!isGenerating && editorialContent && (
         <>
-          {/* Summary card */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Editorial Report</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-5 gap-4 mb-4">
-                {(Object.keys(categoryLabels) as EditorialCategory[]).map((cat) => {
-                  const count = editorialIssues.filter((i) => i.category === cat && i.status === 'open').length;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(selectedCategory === cat ? 'all' : cat)}
-                      className={cn(
-                        'p-3 rounded-lg text-center transition-all',
-                        selectedCategory === cat
-                          ? 'ring-2 ring-[var(--ring)]'
-                          : 'hover:bg-[var(--muted)]',
-                        categoryColors[cat]
-                      )}
-                    >
-                      <div className="text-2xl font-bold">{count}</div>
-                      <div className="text-xs">{categoryLabels[cat]}</div>
-                    </button>
-                  );
-                })}
-              </div>
-              
-              {selectedCategory !== 'all' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedCategory('all')}
-                >
-                  Show All Issues
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-          
           {/* Full report */}
           <ContentDisplay content={editorialContent} className="mb-6" />
           

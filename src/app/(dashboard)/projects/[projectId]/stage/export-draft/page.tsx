@@ -30,8 +30,6 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
   
   const { advanceStage, loadChapterVersions } = useProjectStore();
   
-  const [includeFrontMatter, setIncludeFrontMatter] = useState(true);
-  const [includeBackMatter, setIncludeBackMatter] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   
@@ -107,8 +105,6 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
         body: JSON.stringify({
           projectId,
           format,
-          includeFrontMatter,
-          includeBackMatter,
         }),
       });
       
@@ -209,42 +205,6 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
         </CardContent>
       </Card>
       
-      {/* Export options */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Export Options</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeFrontMatter}
-                onChange={(e) => setIncludeFrontMatter(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)]"
-              />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">Include Front Matter</p>
-                <p className="text-sm text-[var(--muted-foreground)]">Title page with book title and genre</p>
-              </div>
-            </label>
-            
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeBackMatter}
-                onChange={(e) => setIncludeBackMatter(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)]"
-              />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">Include Back Matter</p>
-                <p className="text-sm text-[var(--muted-foreground)]">&quot;The End&quot; marker</p>
-              </div>
-            </label>
-          </div>
-        </CardContent>
-      </Card>
-      
       {/* Export buttons */}
       <div className="grid grid-cols-2 gap-4 mb-8">
         <Button
@@ -281,23 +241,21 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
       </div>
       
       {/* Continue to editorial */}
-      <Card className="bg-gradient-to-r from-[var(--primary)] to-[var(--color-ink-light)] text-[var(--primary-foreground)]">
-        <CardContent className="py-8">
+      <Card>
+        <CardContent className="py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold mb-2">Ready for Editorial Review?</h2>
-              <p className="opacity-80">
+              <h2 className="text-xl font-semibold mb-2 text-[var(--foreground)]">Ready for Editorial Review?</h2>
+              <p className="text-[var(--muted-foreground)]">
                 Get AI-powered feedback on your manuscript to identify areas for improvement.
               </p>
             </div>
             <Button
               variant="secondary"
-              size="lg"
               onClick={handleContinueToEditorial}
-              className="bg-[var(--primary-foreground)] text-[var(--primary)] hover:opacity-90"
             >
               Continue to Editorial
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Button>

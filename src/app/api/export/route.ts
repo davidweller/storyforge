@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing projectId or format' }, { status: 400 });
     }
     
+    // Default to false if not provided (removed from UI)
+    const includeFront = includeFrontMatter ?? false;
+    const includeBack = includeBackMatter ?? false;
+    
     let db;
     try {
       db = getAdminDb();
@@ -102,7 +106,7 @@ export async function POST(request: NextRequest) {
       // Generate plain text
       let text = '';
       
-      if (includeFrontMatter) {
+      if (includeFront) {
         text += `${project?.title}\n`;
         text += `${'='.repeat(project?.title?.length || 0)}\n\n`;
         text += `Genre: ${project?.genre}\n\n`;
@@ -115,7 +119,7 @@ export async function POST(request: NextRequest) {
         text += '\n\n---\n\n';
       }
       
-      if (includeBackMatter) {
+      if (includeBack) {
         text += '\n\nTHE END\n';
       }
       
@@ -129,7 +133,7 @@ export async function POST(request: NextRequest) {
       // Generate DOCX
       const children: Paragraph[] = [];
       
-      if (includeFrontMatter) {
+      if (includeFront) {
         children.push(
           new Paragraph({
             children: [createTextRun({ text: project?.title || 'Untitled' })],
@@ -164,7 +168,7 @@ export async function POST(request: NextRequest) {
               }),
             ],
             heading: HeadingLevel.HEADING_1,
-            pageBreakBefore: includeFrontMatter && chapter.number === 1,
+            pageBreakBefore: includeFront && chapter.number === 1,
             spacing: {
               before: 360, // 18pt matching example
               after: 80, // 4pt matching example
@@ -198,7 +202,7 @@ export async function POST(request: NextRequest) {
         // No extra spacing needed - BodyText style handles it
       }
       
-      if (includeBackMatter) {
+      if (includeBack) {
         children.push(
           new Paragraph({
             children: [createTextRun({ text: 'THE END' })],

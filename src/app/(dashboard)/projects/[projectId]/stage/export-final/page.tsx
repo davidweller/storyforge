@@ -27,8 +27,6 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
   
   const { loadChapterVersions, loadRevisionTasks, updateProject } = useProjectStore();
   
-  const [includeFrontMatter, setIncludeFrontMatter] = useState(true);
-  const [includeBackMatter, setIncludeBackMatter] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   
@@ -109,8 +107,6 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
         body: JSON.stringify({
           projectId,
           format,
-          includeFrontMatter,
-          includeBackMatter,
         }),
       });
       
@@ -219,42 +215,6 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
               <div className="text-3xl font-bold text-[var(--foreground)]">~{Math.ceil(totalWordCount / 250)}</div>
               <p className="text-sm text-[var(--muted-foreground)]">Est. Pages</p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Export options */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Export Options</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeFrontMatter}
-                onChange={(e) => setIncludeFrontMatter(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)]"
-              />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">Include Front Matter</p>
-                <p className="text-sm text-[var(--muted-foreground)]">Title page with book title and genre</p>
-              </div>
-            </label>
-            
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeBackMatter}
-                onChange={(e) => setIncludeBackMatter(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)]"
-              />
-              <div>
-                <p className="font-medium text-[var(--foreground)]">Include Back Matter</p>
-                <p className="text-sm text-[var(--muted-foreground)]">&quot;The End&quot; marker</p>
-              </div>
-            </label>
           </div>
         </CardContent>
       </Card>
