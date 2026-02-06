@@ -129,39 +129,49 @@ export const STAGE_DESCRIPTIONS: Record<string, string> = {
 export { STAGE_DEFAULT_PROVIDERS as STAGE_MODELS } from '@/lib/data/models';
 
 /**
- * Convert plain text to HTML with proper paragraph formatting
- * Handles double newlines as paragraph breaks and single newlines as line breaks
+ * Apply basic markdown-style bold/italic to already-escaped HTML text.
+ */
+function applyInlineFormat(escaped: string): string {
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+}
+
+/**
+ * Convert plain text to HTML with proper paragraph formatting (book-like).
+ * Handles double newlines as paragraph breaks, single newlines as line breaks,
+ * and basic **bold** / *italic* so content does not show raw markdown.
  */
 export function textToHtml(text: string): string {
   if (!text) return '';
-  
+
   // Check if content is already HTML (contains HTML tags)
   const isHtml = /<[a-z][\s\S]*>/i.test(text);
   if (isHtml) {
     return text;
   }
-  
+
   // Escape HTML entities
   let html = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  
+
   // Split by double newlines (paragraph breaks)
   const paragraphs = html.split(/\n\n+/);
-  
-  // Convert each paragraph
+
+  // Convert each paragraph with book-like spacing and inline formatting
   const formattedParagraphs = paragraphs
     .map((para) => {
       const trimmed = para.trim();
       if (!trimmed) return '';
-      
-      // Replace single newlines with <br> tags within paragraphs
-      const withBreaks = trimmed.replace(/\n/g, '<br />');
-      
-      return `<p style="margin-bottom: 1rem; line-height: 1.75;">${withBreaks}</p>`;
+
+      const withInline = applyInlineFormat(trimmed);
+      const withBreaks = withInline.replace(/\n/g, '<br />');
+
+      return `<p style="margin-bottom: 0.75em; line-height: 1.75;">${withBreaks}</p>`;
     })
     .filter((p) => p);
-  
+
   return formattedParagraphs.join('\n');
 }

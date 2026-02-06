@@ -280,6 +280,85 @@ label, .label {
   height: 0;
 }
 
+/* Book-like prose: shared typography for chapters and stage content */
+.prose-book {
+  max-width: 65ch;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--foreground);
+}
+
+.prose-book p {
+  margin-bottom: 0.75em;
+  line-height: 1.75;
+}
+
+.prose-book p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-book h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: var(--foreground);
+}
+
+.prose-book h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  color: var(--foreground);
+}
+
+.prose-book h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.375em;
+  color: var(--foreground);
+}
+
+.prose-book ul,
+.prose-book ol {
+  margin-bottom: 0.75em;
+  padding-left: 1.5em;
+}
+
+.prose-book li {
+  margin-bottom: 0.25em;
+}
+
+.prose-book blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.prose-book hr {
+  margin: 1.25em 0;
+}
+
+.prose-book pre {
+  margin: 0.75em 0;
+}
+
+.prose-book-cards-header {
+  margin-top: 0.75em;
+  margin-bottom: 0.25em;
+}
+
+.prose-book-card {
+  margin-bottom: 0.5em;
+  padding: 0.5em 0.75em;
+  background: var(--muted);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+}
+
 /* Diff view styles */
 .diff-added {
   background-color: rgba(92, 124, 92, 0.2);

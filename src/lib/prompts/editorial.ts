@@ -104,35 +104,43 @@ Provide your feedback in the following structured format:
 - Commercial viability assessment
 
 ### 2. Continuity Issues
-List any continuity errors or inconsistencies. **MUST cite specific passages from the manuscript**:
-| Chapter | Location | Issue | Specific Example from Manuscript | Recommended Fix |
-|---------|----------|-------|----------------------------------|-----------------|
+List any continuity errors or inconsistencies. **MUST cite specific passages from the manuscript.** For each issue use this structure (leave a blank line between issues):
+- **Chapter:** [number]
+- **Location:** [where in chapter]
+- **Issue:** [description]
+- **Example from manuscript:** [quote or reference]
+- **Recommended fix:** [action]
 
 ### 3. Character Issues
-Identify problems with character consistency, development, or voice. **MUST reference specific dialogue or actions from the manuscript**:
-| Character | Chapter | Issue Type | Description | Specific Example from Manuscript | Recommended Fix |
-|-----------|---------|------------|-------------|----------------------------------|-----------------|
-
-Issue types: voice_inconsistency, motivation_unclear, arc_problem, relationship_issue
+Identify problems with character consistency, development, or voice. **MUST reference specific dialogue or actions from the manuscript.** For each issue list:
+- **Character:** [name]
+- **Chapter:** [number]
+- **Issue type:** voice_inconsistency | motivation_unclear | arc_problem | relationship_issue
+- **Description:** [what’s wrong]
+- **Example from manuscript:** [quote or reference]
+- **Recommended fix:** [action]
 
 ### 4. Pacing Issues
-Identify sections with pacing problems. **MUST reference specific chapters and scenes**:
-| Chapters | Issue | Description | Specific Scene/Passage Reference | Recommended Fix |
-|----------|-------|-------------|----------------------------------|-----------------|
-
-Issue types: too_slow, too_fast, tension_drops, missing_beats
+Identify sections with pacing problems. **MUST reference specific chapters and scenes.** For each issue list:
+- **Chapters:** [which]
+- **Issue type:** too_slow | too_fast | tension_drops | missing_beats
+- **Description:** [what’s wrong]
+- **Scene/passage reference:** [specific location]
+- **Recommended fix:** [action]
 
 ### 5. Prose & Style Issues
-Note recurring prose-level issues. **MUST provide actual examples from the manuscript**:
-| Issue Type | Frequency | Actual Examples from Manuscript | Recommendation |
-|------------|-----------|--------------------------------|----------------|
-
-Issue types: telling_not_showing, weak_verbs, repetitive_phrases, dialogue_tags, filter_words
+Note recurring prose-level issues. **MUST provide actual examples from the manuscript.** For each issue list:
+- **Issue type:** telling_not_showing | weak_verbs | repetitive_phrases | dialogue_tags | filter_words
+- **Frequency:** [how often it appears]
+- **Examples from manuscript:** [quotes]
+- **Recommendation:** [action]
 
 ### 6. Logic & Plot Issues
-Identify plot holes or logical inconsistencies. **MUST reference specific plot points from the manuscript**:
-| Chapter | Issue | Description | Specific Plot Point Reference | Recommended Fix |
-|---------|-------|-------------|-------------------------------|-----------------|
+Identify plot holes or logical inconsistencies. **MUST reference specific plot points from the manuscript.** For each issue list:
+- **Chapter:** [number]
+- **Issue:** [description]
+- **Plot point reference:** [specific reference]
+- **Recommended fix:** [action]
 
 ### 7. Chapter-by-Chapter Notes
 For each chapter, provide detailed analysis based on the actual manuscript content:

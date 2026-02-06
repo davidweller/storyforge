@@ -46,7 +46,7 @@ export function TipTapEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-lg max-w-none focus:outline-none min-h-[400px] px-6 py-4',
+        class: 'prose prose-book max-w-none focus:outline-none min-h-[400px] px-6 py-4',
       },
     },
   });

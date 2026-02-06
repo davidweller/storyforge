@@ -624,7 +624,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                       <CardTitle>Original</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="max-h-[500px] overflow-y-auto text-sm">
+                      <div className="max-h-[500px] overflow-y-auto prose-book text-sm">
                         <div dangerouslySetInnerHTML={{ __html: originalVersion?.content || '' }} />
                       </div>
                     </CardContent>
@@ -634,7 +634,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                       <CardTitle>Revised</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="max-h-[500px] overflow-y-auto text-sm">
+                      <div className="max-h-[500px] overflow-y-auto prose-book text-sm">
                         <div dangerouslySetInnerHTML={{ __html: revisedContent }} />
                       </div>
                     </CardContent>

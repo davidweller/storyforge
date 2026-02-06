@@ -49,25 +49,89 @@ export function ContentDisplay({
         padding: '1.5rem',
       }}
     >
-      <div 
-        style={{ color: '#171717', whiteSpace: 'pre-wrap' }}
+      <div
+        className="prose-book"
         dangerouslySetInnerHTML={{ __html: formatMarkdown(content) }}
       />
     </div>
   );
 }
 
-// Enhanced markdown formatter
+const TABLE_BLOCK_PREFIX = '\u0000TABLE:';
+const TABLE_BLOCK_SUFFIX = '\u0000';
+
+// Convert markdown table blocks to encoded card HTML (injected later, no <table>)
+function replaceMarkdownTables(text: string): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let i = 0;
+
+  function isTableRow(line: string): boolean {
+    const t = line.trim();
+    return /^\|.+\|$/.test(t) && t.includes('|');
+  }
+  function parseTableRow(line: string): string[] {
+    return line
+      .trim()
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean);
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!isTableRow(line)) {
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    const rows: string[][] = [];
+    while (i < lines.length && isTableRow(lines[i])) {
+      rows.push(parseTableRow(lines[i]));
+      i++;
+    }
+
+    const hasSeparator =
+      rows.length >= 2 && rows[1].every((cell) => /^-+$/.test(cell));
+    const headerRow = hasSeparator ? rows[0] : null;
+    const bodyRows = hasSeparator ? rows.slice(2) : rows;
+
+    if (headerRow && bodyRows.length > 0) {
+      const headerText = headerRow.map((c) => escapeHtml(c)).join(' · ');
+      const cards = bodyRows
+        .map(
+          (cells) =>
+            `<p class="prose-book-card">${cells
+              .map((c) => escapeHtml(c))
+              .join(' · ')}</p>`
+        )
+        .join('');
+      const blockHtml = `<p class="prose-book-cards-header"><strong>${headerText}</strong></p>${cards}`;
+      result.push(TABLE_BLOCK_PREFIX + blockHtml + TABLE_BLOCK_SUFFIX);
+    } else {
+      rows.forEach((r) => result.push(r.map((c) => c).join(' | ')));
+    }
+  }
+
+  return result.join('\n');
+}
+
+// Enhanced markdown formatter (book-like, collapsed blanks, no tables)
 function formatMarkdown(text: string): string {
   if (!text) return '';
-  
-  const lines = text.split('\n');
+
+  const withCards = replaceMarkdownTables(text);
+  const lines = withCards.split('\n');
   const result: string[] = [];
   let inCodeBlock = false;
   let inList = false;
   let listType: 'ul' | 'ol' | null = null;
   let listItems: string[] = [];
-  
+  let blankRun = false;
+
   function flushList() {
     if (listItems.length > 0 && listType) {
       const tag = listType === 'ul' ? 'ul' : 'ol';
@@ -80,100 +144,144 @@ function formatMarkdown(text: string): string {
       inList = false;
     }
   }
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
-    
+
     // Handle code blocks
     if (trimmed.startsWith('```')) {
       flushList();
+      blankRun = false;
       if (inCodeBlock) {
         result.push('</code></pre>');
         inCodeBlock = false;
       } else {
-        result.push('<pre class="bg-[var(--muted)] p-4 rounded-lg my-4 overflow-x-auto"><code>');
+        result.push(
+          '<pre class="bg-[var(--muted)] p-4 rounded-lg my-4 overflow-x-auto"><code>'
+        );
         inCodeBlock = true;
       }
       continue;
     }
-    
+
     if (inCodeBlock) {
       result.push(line + '\n');
       continue;
     }
-    
+
     // Handle horizontal rules
     if (trimmed === '---' || trimmed === '***') {
       flushList();
-      result.push('<hr class="my-6 border-[var(--border)]" />');
+      blankRun = false;
+      result.push('<hr class="my-4 border-[var(--border)]" />');
       continue;
     }
-    
+
     // Handle headers
     if (trimmed.startsWith('### ')) {
       flushList();
-      result.push(`<h3 class="text-lg font-semibold mt-6 mb-3 text-[var(--foreground)]">${escapeHtml(trimmed.substring(4))}</h3>`);
+      if (blankRun) {
+        result.push('<br />');
+        blankRun = false;
+      }
+      result.push(`<h3>${escapeHtml(trimmed.substring(4))}</h3>`);
       continue;
     }
     if (trimmed.startsWith('## ')) {
       flushList();
-      result.push(`<h2 class="text-xl font-semibold mt-8 mb-4 text-[var(--foreground)]">${escapeHtml(trimmed.substring(3))}</h2>`);
+      if (blankRun) {
+        result.push('<br />');
+        blankRun = false;
+      }
+      result.push(`<h2>${escapeHtml(trimmed.substring(3))}</h2>`);
       continue;
     }
     if (trimmed.startsWith('# ')) {
       flushList();
-      result.push(`<h1 class="text-2xl font-bold mt-8 mb-4 text-[var(--foreground)]">${escapeHtml(trimmed.substring(2))}</h1>`);
+      if (blankRun) {
+        result.push('<br />');
+        blankRun = false;
+      }
+      result.push(`<h1>${escapeHtml(trimmed.substring(2))}</h1>`);
       continue;
     }
-    
+
     // Handle blockquotes
     if (trimmed.startsWith('> ')) {
       flushList();
-      result.push(`<blockquote class="border-l-4 border-[var(--border)] pl-4 my-4 italic text-[var(--muted-foreground)]">${formatInline(trimmed.substring(2))}</blockquote>`);
+      if (blankRun) {
+        result.push('<br />');
+        blankRun = false;
+      }
+      result.push(
+        `<blockquote>${formatInline(trimmed.substring(2))}</blockquote>`
+      );
       continue;
     }
-    
+
     // Handle lists
     const unorderedMatch = trimmed.match(/^-\s+(.+)$/);
     const orderedMatch = trimmed.match(/^\d+\.\s+(.+)$/);
-    
+
     if (unorderedMatch || orderedMatch) {
       const content = unorderedMatch ? unorderedMatch[1] : orderedMatch![1];
       const currentListType = unorderedMatch ? 'ul' : 'ol';
-      
+
+      if (blankRun) {
+        result.push('<br />');
+        blankRun = false;
+      }
       if (!inList || listType !== currentListType) {
         flushList();
         inList = true;
         listType = currentListType;
       }
-      
+
       listItems.push(`<li class="mb-1">${formatInline(content)}</li>`);
       continue;
     }
-    
-    // If we hit a non-list line while in a list, flush it
+
     if (inList && trimmed) {
       flushList();
     }
-    
-    // Handle empty lines
+
+    // Handle empty lines: collapse to single break per run
     if (!trimmed) {
       if (!inList) {
-        result.push('<br />');
+        blankRun = true;
       }
       continue;
     }
-    
-    // Regular paragraph content
-    result.push(`<p class="mb-4 leading-relaxed">${formatInline(trimmed)}</p>`);
+
+    if (blankRun) {
+      result.push('<br />');
+      blankRun = false;
+    }
+
+    // Injected table-as-cards block (do not escape)
+    if (
+      trimmed.startsWith(TABLE_BLOCK_PREFIX) &&
+      trimmed.endsWith(TABLE_BLOCK_SUFFIX)
+    ) {
+      result.push(
+        trimmed.slice(
+          TABLE_BLOCK_PREFIX.length,
+          trimmed.length - TABLE_BLOCK_SUFFIX.length
+        )
+      );
+      continue;
+    }
+
+    // Regular paragraph (spacing from .prose-book)
+    result.push(`<p>${formatInline(trimmed)}</p>`);
   }
-  
+
   flushList();
   if (inCodeBlock) {
     result.push('</code></pre>');
   }
-  
+
   return result.join('\n');
 }
 
