@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "cross-env NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099 next dev",
+    "emulators": "firebase emulators:start --only auth,firestore,ui",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -39,6 +41,7 @@
     "@types/react-dom": "^19",
     "@types/xlsx": "^0.0.35",
     "adm-zip": "^0.5.16",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

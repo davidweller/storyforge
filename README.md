@@ -71,6 +71,28 @@ AI-powered novel writing web application with a structured, human-in-the-loop wo
 5. Deploy the indexes from `firestore.indexes.json`
 6. Generate a service account key for admin SDK
 
+### Local development with Firebase Emulators
+
+To run the app entirely on your machine with no production Firebase usage or quotas:
+
+1. **Install the Firebase CLI** (if needed): `npm install -g firebase-tools` and run `firebase login`.
+2. **Start the emulators** (in a separate terminal):
+   ```bash
+   npm run emulators
+   ```
+   This starts the Auth emulator (port 9099), Firestore emulator (port 8080), and Emulator UI (port 4000). Open http://localhost:4000 to inspect data and auth users.
+3. **Run the app against the emulators**:
+   ```bash
+   npm run dev:local
+   ```
+   Or set these in `.env.local` and run `npm run dev`:
+   - `NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true`
+   - `FIRESTORE_EMULATOR_HOST=localhost:8080`
+   - `FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099`
+4. Use **email/password** sign-up and sign-in; the Auth emulator accepts any email/password. Add your dev email to `ALLOWED_EMAILS` in `.env.local`, or set `ALLOWLIST_DISABLED_FOR_EMULATOR=true` (dev only) to bypass the allowlist.
+
+Emulator data is stored locally and is lost when you stop the emulators unless you use export/import. To use production Firebase again, do not set the emulator env vars and use your normal credentials.
+
 ### Environment Variables
 
 ```env
