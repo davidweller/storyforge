@@ -341,6 +341,8 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
       revisionTasks={revisionTasks}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error */}
       {(projectError || generateError) && (

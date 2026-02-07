@@ -111,6 +111,8 @@ export default function TitlePage({ params }: TitlePageProps) {
       currentStage={project.currentStage}
       activeStage="title"
       chapters={chapters}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">

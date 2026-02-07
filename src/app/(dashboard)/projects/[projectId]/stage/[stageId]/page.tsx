@@ -201,6 +201,8 @@ export default function StagePage({ params }: StagePageProps) {
       currentStage={project.currentStage}
       activeStage={stage}
       chapters={chapters}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error display */}
       {(projectError || generateError) && (

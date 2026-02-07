@@ -122,6 +122,8 @@ export default function CompilationPage({ params }: CompilationPageProps) {
       activeStage="compilation"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error */}
       {error && (

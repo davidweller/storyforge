@@ -285,6 +285,8 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         currentStage={project.currentStage}
         chapters={chapters}
         approvedChapterIds={approvedChapterIds}
+        blurbFilled={!!project.blurb?.trim()}
+        amazonDescriptionFilled={!!project.amazonDescription?.trim()}
       />
       
       {/* Main content */}

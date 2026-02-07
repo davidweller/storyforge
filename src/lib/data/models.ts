@@ -115,6 +115,8 @@ export const STAGE_DEFAULT_PROVIDERS: Record<string, LLMProvider> = {
   'compilation': 'openai',
   'editorial': 'openai',
   'revision': 'anthropic',
+  'blurb': 'openai',
+  'amazon-description': 'openai',
 };
 
 // Get default model for a stage

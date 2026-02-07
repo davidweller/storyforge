@@ -111,6 +111,8 @@ export default function SetupPage({ params }: SetupPageProps) {
       currentStage={project.currentStage}
       activeStage="setup"
       chapters={chapters}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error display */}
       {projectError && (

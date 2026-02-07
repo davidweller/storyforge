@@ -14,7 +14,9 @@ export type WorkflowStage =
   | 'export-draft'    // Stage 10
   | 'editorial'       // Stage 11
   | 'revision'        // Stage 12
-  | 'export-final';   // Stage 13
+  | 'export-final'    // Stage 13
+  | 'blurb'           // Marketing: back-cover blurb
+  | 'amazon-description';  // Marketing: Amazon product description
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 
@@ -49,6 +51,8 @@ export interface Project {
   status: 'active' | 'completed' | 'archived';
   currentStage: WorkflowStage;
   finalExportedAt?: Date;  // Timestamp when final export was completed
+  blurb?: string;          // Back-cover / marketing blurb
+  amazonDescription?: string;  // Amazon product description
   createdAt: Date;
   updatedAt: Date;
 }

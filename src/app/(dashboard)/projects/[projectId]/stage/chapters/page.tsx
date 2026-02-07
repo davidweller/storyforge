@@ -200,6 +200,8 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
       activeStage="chapters"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">

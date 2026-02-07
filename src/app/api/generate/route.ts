@@ -25,6 +25,10 @@ import {
   EDITORIAL_SYSTEM,
   buildEditorialPrompt,
   buildRevisionQueuePrompt,
+  BLURB_SYSTEM,
+  buildBlurbPrompt,
+  AMAZON_DESCRIPTION_SYSTEM,
+  buildAmazonDescriptionPrompt,
 } from '@/lib/prompts';
 
 // Bypass auth in development mode
@@ -333,6 +337,32 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string || '',
           structureReference: data.structureReference as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+        });
+        break;
+
+      case 'blurb':
+        systemPrompt = BLURB_SYSTEM;
+        prompt = buildBlurbPrompt({
+          genre: data.genre as string,
+          niche: data.niche as string | undefined,
+          title: data.title as string | undefined,
+          premise: data.premise as string | undefined,
+          marketAnalysis: data.marketAnalysis as string | undefined,
+          readerTargeting: data.readerTargeting as string | undefined,
+          plotBlueprint: data.plotBlueprint as string | undefined,
+        });
+        break;
+
+      case 'amazon-description':
+        systemPrompt = AMAZON_DESCRIPTION_SYSTEM;
+        prompt = buildAmazonDescriptionPrompt({
+          genre: data.genre as string,
+          niche: data.niche as string | undefined,
+          title: data.title as string | undefined,
+          premise: data.premise as string | undefined,
+          marketAnalysis: data.marketAnalysis as string | undefined,
+          readerTargeting: data.readerTargeting as string | undefined,
+          plotBlueprint: data.plotBlueprint as string | undefined,
         });
         break;
         

@@ -17,6 +17,8 @@ interface StageLayoutProps {
   approvedChapterIds?: Set<string>;
   revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
   finalExportedAt?: Date;  // Optional - timestamp when final export was completed
+  blurbFilled?: boolean;
+  amazonDescriptionFilled?: boolean;
   children: ReactNode;
 }
 
@@ -31,6 +33,8 @@ export function StageLayout({
   approvedChapterIds = new Set(),
   revisionTasks = [],
   finalExportedAt,
+  blurbFilled = false,
+  amazonDescriptionFilled = false,
   children,
 }: StageLayoutProps) {
   // Don't show model selector for setup stage (no generation)
@@ -49,6 +53,8 @@ export function StageLayout({
         approvedChapterIds={approvedChapterIds}
         revisionTasks={revisionTasks}
         finalExportedAt={finalExportedAt}
+        blurbFilled={blurbFilled}
+        amazonDescriptionFilled={amazonDescriptionFilled}
       />
       
       {/* Main content */}

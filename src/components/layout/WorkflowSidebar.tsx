@@ -17,6 +17,8 @@ interface WorkflowSidebarProps {
   approvedChapterIds?: Set<string>;
   revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
   finalExportedAt?: Date;  // Optional - timestamp when final export was completed
+  blurbFilled?: boolean;  // When true, show Blurb tab as green (generated)
+  amazonDescriptionFilled?: boolean;  // When true, show Amazon Description tab as green (generated)
 }
 
 const stageIcons: Record<WorkflowStage, React.ReactNode> = {
@@ -90,6 +92,16 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  'blurb': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+    </svg>
+  ),
+  'amazon-description': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
 };
 
 function getStageStatus(
@@ -157,6 +169,13 @@ const statusIndicators: Record<StageStatus, React.ReactNode> = {
   ),
 };
 
+const marketingGreenStyle = { color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.15)' };
+const marketingCheck = (
+  <svg className="w-3 h-3" style={{ flexShrink: 0, color: '#059669' }} fill="currentColor" viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+);
+
 export function WorkflowSidebar({
   projectId,
   projectTitle,
@@ -167,6 +186,8 @@ export function WorkflowSidebar({
   approvedChapterIds = new Set(),
   revisionTasks = [],
   finalExportedAt,
+  blurbFilled = false,
+  amazonDescriptionFilled = false,
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
   const [isChaptersExpanded, setIsChaptersExpanded] = useState(true);
@@ -384,6 +405,67 @@ export function WorkflowSidebar({
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {editingStages.map(renderStageItem)}
+          </div>
+        </div>
+
+        {/* Marketing */}
+        <div>
+          <h3 style={{ fontSize: '0.75rem', fontWeight: 600, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', padding: '0 0.75rem' }}>
+            Marketing
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <Link
+              href={`/projects/${projectId}/marketing/amazon-description`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                ...(amazonDescriptionFilled ? marketingGreenStyle : {}),
+                ...(!amazonDescriptionFilled && {
+                  backgroundColor: pathname.includes('/marketing/amazon-description') ? '#f5f5f5' : 'transparent',
+                  color: pathname.includes('/marketing/amazon-description') ? '#171717' : '#737373',
+                }),
+                outline: pathname.includes('/marketing/amazon-description') ? '2px solid #3b82f6' : 'none',
+                outlineOffset: pathname.includes('/marketing/amazon-description') ? '2px' : 0,
+              }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Amazon Description
+              {amazonDescriptionFilled && marketingCheck}
+            </Link>
+            <Link
+              href={`/projects/${projectId}/marketing/blurb`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                ...(blurbFilled ? marketingGreenStyle : {}),
+                ...(!blurbFilled && {
+                  backgroundColor: pathname.includes('/marketing/blurb') ? '#f5f5f5' : 'transparent',
+                  color: pathname.includes('/marketing/blurb') ? '#171717' : '#737373',
+                }),
+                outline: pathname.includes('/marketing/blurb') ? '2px solid #3b82f6' : 'none',
+                outlineOffset: pathname.includes('/marketing/blurb') ? '2px' : 0,
+              }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+              </svg>
+              Blurb for back of book
+              {blurbFilled && marketingCheck}
+            </Link>
           </div>
         </div>
       </nav>

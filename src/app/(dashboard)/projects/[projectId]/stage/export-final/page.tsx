@@ -171,6 +171,8 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
       approvedChapterIds={approvedChapterIds}
       revisionTasks={revisionTasks}
       finalExportedAt={project.finalExportedAt}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error */}
       {(error || exportError) && (

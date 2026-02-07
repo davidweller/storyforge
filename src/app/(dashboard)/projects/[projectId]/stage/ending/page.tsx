@@ -258,6 +258,8 @@ export default function EndingPage({ params }: EndingPageProps) {
       currentStage={project.currentStage}
       activeStage="ending"
       chapters={chapters}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Title Modal */}
       {showTitleModal && (

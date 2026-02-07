@@ -426,6 +426,8 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       activeStage="editorial"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error */}
       {(projectError || generateError) && (

@@ -43,6 +43,8 @@ const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
   'editorial': 8192,
   'revision': 16384,
   'export-final': 2048,
+  'blurb': 1024,
+  'amazon-description': 4096,
 };
 
 /**

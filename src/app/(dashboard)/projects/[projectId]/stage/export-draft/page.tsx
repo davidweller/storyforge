@@ -174,6 +174,8 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
       activeStage="export-draft"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
+      blurbFilled={!!project.blurb?.trim()}
+      amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
       {/* Error */}
       {(error || exportError) && (
