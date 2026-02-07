@@ -50,6 +50,7 @@ export interface Project {
   research?: string;
   status: 'active' | 'completed' | 'archived';
   currentStage: WorkflowStage;
+  fullAutoMode?: boolean;  // When true, pipeline runs without intervention; cleared on completion
   finalExportedAt?: Date;  // Timestamp when final export was completed
   blurb?: string;          // Back-cover / marketing blurb
   amazonDescription?: string;  // Amazon product description

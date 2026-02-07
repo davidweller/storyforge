@@ -28,6 +28,7 @@ export default function SetupPage({ params }: SetupPageProps) {
   
   const [premise, setPremise] = useState('');
   const [research, setResearch] = useState('');
+  const [fullAutoMode, setFullAutoMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   
@@ -36,6 +37,7 @@ export default function SetupPage({ params }: SetupPageProps) {
     if (project) {
       setPremise(project.premise || '');
       setResearch(project.research || '');
+      setFullAutoMode(!!project.fullAutoMode);
     }
   }, [project]);
   
@@ -77,22 +79,24 @@ export default function SetupPage({ params }: SetupPageProps) {
   const handleContinue = async () => {
     setIsSaving(true);
     try {
-      // Save any pending changes
-      if (hasChanges) {
-        await updateProject(projectId, {
-          premise: premise || undefined,
-          research: research || undefined,
-        });
+      // Save any pending changes and optional fullAutoMode
+      const updates: Parameters<typeof updateProject>[1] = {
+        premise: premise || undefined,
+        research: research || undefined,
+        fullAutoMode: fullAutoMode || undefined,
+      };
+      if (hasChanges || fullAutoMode !== !!project.fullAutoMode) {
+        await updateProject(projectId, updates);
       }
       
-      // Advance to next stage
       const nextStage = getNextStage('setup');
       if (nextStage && project.currentStage === 'setup') {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
       
-      // Navigate to next stage
-      if (nextStage) {
+      if (fullAutoMode) {
+        router.push(`/projects/${projectId}/full-auto`);
+      } else if (nextStage) {
         router.push(`/projects/${projectId}/stage/${nextStage}`);
       }
     } catch (err) {
@@ -193,6 +197,26 @@ export default function SetupPage({ params }: SetupPageProps) {
           <p style={{ fontSize: '0.75rem', color: '#737373', marginTop: '0.5rem' }}>
             Include anything that might help shape your story - notes, links, excerpts, etc.
           </p>
+        </div>
+        
+        {/* Full Auto Mode */}
+        <div style={{ marginBottom: '2rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'var(--muted)' }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={fullAutoMode}
+              onChange={(e) => setFullAutoMode(e.target.checked)}
+              style={{ marginTop: '0.25rem', width: '1rem', height: '1rem' }}
+            />
+            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--foreground)' }}>
+              Run in Full Auto Mode — every step from Market Analysis through Amazon Description will be generated and completed automatically with no intervention.
+            </span>
+          </label>
+          {fullAutoMode && (
+            <p style={{ marginTop: '0.75rem', marginLeft: '1.75rem', fontSize: '0.8125rem', color: 'var(--destructive)', fontWeight: 500 }}>
+              This can take a long time and will use a significant number of AI tokens. The app will run without further input until all steps are complete.
+            </p>
+          )}
         </div>
         
         {/* Actions */}

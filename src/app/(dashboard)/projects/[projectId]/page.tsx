@@ -126,6 +126,35 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
             ))}
           </div>
           
+          {/* Resume Full Auto (when in full auto mode and not yet complete) */}
+          {project.fullAutoMode && (!project.blurb?.trim() || !project.amazonDescription?.trim()) && (
+            <div style={{ 
+              marginBottom: '1.5rem', 
+              backgroundColor: 'rgba(99, 102, 241, 0.1)', 
+              border: '1px solid rgba(99, 102, 241, 0.4)', 
+              borderRadius: '12px', 
+              padding: '1.5rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem', color: 'var(--foreground)' }}>Full Auto Mode</h2>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
+                    Resume automatic run from {STAGE_NAMES[project.currentStage]} through Amazon Description.
+                  </p>
+                </div>
+                <Link href={`/projects/${project.id}/full-auto`}>
+                  <Button size="lg">
+                    Resume Full Auto
+                    <svg style={{ width: '1rem', height: '1rem', marginLeft: '0.5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+          
           {/* Continue CTA */}
           <div style={{ 
             marginBottom: '2.5rem', 
