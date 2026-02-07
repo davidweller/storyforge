@@ -261,9 +261,18 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Export error:', error);
+    const message = error instanceof Error ? error.message : 'Export failed';
+    const isQuotaError =
+      message.includes('RESOURCE_EXHAUSTED') ||
+      message.includes('Quota exceeded') ||
+      message.includes('quota exceeded');
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Export failed' },
-      { status: 500 }
+      {
+        error: isQuotaError
+          ? 'Quota exceeded. Your database or service has hit its usage limit. Please try again in a few minutes, or check your Firebase/Google Cloud quota in the console.'
+          : message,
+      },
+      { status: isQuotaError ? 503 : 500 }
     );
   }
 }

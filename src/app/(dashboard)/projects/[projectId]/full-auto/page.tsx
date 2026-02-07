@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useRef, useCallback } from 'react';
+import { use, useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
@@ -11,6 +11,47 @@ import { getEstimatedMinutesForStep, FULL_AUTO_ESTIMATES_MINUTES } from '@/lib/f
 import { Button } from '@/components/ui';
 import type { WorkflowStage, DocumentType } from '@/types';
 import { countWords } from '@/lib/utils';
+
+/** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
+const FullAutoSpinner = memo(function FullAutoSpinner() {
+  return (
+    <div
+      key="full-auto-spinner-wrap"
+      style={{
+        isolation: 'isolate',
+        transform: 'translateZ(0)',
+        width: '3.5rem',
+        height: '3.5rem',
+        margin: '0 auto 1.5rem',
+        flexShrink: 0,
+      }}
+    >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+@keyframes fullAutoSpinnerRotate {
+  from { transform: translateZ(0) rotate(0deg); }
+  to { transform: translateZ(0) rotate(360deg); }
+}
+@-webkit-keyframes fullAutoSpinnerRotate {
+  from { -webkit-transform: translateZ(0) rotate(0deg); }
+  to { -webkit-transform: translateZ(0) rotate(360deg); }
+}`,
+        }}
+      />
+      <div
+        className="border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full"
+        style={{
+          width: '100%',
+          height: '100%',
+          animation: 'fullAutoSpinnerRotate 0.8s linear infinite',
+          WebkitAnimation: 'fullAutoSpinnerRotate 0.8s linear infinite',
+          willChange: 'transform',
+        }}
+      />
+    </div>
+  );
+});
 
 // --- Parsing helpers (mirrored from stage pages) ---
 interface EndingConcept {
@@ -69,17 +110,31 @@ interface ChapterOutline {
 
 function parseChapterOutlines(content: string): ChapterOutline[] {
   const outlines: ChapterOutline[] = [];
-  const chapterRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
+  // Prefer strict format: **Chapter N: Title**; fallback: line starting with Chapter N: (with or without **)
+  const strictRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
+  const lenientRegex = /^#{0,3}\s*\*{0,2}Chapter\s+(\d+):\s*(.+?)(?:\*{2})?\s*$/gm;
   const matches: Array<{ index: number; number: number; title: string; endIndex: number }> = [];
   let match;
-  while ((match = chapterRegex.exec(content)) !== null) {
+  while ((match = strictRegex.exec(content)) !== null) {
     matches.push({
       index: match.index,
       number: parseInt(match[1], 10),
-      title: match[2]?.trim() || '',
+      title: (match[2]?.trim() || '').replace(/\*+$/, ''),
       endIndex: match.index + match[0].length,
     });
   }
+  if (matches.length === 0) {
+    while ((match = lenientRegex.exec(content)) !== null) {
+      matches.push({
+        index: match.index,
+        number: parseInt(match[1], 10),
+        title: (match[2]?.trim() || '').replace(/\*+$/, ''),
+        endIndex: match.index + match[0].length,
+      });
+    }
+  }
+  // Sort by index so we can slice content between chapters
+  matches.sort((a, b) => a.index - b.index);
   for (let i = 0; i < matches.length; i++) {
     const current = matches[i];
     const next = matches[i + 1];
@@ -87,10 +142,11 @@ function parseChapterOutlines(content: string): ChapterOutline[] {
     const endIndex = next ? next.index : content.length;
     const chapterContent = content.substring(startIndex, endIndex);
     if (isNaN(current.number)) continue;
-    const beatMatch = chapterContent.match(/\*\*Story Beat\(s\)\*\*:\s*(.+?)(?:\n|$)/i);
-    const sceneGoalMatch = chapterContent.match(/\*\*Scene Goal\*\*:\s*(.+?)(?:\n|$)/i);
-    const povMatch = chapterContent.match(/\*\*POV Character\*\*:\s*(.+?)(?:\n|$)/i);
-    const wordTargetMatch = chapterContent.match(/\*\*Word Target\*\*:\s*~?(\d+)/i);
+    // Allow **Label**: or - **Label**: or Label:
+    const beatMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Story Beat\(s\)\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
+    const sceneGoalMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Scene Goal\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
+    const povMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}POV Character\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
+    const wordTargetMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Word Target\*{0,2}\s*:\s*~?(\d+)/im);
     outlines.push({
       chapterNumber: current.number,
       title: current.title,
@@ -160,14 +216,20 @@ export default function FullAutoPage({
   const [error, setError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const pipelineStarted = useRef(false);
+  const lastStepUpdate = useRef(0);
+  const stepThrottleMs = 600;
 
   const setStep = useCallback(
     (label: string, stepIdx: number, total: number, minsThis: number, minsTotal: number) => {
-      setCurrentStepLabel(label);
-      setStepIndex(stepIdx);
-      setTotalSteps(total);
-      setTimeLeftThisStep(minsThis);
-      setTimeLeftTotal(minsTotal);
+      const now = Date.now();
+      if (now - lastStepUpdate.current >= stepThrottleMs || stepIdx === 0) {
+        lastStepUpdate.current = now;
+        setCurrentStepLabel(label);
+        setStepIndex(stepIdx);
+        setTotalSteps(total);
+        setTimeLeftThisStep(minsThis);
+        setTimeLeftTotal(minsTotal);
+      }
     },
     []
   );
@@ -207,6 +269,7 @@ export default function FullAutoPage({
       setOverlayStatus('running');
       setError(null);
       clearError();
+      setStep('Loading project…', 0, 20, 0, 0);
 
       let currentStage = project.currentStage as WorkflowStage;
       let stepIdx = 0;
@@ -292,11 +355,62 @@ export default function FullAutoPage({
       };
 
       try {
-        // Reload to get latest project/documents
-        await loadProject(projectId);
-        const proj = useProjectStore.getState().currentProject;
-        if (!proj) throw new Error('Project not loaded');
-        currentStage = proj.currentStage as WorkflowStage;
+        // Timeout so we don't hang forever if load or rewind stalls (e.g. network/Firestore)
+        const LOAD_TIMEOUT_MS = 35_000;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Loading project timed out. Check your connection and try again.')), LOAD_TIMEOUT_MS);
+        });
+
+        const loadAndRewind = async () => {
+          // Reload to get latest project/documents
+          await loadProject(projectId);
+          const proj = useProjectStore.getState().currentProject;
+          if (!proj) throw new Error('Project not loaded');
+          currentStage = proj.currentStage as WorkflowStage;
+
+          // If we're past chapter-outlines but chapters weren't written (e.g. resume after error), rewind so we run chapter-outlines and/or chapters
+          const stagesRequiringChapters: WorkflowStage[] = ['compilation', 'export-draft', 'editorial', 'revision', 'export-final'];
+          if (stagesRequiringChapters.includes(currentStage)) {
+            setStep('Checking chapters…', stepIdx, 20, 0, 0);
+            try {
+              const docs = useProjectStore.getState().documents;
+              const outlinesDoc = docs
+                .filter((d) => d.type === 'chapter-outlines')
+                .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
+              const hasOutlinesContent = typeof outlinesDoc?.content === 'string' && outlinesDoc.content.trim().length > 0;
+              if (!hasOutlinesContent) {
+                currentStage = 'chapter-outlines';
+                await advanceStage(projectId, 'chapter-outlines');
+                await loadProject(projectId);
+              } else {
+                const content = outlinesDoc!.content as string;
+                const outlines = parseChapterOutlines(content);
+                const chs = useProjectStore.getState().chapters;
+                await Promise.all(chs.map((ch) => loadChapterVersions(ch.id)));
+                const approvedVersions = new Map<string, boolean>();
+                for (const ch of chs) {
+                  const ver = getApprovedChapterVersion(ch.id);
+                  approvedVersions.set(ch.id, !!ver);
+                }
+                const allChaptersWritten = outlines.length > 0 && outlines.every((outline) => {
+                  const ch = chs.find((c) => c.chapterNumber === outline.chapterNumber);
+                  return ch && approvedVersions.get(ch.id);
+                });
+                if (!allChaptersWritten) {
+                  currentStage = 'chapters';
+                  await advanceStage(projectId, 'chapters');
+                  await loadProject(projectId);
+                }
+              }
+            } catch (rewindErr) {
+              currentStage = 'chapters';
+              await advanceStage(projectId, 'chapters');
+              await loadProject(projectId);
+            }
+          }
+        };
+
+        await Promise.race([loadAndRewind(), timeoutPromise]);
 
         let totalStepsEst = 0;
         const addEst = (key: string, count?: number) => {
@@ -410,16 +524,40 @@ export default function FullAutoPage({
           stepIdx++;
           await loadProject(projectId);
         }
-        // Chapter-outlines
+        // Chapter-outlines (then run chapters in same pipeline run)
         if (currentStage === 'chapter-outlines') {
           await runDocStage('chapter-outlines');
           await loadProject(projectId);
+          currentStage = 'chapters';
         }
-        // Chapters: create chapter records and generate each
+        // Chapters: create chapter records and generate each (read from store so we see just-saved chapter-outlines)
         if (currentStage === 'chapters') {
-          const outlinesDoc = getLatestDocumentByType('chapter-outlines');
-          if (!outlinesDoc) throw new Error('No chapter outlines');
-          const outlines = parseChapterOutlines(outlinesDoc.content);
+          const docs = useProjectStore.getState().documents;
+          const outlinesDoc = docs
+            .filter((d) => d.type === 'chapter-outlines')
+            .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
+          if (!outlinesDoc?.content) throw new Error('No chapter outlines. Complete the Chapter Outlines stage first, then resume Full Auto.');
+          const outlines = parseChapterOutlines(String(outlinesDoc.content));
+          if (outlines.length === 0) {
+            throw new Error('Chapter outlines could not be parsed. Open Chapter Outlines, ensure the format is correct and save, then resume Full Auto.');
+          }
+          const chs = useProjectStore.getState().chapters;
+          await Promise.all(chs.map((ch) => loadChapterVersions(ch.id)));
+          // Read approved state directly from store (hook's getApprovedChapterVersion can be stale in async pipeline)
+          const chapterVersionsMap = useProjectStore.getState().chapterVersions;
+          const allChaptersAlreadyWritten = outlines.every((outline) => {
+            const ch = chs.find((c) => c.chapterNumber === outline.chapterNumber);
+            if (!ch) return false;
+            const versions = chapterVersionsMap.get(ch.id) || [];
+            return versions.some((v) => v.approved);
+          });
+          if (allChaptersAlreadyWritten) {
+            setStep('Chapters already complete', stepIdx, 20, 0, 0);
+            const next = getNextStage('chapters');
+            if (next) await advanceStage(projectId, next as WorkflowStage);
+            currentStage = (next || currentStage) as WorkflowStage;
+            await loadProject(projectId);
+          } else {
           for (let i = 0; i < outlines.length; i++) {
             const outline = outlines[i];
             const chs = useProjectStore.getState().chapters;
@@ -484,6 +622,7 @@ export default function FullAutoPage({
           if (next) await advanceStage(projectId, next as WorkflowStage);
           currentStage = (next || currentStage) as WorkflowStage;
           await loadProject(projectId);
+          }
         }
         // Compilation, export-draft: advance only
         if (currentStage === 'compilation') {
@@ -498,23 +637,37 @@ export default function FullAutoPage({
           currentStage = 'editorial';
           stepIdx++;
         }
-        // Editorial: generate report then revision queue
+        // Editorial: generate report then revision queue (requires approved chapters)
         if (currentStage === 'editorial') {
-          setStep(STAGE_NAMES['editorial'], stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['editorial'] ?? 5, 0);
-          const manuscript = useProjectStore
-            .getState()
-            .chapters.sort((a, b) => a.chapterNumber - b.chapterNumber)
+          await loadProject(projectId);
+          const editorialChapters = useProjectStore.getState().chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+          // Load chapter versions so we have approved content for the manuscript
+          await Promise.all(editorialChapters.map((ch) => loadChapterVersions(ch.id)));
+          // Read approved content directly from store (hook's getApprovedChapterVersion can be stale in async pipeline)
+          const chapterVersionsMap = useProjectStore.getState().chapterVersions;
+          const manuscript = editorialChapters
             .map((ch) => {
-              const ver = getApprovedChapterVersion(ch.id);
-              return ver ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${ver.content}` : '';
+              const versions = chapterVersionsMap.get(ch.id) || [];
+              const approved = versions.find((v) => v.approved);
+              return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${approved.content}` : '';
             })
             .filter(Boolean)
             .join('\n\n');
-          const editorialResult = await generate('editorial', {
-            manuscript,
-            genre: project.genre,
-            chapterCount: useProjectStore.getState().chapters.length,
-          });
+          if (!manuscript.trim()) {
+            throw new Error('No manuscript available. Approved chapter content could not be loaded. Try opening Write Chapters, then resume Full Auto.');
+          }
+          setStep(STAGE_NAMES['editorial'], stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['editorial'] ?? 5, 0);
+          let editorialResult;
+          try {
+            editorialResult = await generate('editorial', {
+              manuscript,
+              genre: project.genre,
+              chapterCount: useProjectStore.getState().chapters.length,
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Unknown error';
+            throw new Error(`Editorial analysis failed: ${msg}`);
+          }
           let editorialDocId: string | null = null;
           const latestEditorial = getLatestDocumentByType('editorial');
           if (latestEditorial) {
@@ -530,11 +683,17 @@ export default function FullAutoPage({
             });
           }
           await approveDocument(editorialDocId!);
-          const queueResult = await generate('editorial', {
-            createQueue: true,
-            editorialReport: editorialResult.content,
-            chapterCount: useProjectStore.getState().chapters.length,
-          });
+          let queueResult;
+          try {
+            queueResult = await generate('editorial', {
+              createQueue: true,
+              editorialReport: editorialResult.content,
+              chapterCount: useProjectStore.getState().chapters.length,
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Unknown error';
+            throw new Error(`Revision queue generation failed: ${msg}. You can retry or continue from the Revision stage.`);
+          }
           let revisionQueueData: {
             revisionTasks: Array<{
               chapterNumber: number;
@@ -547,12 +706,16 @@ export default function FullAutoPage({
           let jsonContent = queueResult.content;
           const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
           if (jsonMatch) jsonContent = jsonMatch[1];
-          revisionQueueData = JSON.parse(jsonContent);
+          try {
+            revisionQueueData = JSON.parse(jsonContent);
+          } catch {
+            throw new Error('Revision queue response was not valid JSON. You can retry or continue from the Revision stage.');
+          }
           if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
-            throw new Error('Invalid revision queue format');
+            throw new Error('Revision queue missing task list. You can retry or continue from the Revision stage.');
           }
           for (const taskData of revisionQueueData.revisionTasks) {
-            const instructions = taskData.issues
+            const instructions = (taskData.issues || [])
               .map((i) => `${i.category}: ${i.description}\nLocation: ${i.location}\nFix: ${i.fix}`)
               .join('\n\n');
             const finalInstructions =
@@ -699,11 +862,15 @@ export default function FullAutoPage({
     retryTrigger,
   ]);
 
-  if (projectLoading || !project) {
+  // Only show loading spinner when idle and project not ready; once pipeline is running, never switch to spinner (avoids flash when loadProject sets loading: true)
+  if (overlayStatus === 'idle' && (projectLoading || !project)) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin" />
+          <div
+            className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full"
+            style={{ animation: 'spin 1s linear infinite', willChange: 'transform' }}
+          />
           <p className="text-[var(--muted-foreground)]">Loading...</p>
         </div>
       </div>
@@ -712,8 +879,9 @@ export default function FullAutoPage({
 
   return (
     <div style={{ position: 'relative', minHeight: 'calc(100vh - var(--header-height))' }}>
-      {/* Blocking overlay */}
+      {/* Blocking overlay - own layer to avoid flicker when page re-renders (e.g. store updates) */}
       <div
+        key="full-auto-overlay"
         style={{
           position: 'fixed',
           inset: 0,
@@ -723,6 +891,8 @@ export default function FullAutoPage({
           alignItems: 'center',
           justifyContent: 'center',
           padding: '2rem',
+          transform: 'translateZ(0)',
+          willChange: 'transform',
         }}
       >
         <div
@@ -734,11 +904,15 @@ export default function FullAutoPage({
             maxWidth: '480px',
             width: '100%',
             textAlign: 'center',
+            minHeight: '200px',
           }}
         >
+          {overlayStatus === 'idle' && (
+            <p style={{ fontSize: '0.9375rem', color: 'var(--muted-foreground)' }}>Starting Full Auto...</p>
+          )}
           {overlayStatus === 'running' && (
             <>
-              <div className="w-14 h-14 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin mx-auto mb-6" />
+              <FullAutoSpinner />
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--foreground)' }}>
                 Full Auto Mode
               </h2>

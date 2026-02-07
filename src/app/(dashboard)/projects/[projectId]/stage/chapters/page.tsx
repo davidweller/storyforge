@@ -22,58 +22,52 @@ interface ChapterOutline {
   wordTarget?: number;
 }
 
-// Parse chapter outlines from markdown format
+// Parse chapter outlines from markdown (tolerant of **, list markers, spacing)
 function parseChapterOutlines(content: string): ChapterOutline[] {
   const outlines: ChapterOutline[] = [];
-  
-  // Match chapter blocks: **Chapter [Number]: [Title]**
-  const chapterRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
+  const strictRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
+  const lenientRegex = /^#{0,3}\s*\*{0,2}Chapter\s+(\d+):\s*(.+?)(?:\*{2})?\s*$/gm;
   const matches: Array<{ index: number; number: number; title: string; endIndex: number }> = [];
-  
-  // Collect all matches first
   let match;
-  while ((match = chapterRegex.exec(content)) !== null) {
+  while ((match = strictRegex.exec(content)) !== null) {
     matches.push({
       index: match.index,
       number: parseInt(match[1], 10),
-      title: match[2]?.trim() || '',
+      title: (match[2]?.trim() || '').replace(/\*+$/, ''),
       endIndex: match.index + match[0].length,
     });
   }
-  
-  // Process each match
+  if (matches.length === 0) {
+    while ((match = lenientRegex.exec(content)) !== null) {
+      matches.push({
+        index: match.index,
+        number: parseInt(match[1], 10),
+        title: (match[2]?.trim() || '').replace(/\*+$/, ''),
+        endIndex: match.index + match[0].length,
+      });
+    }
+  }
+  matches.sort((a, b) => a.index - b.index);
   for (let i = 0; i < matches.length; i++) {
     const current = matches[i];
     const next = matches[i + 1];
-    
-    // Get content between this chapter header and the next (or end of string)
     const startIndex = current.endIndex;
     const endIndex = next ? next.index : content.length;
     const chapterContent = content.substring(startIndex, endIndex);
-    
     if (isNaN(current.number)) continue;
-    
-    // Extract fields from the chapter content
-    const beatMatch = chapterContent.match(/\*\*Story Beat\(s\)\*\*:\s*(.+?)(?:\n|$)/i);
-    const sceneGoalMatch = chapterContent.match(/\*\*Scene Goal\*\*:\s*(.+?)(?:\n|$)/i);
-    const povMatch = chapterContent.match(/\*\*POV Character\*\*:\s*(.+?)(?:\n|$)/i);
-    const wordTargetMatch = chapterContent.match(/\*\*Word Target\*\*:\s*~?(\d+)/i);
-    
-    const beatReference = beatMatch?.[1]?.trim() || '';
-    const sceneGoal = sceneGoalMatch?.[1]?.trim() || '';
-    const pov = povMatch?.[1]?.trim() || undefined;
-    const wordTarget = wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined;
-    
+    const beatMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Story Beat\(s\)\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
+    const sceneGoalMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Scene Goal\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
+    const povMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}POV Character\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
+    const wordTargetMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Word Target\*{0,2}\s*:\s*~?(\d+)/im);
     outlines.push({
       chapterNumber: current.number,
       title: current.title,
-      beatReference,
-      sceneGoal,
-      pov,
-      wordTarget,
+      beatReference: beatMatch?.[1]?.trim() || '',
+      sceneGoal: sceneGoalMatch?.[1]?.trim() || '',
+      pov: povMatch?.[1]?.trim() || undefined,
+      wordTarget: wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined,
     });
   }
-  
   return outlines;
 }
 
@@ -95,7 +89,8 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
   } = useProject(projectId);
   
   const { createChapter, loadChapterVersions } = useProjectStore();
-  
+  const [startingChapter1, setStartingChapter1] = useState(false);
+
   // Load versions for all chapters when chapters are available
   useEffect(() => {
     if (chapters.length > 0) {
@@ -105,12 +100,13 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     }
   }, [chapters, loadChapterVersions]);
   
+  // Outlines doc: use latest by version (safe sort for undefined version)
+  const outlinesDoc = getLatestDocumentByType('chapter-outlines');
   // Parse chapter outlines (use latest version, not just approved)
   const chapterOutlines = useMemo(() => {
-    const outlinesDoc = getLatestDocumentByType('chapter-outlines');
-    if (!outlinesDoc) return [];
+    if (!outlinesDoc?.content) return [];
     return parseChapterOutlines(outlinesDoc.content);
-  }, [documents, getLatestDocumentByType]);
+  }, [outlinesDoc]);
   
   // Find next uncompleted chapter
   const nextChapter = useMemo(() => {
@@ -157,7 +153,7 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     }
   }
   
-  // Handle writing next chapter
+  // Handle writing next chapter (from parsed outline or placeholder for chapter 1)
   const handleWriteNextChapter = async () => {
     if (!nextChapter) return;
     
@@ -186,8 +182,35 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
       console.error('Error creating chapter:', err);
     }
   };
+
+  // Start writing chapter 1 when we have an outlines doc but parser returned no list (fallback so user can always write)
+  const handleStartChapter1 = async () => {
+    try {
+      setStartingChapter1(true);
+      const existing = chapters.find(ch => ch.chapterNumber === 1);
+      if (existing) {
+        router.push(`/projects/${projectId}/chapter/${existing.id}`);
+        return;
+      }
+      const chapterId = await createChapter({
+        projectId,
+        chapterNumber: 1,
+        title: 'Chapter 1',
+        beatReference: '',
+        sceneGoal: '',
+        pov: undefined,
+      });
+      router.push(`/projects/${projectId}/chapter/${chapterId}`);
+    } catch (err) {
+      console.error('Error creating chapter:', err);
+    } finally {
+      setStartingChapter1(false);
+    }
+  };
   
-  // Check if chapter outlines exist
+  // We have an outlines doc with content (even if parser returned 0)
+  const hasOutlinesDoc = (outlinesDoc?.content?.trim()?.length ?? 0) > 0;
+  // We have a parsed list of outlines for "next chapter" and counts
   const hasOutlines = chapterOutlines.length > 0;
   
   return (
@@ -225,32 +248,45 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
         </Card>
       </div>
       
-      {/* Write Next Chapter Button */}
-      {hasOutlines ? (
-        nextChapter ? (
-          <div className="mb-8">
-            <EmptyContent
-              title={`Write Chapter ${nextChapter.chapterNumber}`}
-              description={nextChapter.title ? `Next up: "${nextChapter.title}"` : `Ready to write the next chapter`}
-              actionLabel={`Write Chapter ${nextChapter.chapterNumber}`}
-              onAction={handleWriteNextChapter}
-              isLoading={false}
-            />
-          </div>
+      {/* Write chapters: main CTA and where to find it */}
+      <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Write chapters</h2>
+      {hasOutlinesDoc ? (
+        hasOutlines ? (
+          nextChapter ? (
+            <div className="mb-8">
+              <EmptyContent
+                title={`Write Chapter ${nextChapter.chapterNumber}`}
+                description={nextChapter.title ? `Next up: "${nextChapter.title}"` : `Ready to write the next chapter`}
+                actionLabel={`Write Chapter ${nextChapter.chapterNumber}`}
+                onAction={handleWriteNextChapter}
+                isLoading={false}
+              />
+            </div>
+          ) : (
+            <div className="mb-8 p-6 bg-[rgba(16,185,129,0.1)] border border-[var(--status-approved)] rounded-lg text-center">
+              <h3 className="font-semibold text-[var(--status-approved)] mb-2">All Chapters Complete!</h3>
+              <p className="text-sm text-[var(--muted-foreground)] mb-4">
+                You've written all {totalChapters} chapters. Ready to compile your manuscript?
+              </p>
+              <Link href={`/projects/${projectId}/stage/compilation`}>
+                <Button>
+                  Continue to Compilation
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Button>
+              </Link>
+            </div>
+          )
         ) : (
-          <div className="mb-8 p-6 bg-[rgba(16,185,129,0.1)] border border-[var(--status-approved)] rounded-lg text-center">
-            <h3 className="font-semibold text-[var(--status-approved)] mb-2">All Chapters Complete!</h3>
+          <div className="mb-8 p-6 bg-[var(--card)] border border-[var(--border)] rounded-lg text-center">
+            <h3 className="font-semibold text-[var(--foreground)] mb-2">Start writing</h3>
             <p className="text-sm text-[var(--muted-foreground)] mb-4">
-              You've written all {totalChapters} chapters. Ready to compile your manuscript?
+              Your chapter outlines are saved. Start with Chapter 1 to open the editor and write (or generate) your first chapter.
             </p>
-            <Link href={`/projects/${projectId}/stage/compilation`}>
-              <Button>
-                Continue to Compilation
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Button>
-            </Link>
+            <Button onClick={handleStartChapter1} disabled={startingChapter1}>
+              {startingChapter1 ? 'Opening…' : 'Write Chapter 1'}
+            </Button>
           </div>
         )
       ) : (

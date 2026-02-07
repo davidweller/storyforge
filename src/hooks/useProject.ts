@@ -63,7 +63,8 @@ export function useProject(projectId: string | null) {
   
   const getLatestDocumentByType = useCallback((type: string) => {
     const docs = documents.filter((d) => d.type === type);
-    return docs.sort((a, b) => b.version - a.version)[0];
+    if (docs.length === 0) return undefined;
+    return docs.sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
   }, [documents]);
   
   const getChapterVersions = useCallback((chapterId: string) => {
