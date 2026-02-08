@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebase/admin';
 import { generateForStage } from '@/lib/llm';
 import { getModelById, getDefaultModelForStage } from '@/lib/data/models';
-import { MAX_MANUSCRIPT_TOKENS, MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { MAX_MANUSCRIPT_TOKENS, TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { WorkflowStage } from '@/types';
 import {
   GENRE_RESEARCH_SYSTEM,
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
           nicheReference: data.nicheReference as string,
           endingReference: data.endingReference as string,
           charactersReference: data.charactersReference as string,
-          maxTotalWords: MAX_MANUSCRIPT_WORDS,
+          maxTotalWords: TARGET_MANUSCRIPT_WORDS,
         });
         break;
         
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string,
           genreResearch: data.genreResearch as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
-          maxTotalWords: MAX_MANUSCRIPT_WORDS,
+          maxTotalWords: TARGET_MANUSCRIPT_WORDS,
         });
         break;
         

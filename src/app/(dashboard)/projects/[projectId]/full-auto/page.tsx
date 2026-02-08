@@ -11,7 +11,7 @@ import { getEstimatedMinutesForStep, FULL_AUTO_ESTIMATES_MINUTES } from '@/lib/f
 import { Button } from '@/components/ui';
 import type { WorkflowStage, DocumentType } from '@/types';
 import { countWords, capOutlineWordTargets } from '@/lib/utils';
-import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 
 /** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
 const FullAutoSpinner = memo(function FullAutoSpinner() {
@@ -540,7 +540,7 @@ export default function FullAutoPage({
             .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
           if (!outlinesDoc?.content) throw new Error('No chapter outlines. Complete the Chapter Outlines stage first, then resume Full Auto.');
           const parsed = parseChapterOutlines(String(outlinesDoc.content));
-          const outlines = capOutlineWordTargets(parsed, MAX_MANUSCRIPT_WORDS);
+          const outlines = capOutlineWordTargets(parsed, TARGET_MANUSCRIPT_WORDS);
           if (outlines.length === 0) {
             throw new Error('Chapter outlines could not be parsed. Open Chapter Outlines, ensure the format is correct and save, then resume Full Auto.');
           }

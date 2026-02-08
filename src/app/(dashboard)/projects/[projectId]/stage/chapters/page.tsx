@@ -8,7 +8,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, EmptyContent } from '@/components/stages';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
 import { cn, countWords, capOutlineWordTargets } from '@/lib/utils';
-import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 
 interface ChaptersPageProps {
   params: Promise<{ projectId: string }>;
@@ -107,7 +107,7 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
   const chapterOutlines = useMemo(() => {
     if (!outlinesDoc?.content) return [];
     const parsed = parseChapterOutlines(outlinesDoc.content);
-    return capOutlineWordTargets(parsed, MAX_MANUSCRIPT_WORDS);
+    return capOutlineWordTargets(parsed, TARGET_MANUSCRIPT_WORDS);
   }, [outlinesDoc]);
   
   // Find next uncompleted chapter
@@ -244,7 +244,7 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <div className="text-3xl font-bold text-[var(--foreground)]">{totalWordCount.toLocaleString()} <span className="text-lg font-normal text-[var(--muted-foreground)]">/ {MAX_MANUSCRIPT_WORDS.toLocaleString()}</span></div>
+            <div className="text-3xl font-bold text-[var(--foreground)]">{totalWordCount.toLocaleString()} <span className="text-lg font-normal text-[var(--muted-foreground)]">/ {TARGET_MANUSCRIPT_WORDS.toLocaleString()}</span></div>
             <p className="text-sm text-[var(--muted-foreground)]">Words (manuscript budget)</p>
           </CardContent>
         </Card>

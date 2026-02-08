@@ -5,3 +5,6 @@
  */
 export const MAX_MANUSCRIPT_TOKENS = 190_000;
 export const MAX_MANUSCRIPT_WORDS = 152_000; // 190_000 * 4/5
+
+/** Standard novel length used for outline and chapter word budgeting (target ~80k words). */
+export const TARGET_MANUSCRIPT_WORDS = 80_000;

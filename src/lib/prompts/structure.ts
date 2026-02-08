@@ -1,4 +1,4 @@
-import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 
 export const STRUCTURE_SYSTEM = `You are a story architect specializing in the Save the Cat beat sheet methodology. You understand how to structure compelling narratives that satisfy readers while allowing creative flexibility.
 
@@ -19,7 +19,7 @@ export function buildStructurePrompt(params: {
   charactersReference: string;
   maxTotalWords?: number;
 }): string {
-  const { premise, genre, nicheReference, endingReference, charactersReference, maxTotalWords = MAX_MANUSCRIPT_WORDS } = params;
+  const { premise, genre, nicheReference, endingReference, charactersReference, maxTotalWords = TARGET_MANUSCRIPT_WORDS } = params;
   
   let prompt = `Create a complete Save the Cat beat sheet and chapter outline for this novel:
 

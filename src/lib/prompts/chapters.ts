@@ -9,7 +9,7 @@ export const CHAPTERS_SYSTEM = `You are a skilled fiction writer with a gift for
 
 Write prose that transports readers and makes them feel deeply.`;
 
-import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 
 export const CHAPTER_OUTLINES_SYSTEM = `You are a story architect who specializes in converting plot blueprints into detailed chapter outlines. You understand how to break down Save the Cat beats into specific, actionable chapter plans that guide the writing process.
 
@@ -42,7 +42,7 @@ export function buildChapterOutlinesPrompt(params: {
     endingReference,
     genreResearch,
     nicheReference,
-    maxTotalWords = MAX_MANUSCRIPT_WORDS,
+    maxTotalWords = TARGET_MANUSCRIPT_WORDS,
   } = params;
 
   let prompt = `Create a complete Chapter Outlines document for this ${genre} novel based on the Plot Blueprint (Save the Cat beat sheet).
