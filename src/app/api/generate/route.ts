@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebase/admin';
 import { generateForStage } from '@/lib/llm';
-import { getModelById } from '@/lib/data/models';
+import { getModelById, getDefaultModelForStage } from '@/lib/data/models';
 import { MAX_MANUSCRIPT_TOKENS, MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { WorkflowStage } from '@/types';
 import {
@@ -195,8 +195,8 @@ export async function POST(request: NextRequest) {
       case 'editorial':
         systemPrompt = EDITORIAL_SYSTEM;
         
-        // Explicitly use GPT-5.2 Thinking for editorial analysis (preferred)
-        let selectedModel = model || 'gpt-5.2';
+        // Use requested model or stage default (e.g. Claude Opus 4.5)
+        let selectedModel = model || getDefaultModelForStage('editorial').id;
         // modelSwitched and switchMessage are already declared at function scope
         
         if (data.createQueue) {
@@ -230,31 +230,32 @@ export async function POST(request: NextRequest) {
           const estimatedPromptOverhead = 2000; // System prompt + instructions
           const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
           
-          // Get model context limits
-          const gpt52Config = getModelById('gpt-5.2');
-          const claude45Config = getModelById('claude-sonnet-4-5');
-          const gpt52MaxContext = gpt52Config?.maxContextTokens || 128000;
-          const claude45MaxContext = claude45Config?.maxContextTokens || 200000;
+          // Get selected model context limit; use fallback (Claude Sonnet 4.5, 200k) if manuscript exceeds it
+          const selectedModelConfig = getModelById(selectedModel);
+          const selectedMaxContext = selectedModelConfig?.maxContextTokens || 128000;
+          const fallbackModelId = 'claude-sonnet-4-5';
+          const fallbackModelConfig = getModelById(fallbackModelId);
+          const fallbackMaxContext = fallbackModelConfig?.maxContextTokens || 200000;
           
-          // Check if manuscript exceeds GPT-5.2's limit
-          if (selectedModel === 'gpt-5.2' && estimatedTotalTokens > gpt52MaxContext) {
-            // Switch to Claude Sonnet 4.5 for larger context window
-            selectedModel = 'claude-sonnet-4-5';
+          if (estimatedTotalTokens > selectedMaxContext && fallbackMaxContext > selectedMaxContext && estimatedTotalTokens <= fallbackMaxContext) {
+            const selectedName = selectedModelConfig?.name || selectedModel;
+            const fallbackName = fallbackModelConfig?.name || fallbackModelId;
+            selectedModel = fallbackModelId;
             modelSwitched = true;
             const manuscriptWordCount = Math.ceil(manuscript.length / 5);
-            switchMessage = `Your manuscript (approximately ${manuscriptWordCount.toLocaleString()} words, ${estimatedTotalTokens.toLocaleString()} tokens) exceeds GPT-5.2 Thinking's context limit (${gpt52MaxContext.toLocaleString()} tokens). We've automatically switched to Claude Sonnet 4.5, which supports up to ${claude45MaxContext.toLocaleString()} tokens, to complete the editorial review.`;
+            switchMessage = `Your manuscript (approximately ${manuscriptWordCount.toLocaleString()} words, ${estimatedTotalTokens.toLocaleString()} tokens) exceeds ${selectedName}'s context limit (${selectedMaxContext.toLocaleString()} tokens). We've automatically switched to ${fallbackName}, which supports up to ${fallbackMaxContext.toLocaleString()} tokens, to complete the editorial review.`;
             
-            console.log('[API] Switching to Claude Sonnet 4.5 due to manuscript size:', {
+            console.log('[API] Switching to fallback model due to manuscript size:', {
               estimatedTotalTokens,
-              gpt52MaxContext,
-              claude45MaxContext,
+              selectedMaxContext,
+              fallbackMaxContext,
               modelSwitched: true,
             });
           }
           
           // Use app cap (190k) so editorial always fits; never exceed model context
-          const selectedModelConfig = getModelById(selectedModel);
-          const modelContextTokens = selectedModelConfig?.maxContextTokens || (selectedModel === 'claude-sonnet-4-5' ? 200000 : 128000);
+          const currentModelConfig = getModelById(selectedModel);
+          const modelContextTokens = currentModelConfig?.maxContextTokens || 128000;
           const effectiveMaxTokens = Math.min(modelContextTokens, MAX_MANUSCRIPT_TOKENS);
           const warningThreshold = effectiveMaxTokens * 0.8;
           

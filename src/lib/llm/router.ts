@@ -193,7 +193,7 @@ export async function generate(
   // Get default model for provider if not specified
   const modelId = options.model || (provider === 'openai' 
     ? OPENAI_MODELS.find((m) => m.isDefault)?.id || 'gpt-5.2'
-    : ANTHROPIC_MODELS.find((m) => m.isDefault)?.id || 'claude-sonnet-4-5');
+    : ANTHROPIC_MODELS.find((m) => m.isDefault)?.id || 'claude-opus-4-5-20251101');
   
   if (provider === 'openai') {
     const result = await generateWithOpenAI(prompt, { ...options, model: modelId });

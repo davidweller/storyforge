@@ -50,13 +50,21 @@ export const OPENAI_MODELS: LLMModel[] = [
 // Using actual model IDs from Anthropic API
 export const ANTHROPIC_MODELS: LLMModel[] = [
   {
+    id: 'claude-opus-4-5-20251101',
+    name: 'Claude Opus 4.5',
+    provider: 'anthropic',
+    description: 'Flagship Claude model, best for long-form writing and analysis',
+    maxTokens: 16384, // Output limit
+    maxContextTokens: 200000, // Input context window (200k tokens)
+    isDefault: true,
+  },
+  {
     id: 'claude-sonnet-4-5',
     name: 'Claude Sonnet 4.5',
     provider: 'anthropic',
     description: 'Latest Claude model, excellent for creative writing',
     maxTokens: 16384, // Output limit
     maxContextTokens: 200000, // Input context window (200k tokens)
-    isDefault: true,
   },
   {
     id: 'claude-3-5-sonnet-20241022',
@@ -113,7 +121,7 @@ export const STAGE_DEFAULT_PROVIDERS: Record<string, LLMProvider> = {
   'chapter-outlines': 'openai',
   'chapters': 'anthropic',
   'compilation': 'openai',
-  'editorial': 'openai',
+  'editorial': 'anthropic',
   'revision': 'anthropic',
   'blurb': 'openai',
   'amazon-description': 'openai',

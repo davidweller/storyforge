@@ -23,7 +23,7 @@ export async function generateWithClaude(
   options: AnthropicGenerateOptions = {}
 ): Promise<{ content: string; tokensUsed: number }> {
   const {
-    model = 'claude-sonnet-4-5',
+    model = 'claude-opus-4-5-20251101',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
@@ -34,7 +34,7 @@ export async function generateWithClaude(
   }
 
   // Get model display name for logging
-  const modelDisplayName = model === 'claude-sonnet-4-5' ? 'Claude Sonnet 4.5' : model;
+  const modelDisplayName = model === 'claude-opus-4-5-20251101' ? 'Claude Opus 4.5' : model === 'claude-sonnet-4-5' ? 'Claude Sonnet 4.5' : model;
   
   console.log('[Anthropic] Calling API:', {
     model: modelDisplayName,
@@ -93,7 +93,7 @@ export async function* streamWithClaude(
   options: AnthropicGenerateOptions = {}
 ): AsyncGenerator<string, { tokensUsed: number }, unknown> {
   const {
-    model = 'claude-sonnet-4-5',
+    model = 'claude-opus-4-5-20251101',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
