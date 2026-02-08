@@ -9,6 +9,8 @@ export const CHAPTERS_SYSTEM = `You are a skilled fiction writer with a gift for
 
 Write prose that transports readers and makes them feel deeply.`;
 
+import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+
 export const CHAPTER_OUTLINES_SYSTEM = `You are a story architect who specializes in converting plot blueprints into detailed chapter outlines. You understand how to break down Save the Cat beats into specific, actionable chapter plans that guide the writing process.
 
 Your approach:
@@ -30,6 +32,7 @@ export function buildChapterOutlinesPrompt(params: {
   endingReference: string;
   genreResearch?: string;
   nicheReference?: string;
+  maxTotalWords?: number;
 }): string {
   const {
     premise,
@@ -39,6 +42,7 @@ export function buildChapterOutlinesPrompt(params: {
     endingReference,
     genreResearch,
     nicheReference,
+    maxTotalWords = MAX_MANUSCRIPT_WORDS,
   } = params;
 
   let prompt = `Create a complete Chapter Outlines document for this ${genre} novel based on the Plot Blueprint (Save the Cat beat sheet).
@@ -82,7 +86,7 @@ Convert the Plot Blueprint into detailed chapter outlines. For each chapter, pro
    - What emotional beats should be hit?
    - What information needs to be revealed or established?
 5. **POV Character** - Which character's point of view should this chapter be written from? Consider which perspective would be most effective for this beat.
-6. **Word Target** - Approximate word count target (typically 2500-4000 words, but can vary for pacing)
+6. **Word Target** - Approximate word count target per chapter. The **sum of all Word Target values** across chapters must not exceed ${maxTotalWords.toLocaleString()} words total. Vary per chapter for pacing (e.g. 2500-4000 words each) but keep the total at or below this limit.
 7. **Key Plot Points** - 3-5 specific plot points or events that must occur in this chapter
 
 ## Output Format
@@ -110,6 +114,7 @@ After all chapter outlines, provide a brief narrative overview explaining:
 ## Guidelines
 
 - Map beats to approximately 20-30 chapters (adjust based on story complexity)
+- **Total word budget:** The sum of all Word Target values must be ≤ ${maxTotalWords.toLocaleString()} words. If you have N chapters, average at most ${Math.floor(maxTotalWords / 25)} words per chapter (e.g. for ~25 chapters) so the manuscript stays within the limit.
 - Ensure each chapter has a clear purpose and advances the story
 - Vary chapter length for pacing (shorter chapters for tension, longer for development)
 - Balance action, character development, and world-building

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebase/admin';
 import { generateForStage } from '@/lib/llm';
 import { getModelById } from '@/lib/data/models';
+import { MAX_MANUSCRIPT_TOKENS, MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { WorkflowStage } from '@/types';
 import {
   GENRE_RESEARCH_SYSTEM,
@@ -142,6 +143,7 @@ export async function POST(request: NextRequest) {
           nicheReference: data.nicheReference as string,
           endingReference: data.endingReference as string,
           charactersReference: data.charactersReference as string,
+          maxTotalWords: MAX_MANUSCRIPT_WORDS,
         });
         break;
         
@@ -167,6 +169,7 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string,
           genreResearch: data.genreResearch as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+          maxTotalWords: MAX_MANUSCRIPT_WORDS,
         });
         break;
         
@@ -249,19 +252,21 @@ export async function POST(request: NextRequest) {
             });
           }
           
-          // Get the selected model's context limit
+          // Use app cap (190k) so editorial always fits; never exceed model context
           const selectedModelConfig = getModelById(selectedModel);
-          const maxContextTokens = selectedModelConfig?.maxContextTokens || (selectedModel === 'claude-sonnet-4-5' ? 200000 : 128000);
-          const warningThreshold = maxContextTokens * 0.8;
+          const modelContextTokens = selectedModelConfig?.maxContextTokens || (selectedModel === 'claude-sonnet-4-5' ? 200000 : 128000);
+          const effectiveMaxTokens = Math.min(modelContextTokens, MAX_MANUSCRIPT_TOKENS);
+          const warningThreshold = effectiveMaxTokens * 0.8;
           
           // Final check - if still too large, return error
-          if (estimatedTotalTokens > maxContextTokens) {
+          if (estimatedTotalTokens > effectiveMaxTokens) {
             const manuscriptWordCount = Math.ceil(manuscript.length / 5);
+            const maxWordsSupported = Math.floor((effectiveMaxTokens - estimatedReferenceTokens - estimatedPromptOverhead) * (4 / 5));
             return NextResponse.json({ 
               error: `Manuscript is too long for editorial review.\n\n` +
                      `• Your manuscript: ~${manuscriptWordCount.toLocaleString()} words (${estimatedTotalTokens.toLocaleString()} tokens)\n` +
-                     `• Maximum supported: ~${Math.floor((maxContextTokens - estimatedReferenceTokens - estimatedPromptOverhead) * 0.8).toLocaleString()} words (${maxContextTokens.toLocaleString()} tokens)\n\n` +
-                     `Even with Claude Sonnet 4.5's larger context window, your manuscript exceeds the limit. Please consider reviewing in batches or focusing on specific sections.`
+                     `• Maximum supported: ~${maxWordsSupported.toLocaleString()} words (${effectiveMaxTokens.toLocaleString()} tokens)\n\n` +
+                     `Please keep your manuscript within the limit when planning chapters (e.g. Structure and Chapter Outlines stages), or consider reviewing in batches or focusing on specific sections.`
             }, { status: 400 });
           }
           
@@ -269,8 +274,8 @@ export async function POST(request: NextRequest) {
             console.warn('[API] Manuscript approaching context limit:', {
               estimatedTotalTokens,
               warningThreshold,
-              maxContextTokens,
-              percentage: ((estimatedTotalTokens / maxContextTokens) * 100).toFixed(1) + '%',
+              effectiveMaxTokens,
+              percentage: ((estimatedTotalTokens / effectiveMaxTokens) * 100).toFixed(1) + '%',
               model: selectedModel,
             });
           }
@@ -282,7 +287,7 @@ export async function POST(request: NextRequest) {
             estimatedManuscriptTokens,
             estimatedReferenceTokens,
             estimatedTotalTokens,
-            maxContextTokens,
+            effectiveMaxTokens,
             genre: data.genre,
             hasNiche: !!data.nicheReference,
             hasCharacters: !!data.charactersReference,

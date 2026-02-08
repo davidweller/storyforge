@@ -9,7 +9,8 @@ import { useProjectStore } from '@/stores/projectStore';
 import { TipTapEditor } from '@/components/editor';
 import { WorkflowSidebar } from '@/components/layout';
 import { Button, Badge } from '@/components/ui';
-import { countWords } from '@/lib/utils';
+import { countWords, capOutlineWordTargets } from '@/lib/utils';
+import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { ChapterVersion } from '@/types';
 
 interface ChapterPageProps {
@@ -179,7 +180,8 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       let wordTarget = 3000;
       
       if (outlinesDoc) {
-        const outlines = parseChapterOutlines(outlinesDoc.content);
+        const parsed = parseChapterOutlines(outlinesDoc.content);
+        const outlines = capOutlineWordTargets(parsed, MAX_MANUSCRIPT_WORDS);
         const outline = outlines.find(o => o.chapterNumber === chapter.chapterNumber);
         if (outline) {
           chapterTitle = outline.title || chapterTitle;

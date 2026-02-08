@@ -1,3 +1,5 @@
+import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
+
 export const STRUCTURE_SYSTEM = `You are a story architect specializing in the Save the Cat beat sheet methodology. You understand how to structure compelling narratives that satisfy readers while allowing creative flexibility.
 
 Your approach:
@@ -15,8 +17,9 @@ export function buildStructurePrompt(params: {
   nicheReference: string;
   endingReference: string;
   charactersReference: string;
+  maxTotalWords?: number;
 }): string {
-  const { premise, genre, nicheReference, endingReference, charactersReference } = params;
+  const { premise, genre, nicheReference, endingReference, charactersReference, maxTotalWords = MAX_MANUSCRIPT_WORDS } = params;
   
   let prompt = `Create a complete Save the Cat beat sheet and chapter outline for this novel:
 
@@ -99,13 +102,15 @@ The "after" snapshot - show how the protagonist has changed.
 
 ## Part 2: Chapter Outline
 
-Map the beats to approximately 20-30 chapters. For each chapter, provide the following in markdown format:
+The entire manuscript must not exceed approximately ${maxTotalWords.toLocaleString()} words (so it can be reviewed in one pass later). Map the beats to approximately 20-30 chapters and assign a **Word Target** per chapter so that the **sum of all chapter word targets** is at or below this total.
+
+For each chapter, provide the following in markdown format:
 
 **Chapter [Number]: [Title]**
 - **Beat(s)**: [Which beat(s) this chapter covers]
 - **POV**: [POV character, if multiple]
 - **Summary**: [2-3 sentence summary of events]
-- **Word Target**: [Approximate word count target]
+- **Word Target**: [Approximate word count target; ensure sum across all chapters ≤ ${maxTotalWords.toLocaleString()} words]
 
 ## Part 3: Emotional Arc Graph
 

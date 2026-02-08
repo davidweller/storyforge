@@ -13,6 +13,25 @@ export function countWords(text: string): number {
     .filter((word) => word.length > 0).length;
 }
 
+const DEFAULT_WORDS_PER_CHAPTER = 3000;
+
+/**
+ * Cap outline word targets so their sum does not exceed maxTotalWords.
+ * If the sum is over the limit, scales each wordTarget proportionally.
+ */
+export function capOutlineWordTargets<T extends { wordTarget?: number }>(
+  outlines: T[],
+  maxTotalWords: number
+): T[] {
+  const total = outlines.reduce((sum, o) => sum + (o.wordTarget ?? DEFAULT_WORDS_PER_CHAPTER), 0);
+  if (total <= maxTotalWords || total <= 0) return outlines;
+  const scale = maxTotalWords / total;
+  return outlines.map((o) => ({
+    ...o,
+    wordTarget: Math.max(500, Math.round((o.wordTarget ?? DEFAULT_WORDS_PER_CHAPTER) * scale)),
+  }));
+}
+
 // Format date for display
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('en-US', {

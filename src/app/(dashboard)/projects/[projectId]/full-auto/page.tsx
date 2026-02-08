@@ -10,7 +10,8 @@ import { getNextStage, STAGE_ORDER, STAGE_NAMES } from '@/lib/utils';
 import { getEstimatedMinutesForStep, FULL_AUTO_ESTIMATES_MINUTES } from '@/lib/fullAutoEstimates';
 import { Button } from '@/components/ui';
 import type { WorkflowStage, DocumentType } from '@/types';
-import { countWords } from '@/lib/utils';
+import { countWords, capOutlineWordTargets } from '@/lib/utils';
+import { MAX_MANUSCRIPT_WORDS } from '@/lib/constants';
 
 /** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
 const FullAutoSpinner = memo(function FullAutoSpinner() {
@@ -419,7 +420,8 @@ export default function FullAutoPage({
 
         // Document stages
         for (const stage of docStages) {
-          if (STAGE_ORDER.indexOf(stage as (typeof STAGE_ORDER)[number]) < STAGE_ORDER.indexOf(currentStage)) continue;
+          const order = STAGE_ORDER as readonly string[];
+          if (order.indexOf(stage) < order.indexOf(currentStage)) continue;
           if (stage === 'ending') {
             addEst('ending-concepts');
             addEst('ending-expand');
@@ -484,7 +486,7 @@ export default function FullAutoPage({
             await updateDocument(endingDocId, { content: expandResult.content });
             await approveDocument(endingDocId);
           }
-          if (!proj.title) await updateProject(projectId, { title: first.title });
+          if (!project.title) await updateProject(projectId, { title: first.title });
           const next = getNextStage('ending');
           if (next) await advanceStage(projectId, next as WorkflowStage);
           currentStage = (next || currentStage) as WorkflowStage;
@@ -537,7 +539,8 @@ export default function FullAutoPage({
             .filter((d) => d.type === 'chapter-outlines')
             .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
           if (!outlinesDoc?.content) throw new Error('No chapter outlines. Complete the Chapter Outlines stage first, then resume Full Auto.');
-          const outlines = parseChapterOutlines(String(outlinesDoc.content));
+          const parsed = parseChapterOutlines(String(outlinesDoc.content));
+          const outlines = capOutlineWordTargets(parsed, MAX_MANUSCRIPT_WORDS);
           if (outlines.length === 0) {
             throw new Error('Chapter outlines could not be parsed. Open Chapter Outlines, ensure the format is correct and save, then resume Full Auto.');
           }
