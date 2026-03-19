@@ -1,5 +1,7 @@
 // Available LLM models for content generation
 
+import type { WorkflowStage } from '@/types';
+
 export type LLMProvider = 'openai' | 'anthropic';
 
 export interface LLMModel {
@@ -109,8 +111,9 @@ export function getModelsByProvider(provider: LLMProvider): LLMModel[] {
   return provider === 'openai' ? OPENAI_MODELS : ANTHROPIC_MODELS;
 }
 
-// Default models per stage (provider assignment)
-export const STAGE_DEFAULT_PROVIDERS: Record<string, LLMProvider> = {
+// Default LLM provider per workflow stage.
+// TypeScript will error if a WorkflowStage value is missing from this map.
+export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
   'setup': 'openai',
   'genre-research': 'openai',
   'niche': 'openai',
@@ -121,15 +124,17 @@ export const STAGE_DEFAULT_PROVIDERS: Record<string, LLMProvider> = {
   'chapter-outlines': 'openai',
   'chapters': 'anthropic',
   'compilation': 'openai',
+  'export-draft': 'openai',
   'editorial': 'anthropic',
   'revision': 'anthropic',
+  'export-final': 'openai',
   'blurb': 'openai',
   'amazon-description': 'openai',
 };
 
 // Get default model for a stage
-export function getDefaultModelForStage(stage: string): LLMModel {
-  const provider = STAGE_DEFAULT_PROVIDERS[stage] || 'openai';
+export function getDefaultModelForStage(stage: WorkflowStage): LLMModel {
+  const provider = STAGE_DEFAULT_PROVIDERS[stage] ?? 'openai';
   return getDefaultModel(provider);
 }
 
@@ -137,7 +142,7 @@ export function getDefaultModelForStage(stage: string): LLMModel {
 export const MODEL_PREFERENCES_KEY = 'storyforge_model_preferences';
 
 // Get saved model preference for a stage
-export function getSavedModelPreference(stage: string): string | null {
+export function getSavedModelPreference(stage: WorkflowStage): string | null {
   if (typeof window === 'undefined') return null;
   
   try {
@@ -153,7 +158,7 @@ export function getSavedModelPreference(stage: string): string | null {
 }
 
 // Save model preference for a stage
-export function saveModelPreference(stage: string, modelId: string): void {
+export function saveModelPreference(stage: WorkflowStage, modelId: string): void {
   if (typeof window === 'undefined') return;
   
   try {
@@ -167,7 +172,7 @@ export function saveModelPreference(stage: string, modelId: string): void {
 }
 
 // Get the effective model for a stage (saved preference or default)
-export function getEffectiveModelForStage(stage: string): LLMModel {
+export function getEffectiveModelForStage(stage: WorkflowStage): LLMModel {
   const savedModelId = getSavedModelPreference(stage);
   if (savedModelId) {
     const model = getModelById(savedModelId);

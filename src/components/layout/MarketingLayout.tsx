@@ -28,7 +28,7 @@ export function MarketingLayout({
   const approvedChapterIds = new Set<string>();
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+    <div className="flex h-[calc(100vh-var(--header-height))]">
       <WorkflowSidebar
         projectId={projectId}
         projectTitle={project.title}
@@ -42,39 +42,29 @@ export function MarketingLayout({
         blurbFilled={!!project.blurb?.trim()}
         amazonDescriptionFilled={!!project.amazonDescription?.trim()}
       />
-      <main style={{ flex: 1, overflowY: 'auto' }}>
-        <div
-          style={{
-            borderBottom: '1px solid #e5e5e5',
-            backgroundColor: '#ffffff',
-            padding: '2rem 3rem',
-          }}
-        >
-          <div style={{ maxWidth: '800px', marginLeft: 'auto', marginRight: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+      <main className="flex-1 overflow-y-auto">
+        <div className="border-b border-border bg-card px-12 py-8">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-2 mb-1">
               <Link
                 href={`/projects/${projectId}/marketing/blurb`}
-                style={{
-                  fontSize: '0.875rem',
-                  color: '#737373',
-                  textDecoration: 'none',
-                }}
+                className="text-sm text-muted-foreground hover:opacity-80 transition-opacity no-underline"
               >
                 Marketing
               </Link>
-              <span style={{ color: '#a3a3a3' }}>/</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#171717' }}>{title}</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-sm font-medium text-foreground">{title}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.025em', color: '#171717' }}>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {title}
               </h1>
               <ModelSelector stage={stage} />
             </div>
           </div>
         </div>
-        <div style={{ padding: '2rem 3rem' }}>
-          <div style={{ maxWidth: '800px', marginLeft: 'auto', marginRight: 'auto' }}>{children}</div>
+        <div className="px-12 py-8">
+          <div className="max-w-3xl mx-auto">{children}</div>
         </div>
       </main>
     </div>

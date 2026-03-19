@@ -1,11 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { auth } from '@/lib/firebase/config';
 import type { WorkflowStage } from '@/types';
-
-// Bypass auth in development mode
-const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
 
 interface GenerateResult {
   content: string;
@@ -15,7 +11,7 @@ interface GenerateResult {
 }
 
 interface GenerateOptions {
-  model?: string; // Optional model override
+  model?: string;
 }
 
 interface UseGenerateReturn {
@@ -28,48 +24,30 @@ interface UseGenerateReturn {
 export function useGenerate(): UseGenerateReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const generate = useCallback(async (
-    stage: WorkflowStage, 
+    stage: WorkflowStage,
     data: Record<string, unknown>,
     options?: GenerateOptions
   ): Promise<GenerateResult> => {
     setIsGenerating(true);
     setError(null);
-    
+
     try {
-      // Authentication disabled for testing - always use dev token
-      let token = 'dev-token';
-      
-      // if (!DEV_MODE_BYPASS_AUTH) {
-      //   const user = auth.currentUser;
-      //   if (!user) {
-      //     throw new Error('Not authenticated');
-      //   }
-      //   token = await user.getIdToken();
-      // }
-      
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ 
-          stage, 
-          data,
-          model: options?.model, // Pass model override if provided
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage, data, model: options?.model }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Generation failed');
       }
-      
+
       const result = await response.json();
       return result as GenerateResult;
-      
+
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Generation failed';
       setError(message);
@@ -78,15 +56,10 @@ export function useGenerate(): UseGenerateReturn {
       setIsGenerating(false);
     }
   }, []);
-  
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
-  
-  return {
-    generate,
-    isGenerating,
-    error,
-    clearError,
-  };
+
+  return { generate, isGenerating, error, clearError };
 }

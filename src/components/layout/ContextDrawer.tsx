@@ -12,30 +12,14 @@ export function ContextSection({ title, children, defaultExpanded = true }: Cont
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   
   return (
-    <div style={{ borderBottom: '1px solid #e5e5e5' }}>
+    <div className="border-b border-border">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '1.25rem',
-          textAlign: 'left',
-          backgroundColor: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-        }}
+        className="w-full flex items-center justify-between p-5 text-left bg-transparent border-none cursor-pointer"
       >
-        <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#171717' }}>{title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <svg
-          style={{ 
-            width: '1rem', 
-            height: '1rem', 
-            color: '#737373',
-            transition: 'transform 0.2s',
-            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}
+          className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -44,7 +28,7 @@ export function ContextSection({ title, children, defaultExpanded = true }: Cont
         </svg>
       </button>
       {isExpanded && (
-        <div style={{ padding: '0 1.25rem 1.25rem' }}>
+        <div className="px-5 pb-5">
           {children}
         </div>
       )}

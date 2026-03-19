@@ -24,6 +24,7 @@ export type DocumentType =
   | 'genre'
   | 'niche'
   | 'ending'
+  | 'ending-choice'  // User-selected ending option (saved separately from the ending blueprint)
   | 'characters'
   | 'structure'
   | 'chapter-outlines'
@@ -140,6 +141,14 @@ export interface GenerationResponse {
   content: string;
   model: string;
   tokensUsed: number;
+}
+
+/** Extended response returned by POST /api/generate — includes provider and
+ *  optional model-switch metadata (editorial stage auto-fallback). */
+export interface GenerateApiResponse extends GenerationResponse {
+  provider: string;
+  modelSwitched?: boolean;
+  switchMessage?: string;
 }
 
 export interface EndingOption {

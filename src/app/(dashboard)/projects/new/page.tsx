@@ -127,48 +127,32 @@ export default function NewProjectPage() {
             {step === 'microniche' && 'Select Your Microniche'}
             {step === 'details' && 'Add Details'}
           </h1>
-          <p style={{ fontSize: '1rem', color: '#737373' }}>
+          <p className="text-muted-foreground">
             {step === 'genre' && 'What kind of story do you want to tell?'}
             {step === 'niche' && `Narrow down your ${selectedGenre?.name} story`}
             {step === 'microniche' && `Further refine your ${selectedNiche?.name} story`}
             {step === 'details' && 'Optional: Share your initial ideas'}
           </p>
         </div>
-        
+
         {/* Progress indicator */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          gap: '0.5rem', 
-          marginBottom: '2.5rem' 
-        }}>
-          {['genre', 'niche', 'microniche', 'details'].map((s, i) => (
-            <div
-              key={s}
-              style={{
-                width: '3rem',
-                height: '4px',
-                borderRadius: '2px',
-                backgroundColor: 
-                  s === step ? '#3b82f6' : 
-                  (['genre', 'niche', 'microniche', 'details'].indexOf(step) > i) ? '#3b82f6' : 
-                  '#e5e5e5',
-                transition: 'background-color 0.3s',
-              }}
-            />
-          ))}
+        <div className="flex justify-center gap-2 mb-10">
+          {(['genre', 'niche', 'microniche', 'details'] as const).map((s, i) => {
+            const stepOrder = ['genre', 'niche', 'microniche', 'details'];
+            const isActive = s === step || stepOrder.indexOf(step) > i;
+            return (
+              <div
+                key={s}
+                className={`w-12 h-1 rounded-sm transition-colors duration-300 ${isActive ? 'bg-[var(--accent)]' : 'bg-border'}`}
+              />
+            );
+          })}
         </div>
-        
+
         {/* Error display */}
         {error && (
-          <div style={{ 
-            marginBottom: '1.5rem', 
-            padding: '1rem', 
-            borderRadius: '12px', 
-            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-            border: '1px solid rgba(239, 68, 68, 0.3)' 
-          }}>
-            <p style={{ fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>
+          <div className="mb-6 p-4 rounded-xl bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)]">
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
         
@@ -251,22 +235,15 @@ export default function NewProjectPage() {
         {step === 'niche' && selectedGenre && (
           <>
             {/* Selected genre indicator */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '1.5rem',
-              padding: '1rem',
-              borderRadius: '12px',
-              backgroundColor: '#ffffff',
-              border: `1px solid ${selectedGenre.color}40`,
-            }}>
-              <span style={{ fontSize: '1.5rem' }}>{selectedGenre.icon}</span>
+            <div style={{ border: `1px solid ${selectedGenre.color}40` }}
+              className="flex items-center gap-3 mb-6 p-4 rounded-xl bg-card"
+            >
+              <span className="text-2xl">{selectedGenre.icon}</span>
               <div>
-                <div style={{ fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">
                   Selected Genre
                 </div>
-                <div style={{ fontSize: '1rem', fontWeight: 600, color: '#171717' }}>
+                <div className="text-base font-semibold text-foreground">
                   {selectedGenre.name}
                 </div>
               </div>
@@ -371,22 +348,15 @@ export default function NewProjectPage() {
         {step === 'microniche' && selectedGenre && selectedNiche && (
           <>
             {/* Selected genre/niche indicator */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '1.5rem',
-              padding: '1rem',
-              borderRadius: '12px',
-              backgroundColor: '#ffffff',
-              border: `1px solid ${selectedGenre.color}40`,
-            }}>
-              <span style={{ fontSize: '1.5rem' }}>{selectedGenre.icon}</span>
+            <div style={{ border: `1px solid ${selectedGenre.color}40` }}
+              className="flex items-center gap-3 mb-6 p-4 rounded-xl bg-card"
+            >
+              <span className="text-2xl">{selectedGenre.icon}</span>
               <div>
-                <div style={{ fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">
                   Selected Genre • Niche
                 </div>
-                <div style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff' }}>
+                <div className="text-base font-semibold text-foreground">
                   {selectedGenre.name} • {selectedNiche.name}
                 </div>
               </div>
@@ -474,143 +444,83 @@ export default function NewProjectPage() {
         {step === 'details' && selectedGenre && (
           <>
             {/* Selected genre/niche indicator */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '2rem',
-              padding: '1rem',
-              borderRadius: '12px',
-              backgroundColor: '#ffffff',
-              border: `1px solid ${selectedGenre.color}40`,
-            }}>
-              <span style={{ fontSize: '1.5rem' }}>{selectedGenre.icon}</span>
+            <div style={{ border: `1px solid ${selectedGenre.color}40` }}
+              className="flex items-center gap-3 mb-8 p-4 rounded-xl bg-card"
+            >
+              <span className="text-2xl">{selectedGenre.icon}</span>
               <div>
-                <div style={{ fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">
                   Your Story
                 </div>
-                <div style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff' }}>
+                <div className="text-base font-semibold text-foreground">
                   {selectedGenre.name}
-                  {selectedNiche && <span style={{ color: '#737373' }}> • {selectedNiche.name}</span>}
-                  {selectedMicroniche && <span style={{ color: '#737373' }}> • {selectedMicroniche.name}</span>}
+                  {selectedNiche && <span className="text-muted-foreground"> • {selectedNiche.name}</span>}
+                  {selectedMicroniche && <span className="text-muted-foreground"> • {selectedMicroniche.name}</span>}
                 </div>
               </div>
             </div>
-            
-            <div style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '16px',
-              border: '1px solid #e5e5e5',
-              padding: '1.5rem',
-              marginBottom: '1.5rem',
-            }}>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '0.875rem', 
-                  fontWeight: 500, 
-                  marginBottom: '0.5rem', 
-                  color: '#171717' 
-                }}>
+
+            <div className="bg-card rounded-2xl border border-border p-6 mb-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Premise / Initial Idea
-                  <span style={{ color: '#737373', fontWeight: 400 }}> (Optional)</span>
+                  <span className="text-muted-foreground font-normal"> (Optional)</span>
                 </label>
                 <textarea
                   placeholder="Describe your story idea. What's the core concept? Who's the protagonist? What's the central conflict?"
                   value={formData.premise}
                   onChange={(e) => setFormData({ ...formData, premise: e.target.value })}
                   rows={5}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem 1rem',
-                    fontSize: '0.875rem',
-                    borderRadius: '8px',
-                    backgroundColor: '#ffffff',
-                    color: '#171717',
-                    border: '1px solid #e5e5e5',
-                    outline: 'none',
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                  }}
+                  className="w-full px-4 py-3.5 text-sm rounded-lg bg-card text-foreground border border-border outline-none resize-y font-[inherit]"
                 />
-                <div style={{ display: 'flex', justifyContent: 'flex-end',                   marginTop: '0.5rem' }}> 
-                  <span style={{ fontSize: '0.75rem', color: '#737373' }}>
+                <div className="flex justify-end mt-2">
+                  <span className="text-xs text-muted-foreground">
                     {formData.premise.length} characters
                   </span>
                 </div>
               </div>
-              
+
               <div>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '0.875rem', 
-                  fontWeight: 500, 
-                  marginBottom: '0.5rem', 
-                  color: '#171717' 
-                }}>
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Research Notes
-                  <span style={{ color: '#737373', fontWeight: 400 }}> (Optional)</span>
+                  <span className="text-muted-foreground font-normal"> (Optional)</span>
                 </label>
                 <textarea
                   placeholder="Paste any research, inspiration, or reference material you've gathered. This helps the AI understand your vision better."
                   value={formData.research}
                   onChange={(e) => setFormData({ ...formData, research: e.target.value })}
                   rows={4}
-                  style={{
-                    width: '100%',
-                    padding: '0.875rem 1rem',
-                    fontSize: '0.875rem',
-                    borderRadius: '8px',
-                    backgroundColor: '#ffffff',
-                    color: '#171717',
-                    border: '1px solid #e5e5e5',
-                    outline: 'none',
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                  }}
+                  className="w-full px-4 py-3.5 text-sm rounded-lg bg-card text-foreground border border-border outline-none resize-y font-[inherit]"
                 />
               </div>
             </div>
-            
+
             {/* Info box about title */}
-            <div style={{
-              display: 'flex',
-              gap: '0.75rem',
-              padding: '1rem',
-              borderRadius: '12px',
-              backgroundColor: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              marginBottom: '1.5rem',
-            }}>
-              <svg style={{ width: '1.25rem', height: '1.25rem', color: '#3b82f6', flexShrink: 0, marginTop: '0.125rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex gap-3 p-4 rounded-xl bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] mb-6">
+              <svg className="w-5 h-5 text-[var(--accent)] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <p style={{ fontSize: '0.875rem', color: '#3b82f6', fontWeight: 500 }}>
+                <p className="text-sm text-[var(--accent)] font-medium">
                   Title comes later
                 </p>
-                <p style={{ fontSize: '0.8rem', color: '#737373', marginTop: '0.25rem' }}>
+                <p className="text-[0.8rem] text-muted-foreground mt-1">
                   You&apos;ll choose your title after developing your ending, when you have a clearer vision of your story.
                 </p>
               </div>
             </div>
-            
+
             {/* Navigation */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between',
-              paddingTop: '1rem',
-              borderTop: '1px solid #e5e5e5',
-            }}>
+            <div className="flex justify-between pt-4 border-t border-border">
               <Button variant="ghost" onClick={handleBack}>
-                <svg style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
                 Back
               </Button>
               <Button onClick={handleSubmit} loading={loading}>
                 Create Project
-                <svg style={{ width: '1rem', height: '1rem', marginLeft: '0.5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </Button>

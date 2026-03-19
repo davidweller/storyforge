@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Node.js CommonJS utility scripts — not part of the Next.js app bundle
+    "scripts/**",
+    // Nested project directory (not linted as part of this workspace)
+    "storyforge/**",
   ]),
 ]);
 

@@ -360,7 +360,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
             </CardHeader>
             <CardContent>
               <p className="text-[var(--muted-foreground)] mb-4">
-                Review and apply revisions by chapter. Click "Apply" to generate revisions using Sonnet 4.5.
+                Review and apply revisions by chapter. Click &quot;Apply&quot; to generate revisions using Sonnet 4.5.
               </p>
               
               {revisionTasks.length === 0 ? (
@@ -545,7 +545,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                   Generate revision for Chapter {selectedChapter?.chapterNumber}: {selectedChapter?.title} using Sonnet 4.5?
                 </p>
                 <p className="text-xs text-[var(--muted-foreground)] mb-4">
-                  This will create a revised version of the chapter based on the revision instructions. You'll be able to review and approve the changes.
+                  This will create a revised version of the chapter based on the revision instructions. You&apos;ll be able to review and approve the changes.
                 </p>
                 <div className="flex items-center gap-3">
                   <Button

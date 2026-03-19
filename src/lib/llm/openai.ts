@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { OPENAI_MODELS } from '@/lib/data/models';
 
 let openaiClient: OpenAI | null = null;
 
@@ -19,11 +20,15 @@ export interface OpenAIGenerateOptions {
   jsonMode?: boolean;
 }
 
-// Models that use max_completion_tokens instead of max_tokens
-const REASONING_MODELS = ['gpt-5.2', 'o3-mini', 'o3', 'o1', 'o1-mini', 'o1-preview'];
+// Models that use max_completion_tokens instead of max_tokens.
+// Derived from models.ts (OPENAI_MODELS) by matching known reasoning model ID prefixes,
+// so the list stays in sync with the model registry rather than being maintained separately.
+const REASONING_MODEL_PREFIXES = OPENAI_MODELS
+  .filter((m) => m.id.startsWith('gpt-5') || m.id.startsWith('o1') || m.id.startsWith('o3'))
+  .map((m) => m.id);
 
 function isReasoningModel(model: string): boolean {
-  return REASONING_MODELS.some(m => model.startsWith(m));
+  return REASONING_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
 }
 
 export async function generateWithOpenAI(

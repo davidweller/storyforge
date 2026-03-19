@@ -2,32 +2,23 @@
 
 import { useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
-import { useAuth } from './useAuth';
-import type { WorkflowStage, ProjectFormData } from '@/types';
+import type { WorkflowStage, ProjectFormData, DocumentType } from '@/types';
 
-// Bypass auth in development mode
-const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
-const DEV_USER_ID = 'dev-user-123';
+const LOCAL_USER_ID = 'local';
 
 export function useProjects() {
-  const { user } = useAuth();
   const { projects, loading, error, loadUserProjects, clearError } = useProjectStore();
-  
-  // Use dev user ID in development mode
-  const userId = DEV_MODE_BYPASS_AUTH ? DEV_USER_ID : user?.uid;
-  
+
   useEffect(() => {
-    if (userId) {
-      loadUserProjects(userId);
-    }
-  }, [userId, loadUserProjects]);
-  
+    loadUserProjects(LOCAL_USER_ID);
+  }, [loadUserProjects]);
+
   return {
     projects,
     loading,
     error,
     clearError,
-    refresh: () => userId && loadUserProjects(userId),
+    refresh: () => loadUserProjects(LOCAL_USER_ID),
   };
 }
 
@@ -57,11 +48,11 @@ export function useProject(projectId: string | null) {
     };
   }, [projectId, loadProject, clearCurrentProject]);
   
-  const getDocumentByType = useCallback((type: string) => {
+  const getDocumentByType = useCallback((type: DocumentType) => {
     return documents.find((d) => d.type === type && d.approved);
   }, [documents]);
   
-  const getLatestDocumentByType = useCallback((type: string) => {
+  const getLatestDocumentByType = useCallback((type: DocumentType) => {
     const docs = documents.filter((d) => d.type === type);
     if (docs.length === 0) return undefined;
     return docs.sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
@@ -139,27 +130,16 @@ export function useProject(projectId: string | null) {
 }
 
 export function useCreateProject() {
-  const { user } = useAuth();
   const { createProject, loading, error, clearError } = useProjectStore();
-  
-  // Use dev user ID in development mode
-  const userId = DEV_MODE_BYPASS_AUTH ? DEV_USER_ID : user?.uid;
-  
+
   const create = async (data: ProjectFormData) => {
-    // Authentication disabled for testing
-    // if (!userId) {
-    //   throw new Error('User not authenticated');
-    // }
-    // Use dev user ID if no userId
-    const finalUserId = userId || DEV_USER_ID;
-    
-    return createProject(finalUserId, {
+    return createProject(LOCAL_USER_ID, {
       ...data,
       status: 'active',
       currentStage: 'setup',
     });
   };
-  
+
   return {
     createProject: create,
     loading,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase/admin';
+import { z } from 'zod';
+import { getProject, getProjectChapters, getApprovedChapterVersions } from '@/lib/db/queries';
 import { 
   Document, 
   Packer, 
@@ -9,91 +10,49 @@ import {
   AlignmentType,
 } from 'docx';
 
-// Verify Firebase auth token
-async function verifyToken(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  
-  const token = authHeader.split('Bearer ')[1];
-  try {
-    const auth = getAdminAuth();
-    const decodedToken = await auth.verifyIdToken(token);
-    return decodedToken.uid;
-  } catch {
-    return null;
-  }
-}
+const ExportBodySchema = z.object({
+  projectId: z.string().min(1),
+  format: z.enum(['docx', 'txt', 'pdf']),
+  includeFrontMatter: z.boolean().optional(),
+  includeBackMatter: z.boolean().optional(),
+});
 
 export async function POST(request: NextRequest) {
-  // Authentication disabled for testing
-  // const userId = await verifyToken(request);
-  // if (!userId) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
-  
   try {
-    const { projectId, format, includeFrontMatter, includeBackMatter } = await request.json();
-    
-    if (!projectId || !format) {
-      return NextResponse.json({ error: 'Missing projectId or format' }, { status: 400 });
-    }
-    
-    // Default to false if not provided (removed from UI)
-    const includeFront = includeFrontMatter ?? false;
-    const includeBack = includeBackMatter ?? false;
-    
-    let db;
-    try {
-      db = getAdminDb();
-    } catch (adminError) {
-      console.error('Firebase Admin initialization error:', adminError);
+    const rawBody = await request.json().catch(() => null);
+    const parsed = ExportBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
       return NextResponse.json(
-        { 
-          error: `Firebase Admin not configured: ${adminError instanceof Error ? adminError.message : 'Unknown error'}. Please configure FIREBASE_ADMIN credentials in your environment.` 
-        },
-        { status: 500 }
+        { error: 'Invalid request body', details: parsed.error.flatten() },
+        { status: 400 }
       );
     }
-    
+    const { projectId, format, includeFrontMatter, includeBackMatter } = parsed.data;
+    const includeFront = includeFrontMatter ?? false;
+    const includeBack = includeBackMatter ?? false;
+
     // Get project
-    const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
+    const project = await getProject(projectId);
+    if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
-    
-    const project = projectDoc.data();
-    // Authentication check disabled for testing
-    // if (project?.userId !== userId) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    // }
-    
-    // Get approved chapter versions
-    const versionsSnapshot = await db.collection('chapter_versions')
-      .where('projectId', '==', projectId)
-      .where('approved', '==', true)
-      .orderBy('chapterNumber', 'asc')
-      .get();
-    
-    // Get chapters for titles
-    const chaptersSnapshot = await db.collection('chapters')
-      .where('projectId', '==', projectId)
-      .orderBy('chapterNumber', 'asc')
-      .get();
-    
+
+    // Get approved chapter versions and chapter metadata
+    const [approvedVersions, dbChapters] = await Promise.all([
+      getApprovedChapterVersions(projectId),
+      getProjectChapters(projectId),
+    ]);
+
     const chapters = new Map<number, { title: string; content: string }>();
-    
-    chaptersSnapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      chapters.set(data.chapterNumber, { title: data.title, content: '' });
+
+    dbChapters.forEach((ch) => {
+      chapters.set(ch.chapterNumber, { title: ch.title, content: '' });
     });
-    
-    versionsSnapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      const chapter = chapters.get(data.chapterNumber);
+
+    approvedVersions.forEach((v) => {
+      const chapter = chapters.get(v.chapterNumber);
       if (chapter) {
-        chapter.content = data.content;
+        chapter.content = v.content;
       }
     });
     
@@ -107,9 +66,9 @@ export async function POST(request: NextRequest) {
       let text = '';
       
       if (includeFront) {
-        text += `${project?.title}\n`;
-        text += `${'='.repeat(project?.title?.length || 0)}\n\n`;
-        text += `Genre: ${project?.genre}\n\n`;
+        text += `${project.title}\n`;
+        text += `${'='.repeat(project.title?.length || 0)}\n\n`;
+        text += `Genre: ${project.genre}\n\n`;
         text += '---\n\n';
       }
       
@@ -126,7 +85,7 @@ export async function POST(request: NextRequest) {
       return new NextResponse(text, {
         headers: {
           'Content-Type': 'text/plain',
-          'Content-Disposition': `attachment; filename="${slugify(project?.title || 'manuscript')}.txt"`,
+          'Content-Disposition': `attachment; filename="${slugify(project.title || 'manuscript')}.txt"`,
         },
       });
     } else if (format === 'docx') {
@@ -136,13 +95,13 @@ export async function POST(request: NextRequest) {
       if (includeFront) {
         children.push(
           new Paragraph({
-            children: [createTextRun({ text: project?.title || 'Untitled' })],
+            children: [createTextRun({ text: project.title || 'Untitled' })],
             heading: HeadingLevel.TITLE,
             alignment: AlignmentType.CENTER,
             spacing: { after: 400 },
           }),
           new Paragraph({
-            children: [createTextRun({ text: `Genre: ${project?.genre || ''}` })],
+            children: [createTextRun({ text: `Genre: ${project.genre || ''}` })],
             alignment: AlignmentType.CENTER,
             spacing: { after: 800 },
           }),
@@ -248,7 +207,7 @@ export async function POST(request: NextRequest) {
         return new NextResponse(uint8Array, {
           headers: {
             'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'Content-Disposition': `attachment; filename="${slugify(project?.title || 'manuscript')}.docx"`,
+            'Content-Disposition': `attachment; filename="${slugify(project.title || 'manuscript')}.docx"`,
           },
         });
       } catch (docxError) {
@@ -262,18 +221,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Export error:', error);
     const message = error instanceof Error ? error.message : 'Export failed';
-    const isQuotaError =
-      message.includes('RESOURCE_EXHAUSTED') ||
-      message.includes('Quota exceeded') ||
-      message.includes('quota exceeded');
-    return NextResponse.json(
-      {
-        error: isQuotaError
-          ? 'Quota exceeded. Your database or service has hit its usage limit. Please try again in a few minutes, or check your Firebase/Google Cloud quota in the console.'
-          : message,
-      },
-      { status: isQuotaError ? 503 : 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -527,7 +475,7 @@ function parseHtmlToParagraphs(html: string, isFirstParagraph: boolean = false):
   }
   
   // Normalize the HTML
-  let normalizedHtml = html
+  const normalizedHtml = html
     .replace(/<p><\/p>/g, '') // Remove empty paragraphs
     .replace(/<p\s*\/>/g, '') // Remove self-closing paragraphs
     .trim();
@@ -828,7 +776,7 @@ function parseInlineFormatting(html: string): TextRun[] {
   }
   
   // First, decode HTML entities
-  let decodedHtml = html
+  const decodedHtml = html
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

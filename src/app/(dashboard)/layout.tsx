@@ -8,7 +8,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <ProtectedRoute>
-        <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
+        <div className="min-h-screen bg-background">
           <Header />
           {children}
         </div>

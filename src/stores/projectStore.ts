@@ -8,7 +8,21 @@ import type {
   RevisionTask,
   WorkflowStage,
 } from '@/types';
-import * as firestore from '@/lib/firebase/firestore';
+import * as firestore from '@/lib/db/client';
+
+/** Fine-grained loading keys so UI components can show targeted spinners
+ *  without a single global flag blocking unrelated parts of the UI. */
+export type LoadingOp =
+  | 'projects'
+  | 'project'
+  | 'createProject'
+  | 'updateProject'
+  | 'deleteProject'
+  | 'document'
+  | 'chapter'
+  | 'chapterVersion'
+  | 'editorial'
+  | 'revision';
 
 interface ProjectState {
   // Current project data
@@ -23,7 +37,10 @@ interface ProjectState {
   projects: Project[];
   
   // Loading states
+  /** @deprecated Use loadingOps.has(op) for targeted loading checks */
   loading: boolean;
+  /** Set of in-progress operation keys — prefer this over the single `loading` flag */
+  loadingOps: Set<LoadingOp>;
   error: string | null;
   
   // Actions
@@ -65,6 +82,15 @@ interface ProjectState {
   clearCurrentProject: () => void;
 }
 
+/** Helper to add/remove an op from the loadingOps Set immutably. */
+function setOp(op: LoadingOp, active: boolean) {
+  return (state: { loadingOps: Set<LoadingOp> }) => {
+    const next = new Set(state.loadingOps);
+    active ? next.add(op) : next.delete(op);
+    return { loadingOps: next, loading: next.size > 0 };
+  };
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   currentProject: null,
   documents: [],
@@ -74,143 +100,131 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   revisionTasks: [],
   projects: [],
   loading: false,
+  loadingOps: new Set(),
   error: null,
 
   loadUserProjects: async (userId: string) => {
-    set({ loading: true, error: null });
+    set(setOp('projects', true));
+    set({ error: null });
     try {
       const projects = await firestore.getUserProjects(userId);
-      set({ projects, loading: false });
+      set({ projects });
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to load projects',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to load projects' });
+    } finally {
+      set(setOp('projects', false));
     }
   },
 
   loadProject: async (projectId: string) => {
-    set({ loading: true, error: null });
+    set(setOp('project', true));
+    set({ error: null });
     try {
       const [project, documents, chapters] = await Promise.all([
         firestore.getProject(projectId),
         firestore.getProjectDocuments(projectId),
         firestore.getProjectChapters(projectId),
       ]);
-      
-      if (!project) {
-        throw new Error('Project not found');
-      }
-      
-      set({
-        currentProject: project,
-        documents,
-        chapters,
-        loading: false,
-      });
+      if (!project) throw new Error('Project not found');
+      set({ currentProject: project, documents, chapters });
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to load project',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to load project' });
+    } finally {
+      set(setOp('project', false));
     }
   },
 
   createProject: async (userId: string, data) => {
-    set({ loading: true, error: null });
+    set(setOp('createProject', true));
+    set({ error: null });
     try {
       const projectId = await firestore.createProject(userId, data);
-      const project = await firestore.getProject(projectId);
-      if (project) {
-        set((state) => ({
-          projects: [project, ...state.projects],
-          currentProject: project,
-          loading: false,
-        }));
-      }
+      // Construct from known fields — avoids a round-trip read after write
+      const now = new Date();
+      const project: Project = {
+        id: projectId,
+        userId,
+        ...data,
+        createdAt: now,
+        updatedAt: now,
+      };
+      set((state) => ({ projects: [project, ...state.projects], currentProject: project }));
       return projectId;
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to create project',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to create project' });
       throw error;
+    } finally {
+      set(setOp('createProject', false));
     }
   },
 
   updateProject: async (projectId: string, data) => {
-    set({ loading: true, error: null });
+    set(setOp('updateProject', true));
+    set({ error: null });
     try {
       await firestore.updateProject(projectId, data);
-      const updatedProject = await firestore.getProject(projectId);
-      set((state) => ({
-        currentProject: updatedProject,
-        projects: state.projects.map((p) =>
-          p.id === projectId ? { ...p, ...data } : p
-        ),
-        loading: false,
-      }));
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to update project',
-        loading: false,
+      // Apply the delta locally — avoids a round-trip read after write
+      set((state) => {
+        const currentProject = state.currentProject?.id === projectId
+          ? { ...state.currentProject, ...data, updatedAt: new Date() }
+          : state.currentProject;
+        const projects = state.projects.map((p) =>
+          p.id === projectId ? { ...p, ...data, updatedAt: new Date() } : p
+        );
+        return { currentProject, projects };
       });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to update project' });
+    } finally {
+      set(setOp('updateProject', false));
     }
   },
 
   deleteProject: async (projectId: string) => {
-    set({ loading: true, error: null });
+    set(setOp('deleteProject', true));
+    set({ error: null });
     try {
       await firestore.deleteProjectData(projectId);
       set((state) => ({
         projects: state.projects.filter((p) => p.id !== projectId),
         currentProject: state.currentProject?.id === projectId ? null : state.currentProject,
-        loading: false,
       }));
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to delete project',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to delete project' });
+    } finally {
+      set(setOp('deleteProject', false));
     }
   },
 
   createDocument: async (data) => {
-    set({ loading: true, error: null });
+    set(setOp('document', true));
+    set({ error: null });
     try {
       const documentId = await firestore.createDocument(data);
-      const document = await firestore.getDocument(documentId);
-      if (document) {
-        set((state) => ({
-          documents: [...state.documents, document],
-          loading: false,
-        }));
-      }
+      const now = new Date();
+      const document: ProjectDocument = { id: documentId, ...data, createdAt: now, updatedAt: now };
+      set((state) => ({ documents: [...state.documents, document] }));
       return documentId;
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to create document',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to create document' });
       throw error;
+    } finally {
+      set(setOp('document', false));
     }
   },
 
   updateDocument: async (documentId: string, data) => {
-    set({ loading: true, error: null });
+    set(setOp('document', true));
+    set({ error: null });
     try {
       await firestore.updateDocument(documentId, data);
       set((state) => ({
-        documents: state.documents.map((d) =>
-          d.id === documentId ? { ...d, ...data } : d
-        ),
-        loading: false,
+        documents: state.documents.map((d) => d.id === documentId ? { ...d, ...data } : d),
       }));
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to update document',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to update document' });
+    } finally {
+      set(setOp('document', false));
     }
   },
 
@@ -220,41 +234,36 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createChapter: async (data) => {
-    set({ loading: true, error: null });
+    set(setOp('chapter', true));
+    set({ error: null });
     try {
       const chapterId = await firestore.createChapter(data);
-      const chapter = await firestore.getChapter(chapterId);
-      if (chapter) {
-        set((state) => ({
-          chapters: [...state.chapters, chapter].sort((a, b) => a.chapterNumber - b.chapterNumber),
-          loading: false,
-        }));
-      }
+      const now = new Date();
+      const chapter: Chapter = { id: chapterId, ...data, createdAt: now, updatedAt: now };
+      set((state) => ({
+        chapters: [...state.chapters, chapter].sort((a, b) => a.chapterNumber - b.chapterNumber),
+      }));
       return chapterId;
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to create chapter',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to create chapter' });
       throw error;
+    } finally {
+      set(setOp('chapter', false));
     }
   },
 
   updateChapter: async (chapterId: string, data) => {
-    set({ loading: true, error: null });
+    set(setOp('chapter', true));
+    set({ error: null });
     try {
       await firestore.updateChapter(chapterId, data);
       set((state) => ({
-        chapters: state.chapters.map((c) =>
-          c.id === chapterId ? { ...c, ...data } : c
-        ),
-        loading: false,
+        chapters: state.chapters.map((c) => c.id === chapterId ? { ...c, ...data } : c),
       }));
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to update chapter',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to update chapter' });
+    } finally {
+      set(setOp('chapter', false));
     }
   },
 
@@ -274,42 +283,37 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createChapterVersion: async (data) => {
-    set({ loading: true, error: null });
+    set(setOp('chapterVersion', true));
+    set({ error: null });
     try {
       const versionId = await firestore.createChapterVersion(data);
-      // Reload versions for this chapter
       const { loadChapterVersions } = get();
       await loadChapterVersions(data.chapterId);
-      set({ loading: false });
       return versionId;
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to create chapter version',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to create chapter version' });
       throw error;
+    } finally {
+      set(setOp('chapterVersion', false));
     }
   },
 
   approveChapterVersion: async (versionId: string) => {
-    set({ loading: true, error: null });
+    set(setOp('chapterVersion', true));
+    set({ error: null });
     try {
       await firestore.updateChapterVersion(versionId, { approved: true });
       set((state) => {
         const newVersions = new Map(state.chapterVersions);
         for (const [chapterId, versions] of newVersions) {
-          const updated = versions.map((v) =>
-            v.id === versionId ? { ...v, approved: true } : v
-          );
-          newVersions.set(chapterId, updated);
+          newVersions.set(chapterId, versions.map((v) => v.id === versionId ? { ...v, approved: true } : v));
         }
-        return { chapterVersions: newVersions, loading: false };
+        return { chapterVersions: newVersions };
       });
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to approve chapter version',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to approve chapter version' });
+    } finally {
+      set(setOp('chapterVersion', false));
     }
   },
 
@@ -325,37 +329,35 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createEditorialIssue: async (data) => {
-    set({ loading: true, error: null });
+    set(setOp('editorial', true));
+    set({ error: null });
     try {
       const issueId = await firestore.createEditorialIssue(data);
       const { loadEditorialIssues } = get();
       await loadEditorialIssues(data.projectId);
-      set({ loading: false });
       return issueId;
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to create editorial issue',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to create editorial issue' });
       throw error;
+    } finally {
+      set(setOp('editorial', false));
     }
   },
 
   resolveEditorialIssue: async (issueId: string) => {
-    set({ loading: true, error: null });
+    set(setOp('editorial', true));
+    set({ error: null });
     try {
       await firestore.updateEditorialIssue(issueId, { status: 'resolved' });
       set((state) => ({
         editorialIssues: state.editorialIssues.map((i) =>
           i.id === issueId ? { ...i, status: 'resolved' as const } : i
         ),
-        loading: false,
       }));
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to resolve editorial issue',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to resolve editorial issue' });
+    } finally {
+      set(setOp('editorial', false));
     }
   },
 
@@ -371,37 +373,33 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createRevisionTask: async (data) => {
-    set({ loading: true, error: null });
+    set(setOp('revision', true));
+    set({ error: null });
     try {
       const taskId = await firestore.createRevisionTask(data);
       const { loadRevisionTasks } = get();
       await loadRevisionTasks(data.projectId);
-      set({ loading: false });
       return taskId;
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to create revision task',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to create revision task' });
       throw error;
+    } finally {
+      set(setOp('revision', false));
     }
   },
 
   updateRevisionTask: async (taskId: string, data) => {
-    set({ loading: true, error: null });
+    set(setOp('revision', true));
+    set({ error: null });
     try {
       await firestore.updateRevisionTask(taskId, data);
       set((state) => ({
-        revisionTasks: state.revisionTasks.map((t) =>
-          t.id === taskId ? { ...t, ...data } : t
-        ),
-        loading: false,
+        revisionTasks: state.revisionTasks.map((t) => t.id === taskId ? { ...t, ...data } : t),
       }));
     } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to update revision task',
-        loading: false,
-      });
+      set({ error: error instanceof Error ? error.message : 'Failed to update revision task' });
+    } finally {
+      set(setOp('revision', false));
     }
   },
 

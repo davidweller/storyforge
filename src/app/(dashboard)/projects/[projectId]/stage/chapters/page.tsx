@@ -161,7 +161,7 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     
     try {
       // Check if chapter already exists (but not approved)
-      let existingChapter = chapters.find(ch => ch.chapterNumber === nextChapter.chapterNumber);
+      const existingChapter = chapters.find(ch => ch.chapterNumber === nextChapter.chapterNumber);
       
       if (!existingChapter) {
         // Create new chapter record
@@ -268,7 +268,7 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
             <div className="mb-8 p-6 bg-[rgba(16,185,129,0.1)] border border-[var(--status-approved)] rounded-lg text-center">
               <h3 className="font-semibold text-[var(--status-approved)] mb-2">All Chapters Complete!</h3>
               <p className="text-sm text-[var(--muted-foreground)] mb-4">
-                You've written all {totalChapters} chapters. Ready to compile your manuscript?
+                You&apos;ve written all {totalChapters} chapters. Ready to compile your manuscript?
               </p>
               <Link href={`/projects/${projectId}/stage/compilation`}>
                 <Button>

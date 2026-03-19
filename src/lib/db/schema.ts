@@ -1,0 +1,89 @@
+import type Database from 'better-sqlite3';
+
+export function initSchema(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      genre TEXT NOT NULL,
+      niche TEXT,
+      microniche TEXT,
+      premise TEXT,
+      research TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      currentStage TEXT NOT NULL DEFAULT 'setup',
+      fullAutoMode INTEGER NOT NULL DEFAULT 0,
+      finalExportedAt TEXT,
+      blurb TEXT,
+      amazonDescription TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      approved INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS chapters (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      chapterNumber INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      beatReference TEXT NOT NULL,
+      sceneGoal TEXT NOT NULL,
+      pov TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS chapter_versions (
+      id TEXT PRIMARY KEY,
+      chapterId TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      chapterNumber INTEGER NOT NULL,
+      version INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      wordCount INTEGER NOT NULL DEFAULT 0,
+      approved INTEGER NOT NULL DEFAULT 0,
+      parentVersionId TEXT,
+      notes TEXT,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (chapterId) REFERENCES chapters(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS editorial_issues (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      chapterNumber INTEGER,
+      locationHint TEXT,
+      category TEXT NOT NULL,
+      description TEXT NOT NULL,
+      recommendedFix TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS revision_tasks (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      chapterNumber INTEGER NOT NULL,
+      issueIds TEXT NOT NULL,
+      instructions TEXT NOT NULL,
+      acceptanceCriteria TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+  `);
+}

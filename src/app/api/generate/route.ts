@@ -1,76 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth } from '@/lib/firebase/admin';
+import { z } from 'zod';
 import { generateForStage } from '@/lib/llm';
-import { getModelById, getDefaultModelForStage } from '@/lib/data/models';
+import { getModelById, getDefaultModelForStage, ALL_MODELS } from '@/lib/data/models';
 import { MAX_MANUSCRIPT_TOKENS, TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { WorkflowStage } from '@/types';
 import {
-  GENRE_RESEARCH_SYSTEM,
-  buildGenreResearchPrompt,
-  NICHE_SYSTEM,
-  buildNichePrompt,
-  ENDING_SYSTEM,
-  buildEndingConceptsPrompt,
-  buildEndingExpansionPrompt,
-  CHARACTERS_SYSTEM,
-  buildCharactersPrompt,
-  STRUCTURE_SYSTEM,
-  buildStructurePrompt,
-  TITLE_IDEAS_SYSTEM,
-  buildTitleIdeasPrompt,
-  CHAPTER_OUTLINES_SYSTEM,
-  buildChapterOutlinesPrompt,
-  CHAPTERS_SYSTEM,
-  buildChapterPrompt,
-  buildChapterRevisionPrompt,
-  EDITORIAL_SYSTEM,
-  buildEditorialPrompt,
-  buildRevisionQueuePrompt,
-  BLURB_SYSTEM,
-  buildBlurbPrompt,
-  AMAZON_DESCRIPTION_SYSTEM,
-  buildAmazonDescriptionPrompt,
+  GENRE_RESEARCH_SYSTEM, buildGenreResearchPrompt,
+  NICHE_SYSTEM, buildNichePrompt,
+  ENDING_SYSTEM, buildEndingConceptsPrompt, buildEndingExpansionPrompt,
+  CHARACTERS_SYSTEM, buildCharactersPrompt,
+  STRUCTURE_SYSTEM, buildStructurePrompt,
+  TITLE_IDEAS_SYSTEM, buildTitleIdeasPrompt,
+  CHAPTER_OUTLINES_SYSTEM, buildChapterOutlinesPrompt,
+  CHAPTERS_SYSTEM, buildChapterPrompt, buildChapterRevisionPrompt,
+  EDITORIAL_SYSTEM, buildEditorialPrompt, buildRevisionQueuePrompt,
+  BLURB_SYSTEM, buildBlurbPrompt,
+  AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt,
 } from '@/lib/prompts';
 
-// Bypass auth in development mode
-const DEV_MODE_BYPASS_AUTH = process.env.NODE_ENV === 'development';
-const DEV_USER_ID = 'dev-user-123';
+const WORKFLOW_STAGES = [
+  'setup', 'genre-research', 'niche', 'ending', 'characters', 'structure',
+  'title', 'chapter-outlines', 'chapters', 'compilation', 'export-draft',
+  'editorial', 'revision', 'export-final', 'blurb', 'amazon-description',
+] as const;
 
-// Verify Firebase auth token
-async function verifyToken(request: NextRequest): Promise<string | null> {
-  // In dev mode, return a mock user ID
-  if (DEV_MODE_BYPASS_AUTH) {
-    return DEV_USER_ID;
-  }
-  
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  
-  const token = authHeader.split('Bearer ')[1];
-  try {
-    const auth = getAdminAuth();
-    const decodedToken = await auth.verifyIdToken(token);
-    return decodedToken.uid;
-  } catch {
-    return null;
-  }
-}
+const GenerateBodySchema = z.object({
+  stage: z.enum(WORKFLOW_STAGES),
+  data: z.record(z.string(), z.unknown()),
+  model: z.string().optional().refine(
+    (m) => !m || ALL_MODELS.some((lm) => lm.id === m),
+    { message: 'Unknown model ID' }
+  ),
+});
+
+type D = Record<string, unknown>;
+
+/** Lookup map for stages whose prompt building requires no branching logic.
+ *  Stages with conditional data (ending, editorial, revision) stay in the switch. */
+const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: string; prompt: string }>> = {
+  'genre-research': (d) => ({ system: GENRE_RESEARCH_SYSTEM, prompt: buildGenreResearchPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, research: d.research as string | undefined }) }),
+  'niche': (d) => ({ system: NICHE_SYSTEM, prompt: buildNichePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, genreResearch: d.genreResearch as string }) }),
+  'characters': (d) => ({ system: CHARACTERS_SYSTEM, prompt: buildCharactersPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string }) }),
+  'structure': (d) => ({ system: STRUCTURE_SYSTEM, prompt: buildStructurePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string, charactersReference: d.charactersReference as string, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
+  'title': (d) => ({ system: TITLE_IDEAS_SYSTEM, prompt: buildTitleIdeasPrompt({ genre: d.genre as string, premise: d.premise as string | undefined, nicheReference: d.nicheReference as string | undefined, structureReference: d.structureReference as string | undefined, endingReference: d.endingReference as string | undefined, charactersReference: d.charactersReference as string | undefined }) }),
+  'chapter-outlines': (d) => ({ system: CHAPTER_OUTLINES_SYSTEM, prompt: buildChapterOutlinesPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, structureReference: d.structureReference as string, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
+  'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummary: d.previousChapterSummary as string | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, wordTarget: d.wordTarget as number | undefined }) }),
+  'blurb': (d) => ({ system: BLURB_SYSTEM, prompt: buildBlurbPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined }) }),
+  'amazon-description': (d) => ({ system: AMAZON_DESCRIPTION_SYSTEM, prompt: buildAmazonDescriptionPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined }) }),
+};
 
 export async function POST(request: NextRequest) {
-  // Authentication disabled for testing
-  // const userId = await verifyToken(request);
-  // if (!userId) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
   
   try {
-    const body = await request.json();
-    const { stage, data, model: requestedModel } = body as { 
-      stage: WorkflowStage; 
+    const rawBody = await request.json().catch(() => null);
+    const parsed = GenerateBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+    const { stage, data, model: requestedModel } = parsed.data as {
+      stage: WorkflowStage;
       data: Record<string, unknown>;
-      model?: string; // Optional model override
+      model?: string;
     };
     
     // Variables for model switching (used in editorial stage)
@@ -87,26 +80,14 @@ export async function POST(request: NextRequest) {
     
     let prompt: string;
     let systemPrompt: string;
-    
-    switch (stage) {
-      case 'genre-research':
-        systemPrompt = GENRE_RESEARCH_SYSTEM;
-        prompt = buildGenreResearchPrompt({
-          premise: data.premise as string | undefined,
-          genre: data.genre as string,
-          research: data.research as string | undefined,
-        });
-        break;
-        
-      case 'niche':
-        systemPrompt = NICHE_SYSTEM;
-        prompt = buildNichePrompt({
-          premise: data.premise as string | undefined,
-          genre: data.genre as string,
-          genreResearch: data.genreResearch as string,
-        });
-        break;
-        
+
+    // --- Simple stages (no branching) ---
+    const simpleHandler = SIMPLE_STAGE_HANDLERS[stage];
+    if (simpleHandler) {
+      ({ system: systemPrompt, prompt } = simpleHandler(data));
+    } else switch (stage) {
+      // --- Stages with conditional prompt building ---
+
       case 'ending':
         systemPrompt = ENDING_SYSTEM;
         if (data.selectedEnding) {
@@ -123,73 +104,6 @@ export async function POST(request: NextRequest) {
             nicheReference: data.nicheReference as string,
           });
         }
-        break;
-        
-      case 'characters':
-        systemPrompt = CHARACTERS_SYSTEM;
-        prompt = buildCharactersPrompt({
-          premise: data.premise as string | undefined,
-          genre: data.genre as string,
-          nicheReference: data.nicheReference as string,
-          endingReference: data.endingReference as string,
-        });
-        break;
-        
-      case 'structure':
-        systemPrompt = STRUCTURE_SYSTEM;
-        prompt = buildStructurePrompt({
-          premise: data.premise as string | undefined,
-          genre: data.genre as string,
-          nicheReference: data.nicheReference as string,
-          endingReference: data.endingReference as string,
-          charactersReference: data.charactersReference as string,
-          maxTotalWords: TARGET_MANUSCRIPT_WORDS,
-        });
-        break;
-        
-      case 'title':
-        systemPrompt = TITLE_IDEAS_SYSTEM;
-        prompt = buildTitleIdeasPrompt({
-          genre: data.genre as string,
-          premise: data.premise as string | undefined,
-          nicheReference: data.nicheReference as string | undefined,
-          structureReference: data.structureReference as string | undefined,
-          endingReference: data.endingReference as string | undefined,
-          charactersReference: data.charactersReference as string | undefined,
-        });
-        break;
-        
-      case 'chapter-outlines':
-        systemPrompt = CHAPTER_OUTLINES_SYSTEM;
-        prompt = buildChapterOutlinesPrompt({
-          premise: data.premise as string | undefined,
-          genre: data.genre as string,
-          structureReference: data.structureReference as string,
-          charactersReference: data.charactersReference as string,
-          endingReference: data.endingReference as string,
-          genreResearch: data.genreResearch as string | undefined,
-          nicheReference: data.nicheReference as string | undefined,
-          maxTotalWords: TARGET_MANUSCRIPT_WORDS,
-        });
-        break;
-        
-      case 'chapters':
-        systemPrompt = CHAPTERS_SYSTEM;
-        prompt = buildChapterPrompt({
-          genre: data.genre as string,
-          chapterNumber: data.chapterNumber as number,
-          chapterTitle: data.chapterTitle as string,
-          beatReference: data.beatReference as string,
-          sceneGoal: data.sceneGoal as string,
-          pov: data.pov as string | undefined,
-          charactersReference: data.charactersReference as string,
-          endingReference: data.endingReference as string,
-          previousChapterSummary: data.previousChapterSummary as string | undefined,
-          structureContext: data.structureContext as string,
-          genreResearch: data.genreResearch as string | undefined,
-          nicheReference: data.nicheReference as string | undefined,
-          wordTarget: data.wordTarget as number | undefined,
-        });
         break;
         
       case 'editorial':
@@ -346,32 +260,6 @@ export async function POST(request: NextRequest) {
         });
         break;
 
-      case 'blurb':
-        systemPrompt = BLURB_SYSTEM;
-        prompt = buildBlurbPrompt({
-          genre: data.genre as string,
-          niche: data.niche as string | undefined,
-          title: data.title as string | undefined,
-          premise: data.premise as string | undefined,
-          marketAnalysis: data.marketAnalysis as string | undefined,
-          readerTargeting: data.readerTargeting as string | undefined,
-          plotBlueprint: data.plotBlueprint as string | undefined,
-        });
-        break;
-
-      case 'amazon-description':
-        systemPrompt = AMAZON_DESCRIPTION_SYSTEM;
-        prompt = buildAmazonDescriptionPrompt({
-          genre: data.genre as string,
-          niche: data.niche as string | undefined,
-          title: data.title as string | undefined,
-          premise: data.premise as string | undefined,
-          marketAnalysis: data.marketAnalysis as string | undefined,
-          readerTargeting: data.readerTargeting as string | undefined,
-          plotBlueprint: data.plotBlueprint as string | undefined,
-        });
-        break;
-        
       default:
         return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
     }
@@ -413,17 +301,15 @@ export async function POST(request: NextRequest) {
     });
     
     // Return response with model switch message if applicable
-    const response: any = {
+    const response: import('@/types').GenerateApiResponse = {
       content: result.content,
       model: result.model,
       provider: result.provider,
       tokensUsed: result.tokensUsed,
+      ...(stage === 'editorial' && modelSwitched && switchMessage
+        ? { modelSwitched: true, switchMessage }
+        : {}),
     };
-    
-    if (stage === 'editorial' && modelSwitched && switchMessage) {
-      response.modelSwitched = true;
-      response.switchMessage = switchMessage;
-    }
     
     return NextResponse.json(response);
     

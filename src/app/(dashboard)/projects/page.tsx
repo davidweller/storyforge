@@ -5,31 +5,25 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useProjects } from '@/hooks/useProject';
 import { useProjectStore } from '@/stores/projectStore';
-import { Button, Badge } from '@/components/ui';
+import { Button, Badge, Modal } from '@/components/ui';
 import { formatRelativeTime, STAGE_NAMES } from '@/lib/utils';
 
 // Skeleton card component for loading state
 function SkeletonCard() {
   return (
-    <div style={{
-      backgroundColor: '#ffffff',
-      borderRadius: '12px',
-      padding: '1.5rem',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      height: '100%',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem' }}>
-        <div style={{ height: '1.5rem', borderRadius: '4px', width: '75%', backgroundColor: '#f5f5f5' }} />
-        <div style={{ height: '1.25rem', borderRadius: '9999px', width: '4rem', backgroundColor: '#f5f5f5' }} />
+    <div className="bg-card rounded-xl p-6 shadow-sm h-full">
+      <div className="flex justify-between items-start gap-2 mb-2">
+        <div className="h-6 rounded w-3/4 bg-muted" />
+        <div className="h-5 rounded-full w-16 bg-muted" />
       </div>
-      <div style={{ height: '1rem', borderRadius: '4px', width: '33%', backgroundColor: '#f5f5f5', marginBottom: '1rem' }} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-        <div style={{ height: '1rem', borderRadius: '4px', width: '100%', backgroundColor: '#f5f5f5' }} />
-        <div style={{ height: '1rem', borderRadius: '4px', width: '66%', backgroundColor: '#f5f5f5' }} />
+      <div className="h-4 rounded w-1/3 bg-muted mb-4" />
+      <div className="flex flex-col gap-2 mb-4">
+        <div className="h-4 rounded w-full bg-muted" />
+        <div className="h-4 rounded w-2/3 bg-muted" />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ height: '0.75rem', borderRadius: '4px', width: '6rem', backgroundColor: '#f5f5f5' }} />
-        <div style={{ height: '0.75rem', borderRadius: '4px', width: '4rem', backgroundColor: '#f5f5f5' }} />
+      <div className="flex justify-between items-center">
+        <div className="h-3 rounded w-24 bg-muted" />
+        <div className="h-3 rounded w-16 bg-muted" />
       </div>
     </div>
   );
@@ -75,22 +69,18 @@ export default function ProjectsPage() {
   // Show skeleton loading state
   if (loading && projects.length === 0) {
     return (
-      <div style={{ paddingTop: '3rem', paddingBottom: '3rem', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto', paddingLeft: '2rem', paddingRight: '2rem' }}>
+      <div className="py-12 max-w-[1200px] mx-auto px-8">
         {/* Header skeleton */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <div style={{ height: '2.25rem', borderRadius: '4px', width: '12rem', backgroundColor: '#f5f5f5', marginBottom: '0.5rem' }} />
-            <div style={{ height: '1.25rem', borderRadius: '4px', width: '6rem', backgroundColor: '#f5f5f5' }} />
+            <div className="h-9 rounded w-48 bg-muted mb-2" />
+            <div className="h-5 rounded w-24 bg-muted" />
           </div>
-          <div style={{ height: '2.75rem', borderRadius: '8px', width: '9rem', backgroundColor: '#f5f5f5' }} />
+          <div className="h-11 rounded-lg w-36 bg-muted" />
         </div>
-        
+
         {/* Grid skeleton */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          gap: '1.5rem'
-        }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <SkeletonCard key={i} />
           ))}
@@ -98,43 +88,35 @@ export default function ProjectsPage() {
       </div>
     );
   }
-  
+
   return (
-    <div style={{ paddingTop: '3rem', paddingBottom: '3rem', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto', paddingLeft: '2rem', paddingRight: '2rem' }}>
+    <div className="py-12 max-w-[1200px] mx-auto px-8">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#171717', letterSpacing: '-0.025em' }}>
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">
             Your Projects
           </h1>
-          <p style={{ marginTop: '0.375rem', color: '#737373' }}>
+          <p className="mt-1.5 text-muted-foreground">
             {projects.length} {projects.length === 1 ? 'project' : 'projects'}
           </p>
         </div>
         <Link href="/projects/new">
           <Button size="lg">
-            <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             New Project
           </Button>
         </Link>
       </div>
-      
+
       {/* Search */}
       {projects.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div style={{ position: 'relative', maxWidth: '24rem' }}>
+        <div className="mb-6">
+          <div className="relative max-w-sm">
             <svg
-              style={{ 
-                position: 'absolute', 
-                left: '0.75rem', 
-                top: '50%', 
-                transform: 'translateY(-50%)',
-                width: '1.25rem', 
-                height: '1.25rem',
-                color: '#737373'
-              }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -146,41 +128,15 @@ export default function ProjectsPage() {
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                height: '2.75rem',
-                paddingLeft: '2.5rem',
-                paddingRight: '2.5rem',
-                borderRadius: '8px',
-                backgroundColor: '#ffffff',
-                color: '#171717',
-                border: '1px solid #d4d4d4',
-                outline: 'none',
-                fontSize: '0.875rem',
-              }}
+              className="w-full h-11 pl-10 pr-10 rounded-lg bg-card text-foreground border border-border outline-none text-sm focus:border-[var(--ring)]"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                style={{ 
-                  position: 'absolute', 
-                  right: '0.75rem', 
-                  top: '50%', 
-                  transform: 'translateY(-50%)',
-                  width: '1.25rem', 
-                  height: '1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '9999px',
-                  backgroundColor: '#f5f5f5', 
-                  color: '#737373',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-muted text-muted-foreground border-none cursor-pointer"
                 aria-label="Clear search"
               >
-                <svg style={{ width: '0.75rem', height: '0.75rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -191,44 +147,29 @@ export default function ProjectsPage() {
       
       {/* Error */}
       {error && (
-        <div style={{ marginBottom: '1.5rem', padding: '1rem', borderRadius: '8px', backgroundColor: '#fef2f2', border: '1px solid #fecaca' }}>
-          <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{error}</p>
+        <div className="mb-6 p-4 rounded-lg bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)]">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
-      
+
       {/* Empty state */}
       {projects.length === 0 && !loading && (
-        <div style={{ maxWidth: '32rem', marginLeft: 'auto', marginRight: 'auto' }}>
-          <div style={{ 
-            backgroundColor: '#ffffff',
-            borderRadius: '16px',
-            padding: '4rem 2rem',
-            textAlign: 'center',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          }}>
-            <div style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              width: '4rem', 
-              height: '4rem', 
-              borderRadius: '9999px', 
-              backgroundColor: '#f5f5f5',
-              marginBottom: '1rem'
-            }}>
-              <svg style={{ width: '2rem', height: '2rem', color: '#737373' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="max-w-lg mx-auto">
+          <div className="bg-card rounded-2xl py-16 px-8 text-center shadow-[var(--shadow-md)]">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+              <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#171717', marginBottom: '0.5rem' }}>
+            <h2 className="text-xl font-semibold text-foreground mb-2">
               No projects yet
             </h2>
-            <p style={{ color: '#737373', marginBottom: '1.5rem' }}>
+            <p className="text-muted-foreground mb-6">
               Start your first novel project and let AI help you through the entire writing process.
             </p>
             <Link href="/projects/new">
               <Button size="lg">
-                <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Create Your First Project
@@ -237,125 +178,50 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
-      
+
       {/* Projects grid */}
       {filteredProjects.length > 0 && (
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          gap: '1.5rem'
-        }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
           {filteredProjects.map((project) => (
             <div
               key={project.id}
-              style={{
-                position: 'relative',
-                backgroundColor: '#ffffff',
-                borderRadius: '12px',
-                padding: '1.5rem',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                height: '100%',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
+              className="project-card relative bg-card rounded-xl p-6 shadow-sm h-full transition-all"
             >
               {/* Delete button */}
               <button
                 onClick={(e) => handleDeleteClick(e, project.id)}
                 disabled={deletingProjectId === project.id}
-                style={{
-                  position: 'absolute',
-                  top: '1rem',
-                  right: '1rem',
-                  width: '2rem',
-                  height: '2rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '6px',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  color: '#737373',
-                  cursor: deletingProjectId === project.id ? 'not-allowed' : 'pointer',
-                  opacity: deletingProjectId === project.id ? 0.5 : 1,
-                  transition: 'all 0.2s',
-                  zIndex: 10,
-                }}
-                onMouseEnter={(e) => {
-                  if (deletingProjectId !== project.id) {
-                    e.currentTarget.style.backgroundColor = '#fef2f2';
-                    e.currentTarget.style.color = '#dc2626';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#737373';
-                }}
+                className="delete-btn absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-md bg-transparent border-none text-muted-foreground cursor-pointer z-10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Delete project"
               >
                 {deletingProjectId === project.id ? (
-                  <div style={{
-                    width: '1rem',
-                    height: '1rem',
-                    border: '2px solid currentColor',
-                    borderTopColor: 'transparent',
-                    borderRadius: '9999px',
-                    animation: 'spin 1s linear infinite',
-                  }} />
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <svg style={{ width: '1.125rem', height: '1.125rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-[1.125rem] h-[1.125rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 )}
               </button>
 
               {/* Project content - clickable link */}
-              <Link
-                href={`/projects/${project.id}`}
-                style={{ textDecoration: 'none', display: 'block' }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem', paddingRight: '2.5rem' }}>
-                  <h3 style={{ 
-                    fontSize: '1.125rem', 
-                    fontWeight: 600, 
-                    color: '#171717',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                  }}>
+              <Link href={`/projects/${project.id}`} className="no-underline block">
+                <div className="flex justify-between items-start gap-2 mb-1 pr-10">
+                  <h3 className="text-lg font-semibold text-foreground overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                     {project.title || `${project.genre} Project`}
                   </h3>
                   <Badge variant={project.status === 'completed' ? 'success' : 'default'}>
                     {project.status}
                   </Badge>
                 </div>
-                <p style={{ fontSize: '0.875rem', color: '#737373', marginBottom: '1rem' }}>
+                <p className="text-sm text-muted-foreground mb-4">
                   {project.genre}{project.niche && ` • ${project.niche}`}
                 </p>
-                <p style={{ 
-                  fontSize: '0.875rem', 
-                  color: '#737373', 
-                  marginBottom: '1rem',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                }}>
+                <p className="text-sm text-muted-foreground mb-4 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                   {project.premise || 'No premise provided yet'}
                 </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#737373' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <svg style={{ width: '1rem', height: '1rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex justify-between items-center text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                     {STAGE_NAMES[project.currentStage]}
@@ -369,75 +235,38 @@ export default function ProjectsPage() {
       )}
 
       {/* Delete confirmation dialog */}
-      {confirmDeleteId && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-          onClick={handleCancelDelete}
-        >
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '12px',
-              padding: '2rem',
-              maxWidth: '28rem',
-              width: '90%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#171717', marginBottom: '0.75rem' }}>
-              Delete Project?
-            </h3>
-            <p style={{ color: '#737373', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-              Are you sure you want to delete this project? This action cannot be undone and will permanently delete all associated data including chapters, documents, and versions.
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <Button
-                variant="secondary"
-                onClick={handleCancelDelete}
-                disabled={deletingProjectId === confirmDeleteId}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => handleConfirmDelete(confirmDeleteId)}
-                disabled={deletingProjectId === confirmDeleteId}
-              >
-                {deletingProjectId === confirmDeleteId ? (
-                  <>
-                    <div style={{
-                      width: '1rem',
-                      height: '1rem',
-                      border: '2px solid currentColor',
-                      borderTopColor: 'transparent',
-                      borderRadius: '9999px',
-                      animation: 'spin 1s linear infinite',
-                      marginRight: '0.5rem',
-                    }} />
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!confirmDeleteId}
+        onClose={handleCancelDelete}
+        title="Delete Project?"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={handleCancelDelete}
+              disabled={deletingProjectId === confirmDeleteId}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmDeleteId && handleConfirmDelete(confirmDeleteId)}
+              loading={deletingProjectId === confirmDeleteId}
+              disabled={deletingProjectId === confirmDeleteId}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        Are you sure you want to delete this project? This action cannot be undone and will
+        permanently delete all associated data including chapters, documents, and versions.
+      </Modal>
       
       {/* No search results */}
       {projects.length > 0 && filteredProjects.length === 0 && (
-        <div style={{ textAlign: 'center', paddingTop: '3rem', paddingBottom: '3rem' }}>
-          <p style={{ color: '#737373' }}>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
             No projects match &quot;{searchQuery}&quot;
           </p>
         </div>

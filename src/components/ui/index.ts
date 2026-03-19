@@ -17,3 +17,5 @@ export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
 export type { TabsProps, TabsListProps, TabsTriggerProps, TabsContentProps } from './Tabs';
 
 export { ToastProvider, useToast } from './Toast';
+
+export { Modal } from './Modal';

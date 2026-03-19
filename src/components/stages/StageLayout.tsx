@@ -41,7 +41,7 @@ export function StageLayout({
   const showModelSelector = activeStage !== 'setup';
   
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+    <div className="flex h-[calc(100vh-var(--header-height))]">
       {/* Sidebar */}
       <WorkflowSidebar
         projectId={projectId}
@@ -56,33 +56,29 @@ export function StageLayout({
         blurbFilled={blurbFilled}
         amazonDescriptionFilled={amazonDescriptionFilled}
       />
-      
+
       {/* Main content */}
-      <main style={{ flex: 1, overflowY: 'auto' }}>
+      <main className="flex-1 overflow-y-auto">
         {/* Stage header */}
-        <div style={{ 
-          borderBottom: '1px solid #e5e5e5', 
-          backgroundColor: '#ffffff', 
-          padding: '2rem 3rem',
-        }}>
-          <div style={{ maxWidth: '800px', marginLeft: 'auto', marginRight: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.025em', color: '#171717' }}>
+        <div className="border-b border-border bg-card px-12 py-8">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {STAGE_NAMES[activeStage]}
               </h1>
               {showModelSelector && (
                 <ModelSelector stage={activeStage} />
               )}
             </div>
-            <p style={{ color: '#737373', lineHeight: 1.6 }}>
+            <p className="text-muted-foreground leading-relaxed">
               {STAGE_DESCRIPTIONS[activeStage]}
             </p>
           </div>
         </div>
-        
+
         {/* Stage content */}
-        <div style={{ padding: '2rem 3rem' }}>
-          <div style={{ maxWidth: '800px', marginLeft: 'auto', marginRight: 'auto' }}>
+        <div className="px-12 py-8">
+          <div className="max-w-3xl mx-auto">
             {children}
           </div>
         </div>

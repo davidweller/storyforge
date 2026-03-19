@@ -16,6 +16,12 @@ export interface AnthropicGenerateOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  /** Anthropic does not support a native JSON mode equivalent to OpenAI's
+   *  `response_format: { type: 'json_object' }`. When this is true, the caller
+   *  must enforce structure via prompt text (e.g. "Output only valid JSON.").
+   *  The field is accepted here so callers can pass a unified options object
+   *  without casting, but it has no effect on the API request. */
+  jsonMode?: boolean;
 }
 
 export async function generateWithClaude(
@@ -27,7 +33,15 @@ export async function generateWithClaude(
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
+    jsonMode,
   } = options;
+
+  if (jsonMode) {
+    console.warn(
+      '[Anthropic] jsonMode=true has no effect — Anthropic does not support a native JSON mode. ' +
+      'Enforce JSON structure via prompt text (e.g. "Output only valid JSON.").'
+    );
+  }
 
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set in environment variables');

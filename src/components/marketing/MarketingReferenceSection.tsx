@@ -10,20 +10,8 @@ const REFERENCE_ITEMS = [
   { type: 'structure' as const, label: 'Plot Blueprint', stageId: 'structure' },
 ] as const;
 
-const blockStyle: React.CSSProperties = {
-  backgroundColor: '#ffffff',
-  border: '1px solid #e5e5e5',
-  borderRadius: '12px',
-  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-  padding: '1.5rem',
-  color: '#171717',
-  fontFamily: 'inherit',
-  fontSize: '0.9375rem',
-  lineHeight: 1.6,
-  whiteSpace: 'pre-wrap' as const,
-  maxHeight: '200px',
-  overflowY: 'auto',
-};
+const blockClassName =
+  'bg-card border border-border rounded-xl shadow-sm p-6 text-foreground font-[inherit] text-[0.9375rem] leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto';
 
 interface MarketingReferenceSectionProps {
   projectId: string;
@@ -42,21 +30,14 @@ export function MarketingReferenceSection({ projectId, getDocumentByType }: Mark
   };
 
   return (
-    <div style={{ marginBottom: '2rem' }}>
-      <h2
-        style={{
-          fontSize: '1.125rem',
-          fontWeight: 600,
-          color: '#171717',
-          marginBottom: '0.75rem',
-        }}
-      >
+    <div className="mb-8">
+      <h2 className="text-lg font-semibold text-foreground mb-3">
         Reference
       </h2>
-      <p style={{ fontSize: '0.875rem', color: '#737373', marginBottom: '1rem' }}>
+      <p className="text-sm text-muted-foreground mb-4">
         Use your Market Analysis, Reader Targeting, and Plot Blueprint below while writing your marketing copy.
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <div className="flex flex-col gap-3">
         {REFERENCE_ITEMS.map(({ type, label, stageId }) => {
           const doc = getDocumentByType(type);
           const content = doc?.content?.trim();
@@ -65,40 +46,16 @@ export function MarketingReferenceSection({ projectId, getDocumentByType }: Mark
           return (
             <div
               key={type}
-              style={{
-                border: '1px solid #e5e5e5',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                backgroundColor: '#fafafa',
-              }}
+              className="border border-border rounded-lg overflow-hidden bg-background"
             >
               <button
                 type="button"
                 onClick={() => toggle(type)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.75rem 1rem',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: '#171717',
-                  textAlign: 'left',
-                }}
+                className="w-full flex items-center justify-between px-4 py-3 bg-transparent border-none cursor-pointer text-sm font-semibold text-foreground text-left"
               >
                 {label}
                 <svg
-                  style={{
-                    width: '1rem',
-                    height: '1rem',
-                    flexShrink: 0,
-                    transition: 'transform 0.2s',
-                    transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                  }}
+                  className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -107,15 +64,15 @@ export function MarketingReferenceSection({ projectId, getDocumentByType }: Mark
                 </svg>
               </button>
               {isExpanded && (
-                <div style={{ padding: '0 1rem 1rem' }}>
+                <div className="px-4 pb-4">
                   {content ? (
-                    <div style={blockStyle}>{content}</div>
+                    <div className={blockClassName}>{content}</div>
                   ) : (
-                    <p style={{ fontSize: '0.875rem', color: '#737373', margin: 0 }}>
+                    <p className="text-sm text-muted-foreground m-0">
                       Complete the{' '}
                       <Link
                         href={`/projects/${projectId}/stage/${stageId}`}
-                        style={{ color: '#3b82f6', textDecoration: 'underline' }}
+                        className="text-[var(--accent)] underline"
                       >
                         {label}
                       </Link>{' '}
