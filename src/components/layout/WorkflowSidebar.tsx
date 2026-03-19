@@ -228,7 +228,7 @@ export function WorkflowSidebar({
   };
   
   return (
-    <aside className="w-[var(--sidebar-width)] h-full bg-[#f5f2ec] border-r border-border flex flex-col overflow-hidden">
+    <aside className="w-[var(--sidebar-width)] h-full bg-card border-r border-border flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-5 border-b border-border">
         <Link

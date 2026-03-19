@@ -50,22 +50,22 @@
   --color-red-500: #ef4444;
   
   /* Semantic colors — warm editorial palette */
-  --background: #f8f6f2;
+  --background: #ede9e1;
   --foreground: #1c1917;
-  --card: #ffffff;
+  --card: #fafaf8;
   --card-foreground: #1c1917;
   --primary: #292524;
   --primary-foreground: #fafaf9;
-  --secondary: #f3f0ea;
+  --secondary: #e8e3da;
   --secondary-foreground: #1c1917;
-  --muted: #f3f0ea;
+  --muted: #e8e3da;
   --muted-foreground: #78716c;
   --accent: #a16207;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #e8e4dc;
-  --input: #e8e4dc;
+  --border: #d8d2c8;
+  --input: #d8d2c8;
   --ring: #a16207;
   
   /* Status colors */
@@ -76,8 +76,8 @@
   --status-attention: var(--color-red-500);
   
   /* Shadows */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
