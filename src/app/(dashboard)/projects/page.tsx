@@ -11,7 +11,7 @@ import { formatRelativeTime, STAGE_NAMES } from '@/lib/utils';
 // Skeleton card component for loading state
 function SkeletonCard() {
   return (
-    <div className="bg-card rounded-xl p-5 shadow-[var(--shadow-card)] border border-border h-full">
+    <div className="bg-card rounded-xl p-6 shadow-[var(--shadow-card)] border border-border h-full">
       <div className="flex justify-between items-start gap-2 mb-2">
         <div className="h-5 rounded w-3/4 bg-muted" />
         <div className="h-4 rounded-full w-16 bg-muted" />
@@ -69,9 +69,9 @@ export default function ProjectsPage() {
   // Show skeleton loading state
   if (loading && projects.length === 0) {
     return (
-      <div className="pt-10 pb-16 max-w-[1200px] mx-auto px-10">
+      <div className="pt-14 pb-20 max-w-[1200px] mx-auto px-10">
         {/* Header skeleton */}
-        <div className="flex justify-between items-center mb-7">
+        <div className="flex justify-between items-center mb-10">
           <div>
             <div className="h-7 rounded w-44 bg-muted mb-2" />
             <div className="h-4 rounded w-20 bg-muted" />
@@ -90,14 +90,14 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="pt-10 pb-16 max-w-[1200px] mx-auto px-10">
+    <div className="pt-14 pb-20 max-w-[1200px] mx-auto px-10">
       {/* Header */}
-      <div className="flex justify-between items-center mb-7">
+      <div className="flex justify-between items-center mb-10">
         <div>
           <h1 className="text-foreground tracking-tight">
             Your Projects
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             {projects.length} {projects.length === 1 ? 'project' : 'projects'}
           </p>
         </div>
@@ -113,8 +113,8 @@ export default function ProjectsPage() {
 
       {/* Search */}
       {projects.length > 0 && (
-        <div className="mb-7">
-          <div className="relative max-w-xs">
+        <div className="mb-8">
+          <div className="relative max-w-sm">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70"
               fill="none"
@@ -181,11 +181,11 @@ export default function ProjectsPage() {
 
       {/* Projects grid */}
       {filteredProjects.length > 0 && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-6">
           {filteredProjects.map((project) => (
             <div
               key={project.id}
-              className="project-card relative bg-card rounded-xl p-5 shadow-[var(--shadow-card)] border border-border h-full transition-all"
+              className="project-card relative bg-card rounded-xl p-6 shadow-[var(--shadow-card)] border border-border h-full transition-all"
             >
               {/* Delete button */}
               <button
@@ -206,17 +206,17 @@ export default function ProjectsPage() {
               {/* Project content - clickable link */}
               <Link href={`/projects/${project.id}`} className="no-underline block">
                 <div className="flex justify-between items-start gap-2 mb-2 pr-8">
-                  <h3 className="text-[0.9375rem] font-semibold text-foreground leading-snug mb-0 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
+                  <h3 className="text-base font-semibold text-foreground leading-snug mb-0 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                     {project.title || `${project.genre} Project`}
                   </h3>
                   <Badge variant={project.status === 'completed' ? 'success' : 'default'}>
                     {project.status}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground/80 mb-3 font-medium tracking-wide">
+                <p className="text-xs text-muted-foreground mb-3 font-medium tracking-wide uppercase">
                   {project.genre}{project.niche && ` · ${project.niche}`}
                 </p>
-                <p className="text-sm text-muted-foreground mb-4 leading-relaxed overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
+                <p className="text-sm text-muted-foreground mb-5 leading-relaxed overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                   {project.premise || 'No premise provided yet'}
                 </p>
                 <div className="flex justify-between items-center text-xs text-muted-foreground/70">
