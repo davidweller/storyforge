@@ -91,6 +91,10 @@ export async function POST(request: NextRequest) {
         const versions = await q.getChapterVersions(body.chapterId as string);
         return NextResponse.json(versions);
       }
+      case 'getApprovedChapterVersions': {
+        const versions = await q.getApprovedChapterVersions(body.projectId as string);
+        return NextResponse.json(versions);
+      }
       case 'updateChapterVersion': {
         await q.updateChapterVersion(
           body.versionId as string,

@@ -86,7 +86,11 @@ interface ProjectState {
 function setOp(op: LoadingOp, active: boolean) {
   return (state: { loadingOps: Set<LoadingOp> }) => {
     const next = new Set(state.loadingOps);
-    active ? next.add(op) : next.delete(op);
+    if (active) {
+      next.add(op);
+    } else {
+      next.delete(op);
+    }
     return { loadingOps: next, loading: next.size > 0 };
   };
 }
@@ -120,13 +124,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set(setOp('project', true));
     set({ error: null });
     try {
-      const [project, documents, chapters] = await Promise.all([
+      const [project, documents, chapters, approvedVersions] = await Promise.all([
         firestore.getProject(projectId),
         firestore.getProjectDocuments(projectId),
         firestore.getProjectChapters(projectId),
+        firestore.getApprovedChapterVersions(projectId),
       ]);
       if (!project) throw new Error('Project not found');
-      set({ currentProject: project, documents, chapters });
+      const chapterVersions = new Map<string, ChapterVersion[]>();
+      for (const version of approvedVersions) {
+        const existing = chapterVersions.get(version.chapterId) ?? [];
+        existing.push(version);
+        chapterVersions.set(version.chapterId, existing);
+      }
+      for (const [chapterId, versions] of chapterVersions) {
+        versions.sort((a, b) => b.version - a.version);
+        chapterVersions.set(chapterId, versions);
+      }
+      set({ currentProject: project, documents, chapters, chapterVersions });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load project' });
     } finally {

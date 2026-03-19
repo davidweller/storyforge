@@ -1,9 +1,9 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
-import { Button, Badge } from '@/components/ui';
+import { Button, Badge, useToast } from '@/components/ui';
 import { WorkflowSidebar } from '@/components/layout';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime } from '@/lib/utils';
 
@@ -22,7 +22,34 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
     getTotalWordCount,
     getApprovedChaptersCount,
     getOpenIssuesCount,
+    updateProject,
   } = useProject(projectId);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [pendingRenameTitle, setPendingRenameTitle] = useState<string | null>(null);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    if (!pendingRenameTitle) return;
+    if (project?.title !== pendingRenameTitle) return;
+    addToast({ type: 'success', message: 'Project renamed successfully.' });
+    // Avoid synchronous state updates in effect body (eslint rule).
+    setTimeout(() => {
+      setPendingRenameTitle(null);
+      setIsEditingTitle(false);
+    }, 0);
+  }, [addToast, pendingRenameTitle, project?.title]);
+
+  useEffect(() => {
+    if (!pendingRenameTitle) return;
+    if (!error) return;
+    addToast({ type: 'error', message: `Failed to rename project: ${error}` });
+    // Avoid synchronous state updates in effect body (eslint rule).
+    setTimeout(() => {
+      setPendingRenameTitle(null);
+    }, 0);
+  }, [addToast, error, pendingRenameTitle]);
   
   if (loading || !project) {
     return (
@@ -56,10 +83,33 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   const totalWordCount = getTotalWordCount();
   const approvedChapters = getApprovedChaptersCount();
   const openIssues = getOpenIssuesCount();
+  const displayTitle = project.title || `${project.genre} Project`;
   
   // Get approved chapter IDs for sidebar
   const approvedChapterIds = new Set<string>();
   // Note: This would need to be populated from chapter versions in a real implementation
+
+  const startEditingTitle = () => {
+    setDraftTitle(displayTitle);
+    setIsEditingTitle(true);
+  };
+
+  const cancelEditingTitle = () => {
+    setDraftTitle('');
+    setIsEditingTitle(false);
+  };
+
+  const saveTitle = async () => {
+    const nextTitle = draftTitle.trim();
+    if (!nextTitle || nextTitle === project.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    setIsSavingTitle(true);
+    setPendingRenameTitle(nextTitle);
+    await updateProject({ title: nextTitle });
+    setIsSavingTitle(false);
+  };
   
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
@@ -83,9 +133,56 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
           <div style={{ marginBottom: '2.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <div>
-                <h1 style={{ fontSize: '1.875rem', fontWeight: 700, letterSpacing: '-0.025em', marginBottom: '0.5rem', color: '#171717' }}>
-                  {project.title || `${project.genre} Project`}
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                  {isEditingTitle ? (
+                    <>
+                      <input
+                        value={draftTitle}
+                        onChange={(e) => setDraftTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void saveTitle();
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEditingTitle();
+                          }
+                        }}
+                        autoFocus
+                        maxLength={120}
+                        aria-label="Project title"
+                        style={{
+                          fontSize: '1.875rem',
+                          fontWeight: 700,
+                          letterSpacing: '-0.025em',
+                          color: '#171717',
+                          lineHeight: 1.2,
+                          border: '1px solid #d4d4d4',
+                          borderRadius: '8px',
+                          padding: '0.35rem 0.5rem',
+                          minWidth: '320px',
+                          flex: 1,
+                          maxWidth: '620px',
+                        }}
+                      />
+                      <Button size="sm" onClick={() => void saveTitle()} disabled={isSavingTitle}>
+                        {isSavingTitle ? 'Saving...' : 'Save'}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={cancelEditingTitle} disabled={isSavingTitle}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <h1 style={{ fontSize: '1.875rem', fontWeight: 700, letterSpacing: '-0.025em', color: '#171717' }}>
+                        {displayTitle}
+                      </h1>
+                      <Button variant="ghost" size="sm" onClick={startEditingTitle}>
+                        Rename
+                      </Button>
+                    </>
+                  )}
+                </div>
                 <p style={{ color: '#737373' }}>
                   {project.genre}{project.niche && ` • ${project.niche}`} • Created {formatDate(project.createdAt)}
                 </p>

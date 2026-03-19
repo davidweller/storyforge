@@ -130,6 +130,10 @@ export async function getChapterVersions(chapterId: string): Promise<ChapterVers
   return dbCall<ChapterVersion[]>('getChapterVersions', { chapterId });
 }
 
+export async function getApprovedChapterVersions(projectId: string): Promise<ChapterVersion[]> {
+  return dbCall<ChapterVersion[]>('getApprovedChapterVersions', { projectId });
+}
+
 export async function updateChapterVersion(
   versionId: string,
   data: Partial<Omit<ChapterVersion, 'id' | 'chapterId' | 'createdAt'>>
