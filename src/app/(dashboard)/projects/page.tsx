@@ -11,7 +11,7 @@ import { formatRelativeTime, STAGE_NAMES } from '@/lib/utils';
 // Skeleton card component for loading state
 function SkeletonCard() {
   return (
-    <div className="bg-card rounded-xl p-5 shadow-card border border-border/60 h-full">
+    <div className="bg-card rounded-xl p-5 shadow-[var(--shadow-card)] border border-border h-full">
       <div className="flex justify-between items-start gap-2 mb-2">
         <div className="h-5 rounded w-3/4 bg-muted" />
         <div className="h-4 rounded-full w-16 bg-muted" />
@@ -185,7 +185,7 @@ export default function ProjectsPage() {
           {filteredProjects.map((project) => (
             <div
               key={project.id}
-              className="project-card relative bg-card rounded-xl p-5 shadow-card border border-border/60 h-full transition-all"
+              className="project-card relative bg-card rounded-xl p-5 shadow-[var(--shadow-card)] border border-border h-full transition-all"
             >
               {/* Delete button */}
               <button
@@ -206,7 +206,7 @@ export default function ProjectsPage() {
               {/* Project content - clickable link */}
               <Link href={`/projects/${project.id}`} className="no-underline block">
                 <div className="flex justify-between items-start gap-2 mb-2 pr-8">
-                  <h3 className="text-[0.9375rem] font-semibold text-foreground leading-snug overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
+                  <h3 className="text-[0.9375rem] font-semibold text-foreground leading-snug mb-0 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                     {project.title || `${project.genre} Project`}
                   </h3>
                   <Badge variant={project.status === 'completed' ? 'success' : 'default'}>

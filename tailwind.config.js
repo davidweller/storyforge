@@ -54,8 +54,6 @@ module.exports = {
         'spacing-section': 'var(--spacing-section)',
       },
       boxShadow: {
-        card:  'var(--shadow-card)',
-        hover: 'var(--shadow-hover)',
         sm: 'var(--shadow-sm)',
         md: 'var(--shadow-md)',
         lg: 'var(--shadow-lg)',
