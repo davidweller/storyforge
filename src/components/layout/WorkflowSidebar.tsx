@@ -162,8 +162,9 @@ export function WorkflowSidebar({
   const getStageItemClass = (status: StageStatus, isActive: boolean) =>
     cn(
       'flex items-center gap-3 px-3 py-2 rounded-lg transition-all no-underline',
-      statusColors[status],
-      isActive && 'outline outline-2 outline-[var(--ring)] outline-offset-2'
+      isActive
+        ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+        : statusColors[status]
     );
 
   const renderStageItem = (stage: WorkflowStage) => {
@@ -227,7 +228,7 @@ export function WorkflowSidebar({
   };
   
   return (
-    <aside className="w-[var(--sidebar-width)] h-full bg-card border-r border-border flex flex-col overflow-hidden shadow-[var(--shadow-sm)]">
+    <aside className="w-[var(--sidebar-width)] h-full bg-card border-r border-border flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-5 border-b border-border">
         <Link
@@ -253,9 +254,9 @@ export function WorkflowSidebar({
       <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-6">
         {/* Planning */}
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
             Planning
-          </h3>
+          </p>
           <div className="flex flex-col gap-1">
             {planningStages.map(renderStageItem)}
           </div>
@@ -263,9 +264,9 @@ export function WorkflowSidebar({
 
         {/* Writing */}
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
             Writing
-          </h3>
+          </p>
           <div className="flex flex-col gap-1">
             {writingStages.map(renderStageItem)}
           </div>
@@ -301,9 +302,9 @@ export function WorkflowSidebar({
 
         {/* Editing */}
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
             Editing
-          </h3>
+          </p>
           <div className="flex flex-col gap-1">
             {editingStages.map(renderStageItem)}
           </div>
@@ -311,9 +312,9 @@ export function WorkflowSidebar({
 
         {/* Marketing */}
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
             Marketing
-          </h3>
+          </p>
           <div className="flex flex-col gap-1">
             {(['amazon-description', 'blurb'] as const).map((mktStage) => {
               const isFilled = mktStage === 'blurb' ? blurbFilled : amazonDescriptionFilled;
@@ -323,13 +324,12 @@ export function WorkflowSidebar({
                   key={mktStage}
                   href={`/projects/${projectId}/marketing/${mktStage}`}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm font-medium transition-all',
+                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
                     isFilled
                       ? marketingApprovedClass
                       : isActive
-                        ? 'bg-muted text-foreground'
-                        : 'text-muted-foreground hover:bg-muted',
-                    isActive && 'outline outline-2 outline-[var(--ring)] outline-offset-2'
+                        ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                        : 'text-muted-foreground hover:bg-muted/60'
                   )}
                 >
                   {mktStage === 'amazon-description' ? (

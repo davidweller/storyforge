@@ -11,12 +11,12 @@ import { formatRelativeTime, STAGE_NAMES } from '@/lib/utils';
 // Skeleton card component for loading state
 function SkeletonCard() {
   return (
-    <div className="bg-card rounded-xl p-6 shadow-sm h-full">
+    <div className="bg-card rounded-xl p-6 shadow-[var(--shadow-card)] border border-border h-full">
       <div className="flex justify-between items-start gap-2 mb-2">
-        <div className="h-6 rounded w-3/4 bg-muted" />
-        <div className="h-5 rounded-full w-16 bg-muted" />
+        <div className="h-5 rounded w-3/4 bg-muted" />
+        <div className="h-4 rounded-full w-16 bg-muted" />
       </div>
-      <div className="h-4 rounded w-1/3 bg-muted mb-4" />
+      <div className="h-3 rounded w-1/3 bg-muted mb-3" />
       <div className="flex flex-col gap-2 mb-4">
         <div className="h-4 rounded w-full bg-muted" />
         <div className="h-4 rounded w-2/3 bg-muted" />
@@ -69,18 +69,18 @@ export default function ProjectsPage() {
   // Show skeleton loading state
   if (loading && projects.length === 0) {
     return (
-      <div className="py-12 max-w-[1200px] mx-auto px-8">
+      <div className="pt-14 pb-20 max-w-[1200px] mx-auto px-10">
         {/* Header skeleton */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-10">
           <div>
-            <div className="h-9 rounded w-48 bg-muted mb-2" />
-            <div className="h-5 rounded w-24 bg-muted" />
+            <div className="h-7 rounded w-44 bg-muted mb-2" />
+            <div className="h-4 rounded w-20 bg-muted" />
           </div>
-          <div className="h-11 rounded-lg w-36 bg-muted" />
+          <div className="h-10 rounded-lg w-36 bg-muted" />
         </div>
 
         {/* Grid skeleton */}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <SkeletonCard key={i} />
           ))}
@@ -90,20 +90,20 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="py-12 max-w-[1200px] mx-auto px-8">
+    <div className="pt-14 pb-20 max-w-[1200px] mx-auto px-10">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-10">
         <div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">
+          <h1 className="text-foreground tracking-tight">
             Your Projects
           </h1>
-          <p className="mt-1.5 text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             {projects.length} {projects.length === 1 ? 'project' : 'projects'}
           </p>
         </div>
         <Link href="/projects/new">
           <Button size="lg">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             New Project
@@ -113,10 +113,10 @@ export default function ProjectsPage() {
 
       {/* Search */}
       {projects.length > 0 && (
-        <div className="mb-6">
+        <div className="mb-8">
           <div className="relative max-w-sm">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -128,15 +128,15 @@ export default function ProjectsPage() {
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-10 pr-10 rounded-lg bg-card text-foreground border border-border outline-none text-sm focus:border-[var(--ring)]"
+              className="w-full h-10 pl-9 pr-9 rounded-xl bg-card text-foreground border border-border outline-none text-sm focus:border-ring focus:ring-1 focus:ring-ring/30"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-muted text-muted-foreground border-none cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-muted text-muted-foreground border-none cursor-pointer"
                 aria-label="Clear search"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -181,23 +181,23 @@ export default function ProjectsPage() {
 
       {/* Projects grid */}
       {filteredProjects.length > 0 && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-6">
           {filteredProjects.map((project) => (
             <div
               key={project.id}
-              className="project-card relative bg-card rounded-xl p-6 shadow-sm h-full transition-all"
+              className="project-card relative bg-card rounded-xl p-6 shadow-[var(--shadow-card)] border border-border h-full transition-all"
             >
               {/* Delete button */}
               <button
                 onClick={(e) => handleDeleteClick(e, project.id)}
                 disabled={deletingProjectId === project.id}
-                className="delete-btn absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-md bg-transparent border-none text-muted-foreground cursor-pointer z-10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="delete-btn absolute top-3.5 right-3.5 w-7 h-7 flex items-center justify-center rounded-md bg-transparent border-none text-muted-foreground/50 cursor-pointer z-10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Delete project"
               >
                 {deletingProjectId === project.id ? (
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <svg className="w-[1.125rem] h-[1.125rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 )}
@@ -205,23 +205,23 @@ export default function ProjectsPage() {
 
               {/* Project content - clickable link */}
               <Link href={`/projects/${project.id}`} className="no-underline block">
-                <div className="flex justify-between items-start gap-2 mb-1 pr-10">
-                  <h3 className="text-lg font-semibold text-foreground overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
+                <div className="flex justify-between items-start gap-2 mb-2 pr-8">
+                  <h3 className="text-base font-semibold text-foreground leading-snug mb-0 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                     {project.title || `${project.genre} Project`}
                   </h3>
                   <Badge variant={project.status === 'completed' ? 'success' : 'default'}>
                     {project.status}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {project.genre}{project.niche && ` • ${project.niche}`}
+                <p className="text-xs text-muted-foreground mb-3 font-medium tracking-wide uppercase">
+                  {project.genre}{project.niche && ` · ${project.niche}`}
                 </p>
-                <p className="text-sm text-muted-foreground mb-4 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
+                <p className="text-sm text-muted-foreground mb-5 leading-relaxed overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                   {project.premise || 'No premise provided yet'}
                 </p>
-                <div className="flex justify-between items-center text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex justify-between items-center text-xs text-muted-foreground/70">
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                     {STAGE_NAMES[project.currentStage]}

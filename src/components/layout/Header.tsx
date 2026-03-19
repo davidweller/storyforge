@@ -26,10 +26,10 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
             </Link>
           )}
 
-          <Link href="/projects" className={cn('flex items-center gap-2', showBackLink && 'ml-2')}>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary">
+          <Link href="/projects" className={cn('flex items-center gap-2.5', showBackLink && 'ml-2')}>
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-accent/15">
               <svg
-                className="w-4 h-4 text-primary-foreground"
+                className="w-3.5 h-3.5 text-accent"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -42,7 +42,7 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
                 />
               </svg>
             </div>
-            <span className="font-semibold text-foreground">StoryForge</span>
+            <span className="font-semibold text-foreground font-sans tracking-tight">StoryForge</span>
           </Link>
         </div>
 
@@ -52,7 +52,7 @@ export function Header({ showBackLink, backLinkHref = '/projects', backLinkText 
           className="flex items-center gap-2 text-sm text-muted-foreground transition-opacity hover:opacity-80"
           title="Settings (API keys)"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
