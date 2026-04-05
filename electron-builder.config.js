@@ -4,36 +4,35 @@ const config = {
   productName: 'StoryForge',
   copyright: 'Copyright © 2026',
 
-  // Entry point for the Electron main process
-  main: 'electron/main.js',
-
   directories: {
     output: 'dist',
     buildResources: 'build-resources',
   },
 
   files: [
-    // Electron process files
+    // Electron main/preload (packaged inside app.asar)
     'electron/**/*',
-    // Next.js standalone server output
-    '.next/standalone/**/*',
-    // Static assets needed by the standalone server
-    '.next/static/**/*',
-    'public/**/*',
     // package.json for electron-builder metadata
     'package.json',
+    // Do NOT put .next/standalone or .next/static inside asar: fork() must run
+    // server.js from a real path under resources/ (see extraResources below).
   ],
 
-  // Copy the Next.js static files into the standalone output so the server
-  // can serve them (Next.js standalone does not copy them automatically).
+  // Next standalone + assets live outside app.asar so Node can fork server.js and
+  // resolve native modules. Mirror `next build` post-step: static + public belong
+  // inside the standalone tree (see https://nextjs.org/docs/app/api-reference/config/next-config-js/output#standalone).
   extraResources: [
     {
+      from: '.next/standalone',
+      to: 'app/.next/standalone',
+    },
+    {
       from: '.next/static',
-      to: 'app/.next/static',
+      to: 'app/.next/standalone/.next/static',
     },
     {
       from: 'public',
-      to: 'app/public',
+      to: 'app/.next/standalone/public',
     },
   ],
 

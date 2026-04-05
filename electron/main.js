@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { fork } = require('child_process');
@@ -63,9 +63,12 @@ function startNextServer() {
       NODE_ENV: 'production',
     };
 
+    const standaloneRoot = path.dirname(serverScript);
+
     nextServer = fork(serverScript, [], {
       env,
       silent: true,
+      cwd: standaloneRoot,
     });
 
     nextServer.stdout?.on('data', (data) => {
@@ -154,11 +157,15 @@ app.on('ready', async () => {
 
   try {
     await startNextServer();
+    createWindow();
   } catch (err) {
     console.error('Failed to start Next.js server:', err);
+    dialog.showErrorBox(
+      'StoryForge',
+      `Could not start the app server.\n\n${err.message}\n\nIf this persists, reinstall or run from a terminal to see logs.`,
+    );
+    app.quit();
   }
-
-  createWindow();
 });
 
 app.on('window-all-closed', () => {

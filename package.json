@@ -11,6 +11,7 @@
     "electron:dev": "concurrently --kill-others \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "npm run build && electron-builder --config electron-builder.config.js",
     "electron:build:win": "npm run build && electron-builder --win --config electron-builder.config.js",
+    "migrate:firebase": "node scripts/migrate-from-firebase.js",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -52,6 +53,7 @@
     "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "firebase-admin": "^13.6.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wait-on": "^9.0.4"

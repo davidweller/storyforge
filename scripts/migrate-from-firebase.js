@@ -2,39 +2,128 @@
 /**
  * One-time migration: Firestore → local SQLite
  *
- * Reads every collection from your Firebase project and inserts the data
- * into the local better-sqlite3 database.
+ * Reads top-level Firestore collections (projects, documents, chapters, …)
+ * and inserts into the local better-sqlite3 database used by StoryForge.
+ *
+ * Prerequisites:
+ *   npm install   (firebase-admin is a devDependency)
+ *
+ * Credentials (any one):
+ *   - FIREBASE_SERVICE_ACCOUNT_PATH or GOOGLE_APPLICATION_CREDENTIALS → path to JSON key file
+ *   - FIREBASE_SERVICE_ACCOUNT_JSON → full JSON string of the service account
+ *   - FIREBASE_ADMIN_PROJECT_ID + FIREBASE_ADMIN_CLIENT_EMAIL + FIREBASE_ADMIN_PRIVATE_KEY
+ *
+ * Env files loaded if present (repo root): .env, .env.local, env.local, storyforge/env.local
  *
  * Usage:
+ *   npm run migrate:firebase
  *   node scripts/migrate-from-firebase.js
  */
 
 const path = require('path');
-const fs   = require('fs');
+const fs = require('fs');
 
-// ── Load env vars from storyforge/env.local ──────────────────────────────────
-const envPath = path.join(__dirname, '..', 'storyforge', 'env.local');
-if (!fs.existsSync(envPath)) {
-  console.error('Cannot find env file at:', envPath);
-  process.exit(1);
+const repoRoot = path.join(__dirname, '..');
+
+function loadDotenvFiles() {
+  const files = [
+    path.join(repoRoot, '.env'),
+    path.join(repoRoot, '.env.local'),
+    path.join(repoRoot, 'env.local'),
+    path.join(repoRoot, 'storyforge', 'env.local'),
+  ];
+  for (const p of files) {
+    if (fs.existsSync(p)) {
+      require('dotenv').config({ path: p });
+    }
+  }
 }
-require('dotenv').config({ path: envPath });
+
+loadDotenvFiles();
 
 // ── Firebase Admin ────────────────────────────────────────────────────────────
 const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore }        = require('firebase-admin/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 
-let privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
-privateKey = privateKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
+function resolveServiceAccountCredential() {
+  let jsonPath =
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (jsonPath) {
+    // Dotenv may turn `\n` inside Windows paths like `\novel` into a real newline — repair.
+    jsonPath = jsonPath.trim().replace(/\r?\n/g, '');
+  }
+  if (jsonPath && fs.existsSync(jsonPath)) {
+    const raw = fs.readFileSync(jsonPath, 'utf8');
+    return cert(JSON.parse(raw));
+  }
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    return cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON));
+  }
+  let privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
+  privateKey = privateKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  if (projectId && clientEmail && privateKey) {
+    return cert({ projectId, clientEmail, privateKey });
+  }
+  console.error(`
+No Firebase Admin credentials found. Set one of:
 
-initializeApp({
-  credential: cert({
-    projectId:   process.env.FIREBASE_ADMIN_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-    privateKey,
-  }),
-});
+  FIREBASE_SERVICE_ACCOUNT_PATH=./path/to-service-account.json
+  (or GOOGLE_APPLICATION_CREDENTIALS — same JSON file)
+
+  FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+
+  FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, FIREBASE_ADMIN_PRIVATE_KEY
+
+Put values in .env.local at the repo root (see .gitignore — file is not committed).
+`);
+  process.exit(1);
+}
+
+initializeApp({ credential: resolveServiceAccountCredential() });
 const fsDb = getFirestore();
+
+function getFirebaseProjectIdForLog() {
+  if (process.env.FIREBASE_ADMIN_PROJECT_ID) {
+    return process.env.FIREBASE_ADMIN_PROJECT_ID;
+  }
+  const jsonPath =
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (jsonPath && fs.existsSync(jsonPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(jsonPath, 'utf8')).project_id || '(unknown)';
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    try {
+      return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON).project_id || '(unknown)';
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  return '(unknown)';
+}
+
+/** Firestore may store string[] or a pre-serialized JSON string; SQLite expects JSON text. */
+function jsonArrayForDb(val) {
+  if (val == null) return JSON.stringify([]);
+  if (Array.isArray(val)) return JSON.stringify(val);
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return val;
+    } catch (_) {
+      /* treat as single line */
+    }
+    return JSON.stringify([val]);
+  }
+  return JSON.stringify([]);
+}
 
 // ── SQLite ────────────────────────────────────────────────────────────────────
 const Database = require('better-sqlite3');
@@ -179,7 +268,7 @@ const insertTask = db.prepare(`
 // ── Migration ─────────────────────────────────────────────────────────────────
 
 async function migrate() {
-  console.log('\n🔗 Connecting to Firestore project:', process.env.FIREBASE_ADMIN_PROJECT_ID);
+  console.log('\n🔗 Connecting to Firestore project:', getFirebaseProjectIdForLog());
   console.log('💾 Writing to SQLite:', dbPath, '\n');
 
   // Projects
@@ -270,8 +359,15 @@ async function migrate() {
       for (const i of iss) {
         const r = i.data();
         insertIssue.run(
-          i.id, r.projectId, r.chapterNumber ?? null, r.locationHint ?? null,
-          r.category, r.description, r.recommendedFix, r.status ?? 'open', toIso(r.createdAt)
+          i.id,
+          r.projectId,
+          r.chapterNumber ?? null,
+          r.locationHint ?? null,
+          r.category ?? 'general',
+          r.description ?? '',
+          r.recommendedFix ?? '',
+          r.status ?? 'open',
+          toIso(r.createdAt),
         );
       }
     });
@@ -284,12 +380,15 @@ async function migrate() {
       for (const t of tasks) {
         const r = t.data();
         insertTask.run(
-          t.id, r.projectId, r.chapterNumber,
-          JSON.stringify(r.issueIds ?? []),
+          t.id,
+          r.projectId,
+          r.chapterNumber,
+          jsonArrayForDb(r.issueIds),
           r.instructions ?? '',
-          JSON.stringify(r.acceptanceCriteria ?? []),
+          jsonArrayForDb(r.acceptanceCriteria),
           r.status ?? 'queued',
-          toIso(r.createdAt), toIso(r.updatedAt)
+          toIso(r.createdAt),
+          toIso(r.updatedAt),
         );
       }
     });
