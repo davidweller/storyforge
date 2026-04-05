@@ -137,6 +137,7 @@ export function useCreateProject() {
       ...data,
       status: 'active',
       currentStage: 'setup',
+      fourPassEditorial: true,
     });
   };
 

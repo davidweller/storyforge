@@ -9,9 +9,11 @@ import { useProjectStore } from '@/stores/projectStore';
 import { getNextStage, STAGE_ORDER, STAGE_NAMES } from '@/lib/utils';
 import { getEstimatedMinutesForStep, FULL_AUTO_ESTIMATES_MINUTES } from '@/lib/fullAutoEstimates';
 import { Button } from '@/components/ui';
-import type { WorkflowStage, DocumentType } from '@/types';
+import type { WorkflowStage, DocumentType, EditorialPass } from '@/types';
 import { countWords, capOutlineWordTargets } from '@/lib/utils';
+import { EDITORIAL_PASSES, documentTypeForEditorialPass } from '@/lib/editorial/passes';
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { getEffectiveModelForStage } from '@/lib/data/models';
 
 /** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
 const FullAutoSpinner = memo(function FullAutoSpinner() {
@@ -203,6 +205,7 @@ export default function FullAutoPage({
     loadRevisionTasks,
     createRevisionTask,
     updateRevisionTask,
+    deleteRevisionTasksForProjectAndPass,
     updateProject,
     loadProject,
   } = store;
@@ -640,97 +643,171 @@ export default function FullAutoPage({
           currentStage = 'editorial';
           stepIdx++;
         }
-        // Editorial: generate report then revision queue (requires approved chapters)
+        // Editorial + revision: four passes (structural → line → copy → proofread), each analyze → queue → apply
         if (currentStage === 'editorial') {
           await loadProject(projectId);
           const editorialChapters = useProjectStore.getState().chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
-          // Load chapter versions so we have approved content for the manuscript
-          await Promise.all(editorialChapters.map((ch) => loadChapterVersions(ch.id)));
-          // Read approved content directly from store (hook's getApprovedChapterVersion can be stale in async pipeline)
-          const chapterVersionsMap = useProjectStore.getState().chapterVersions;
-          const manuscript = editorialChapters
-            .map((ch) => {
-              const versions = chapterVersionsMap.get(ch.id) || [];
-              const approved = versions.find((v) => v.approved);
-              return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${approved.content}` : '';
-            })
-            .filter(Boolean)
-            .join('\n\n');
-          if (!manuscript.trim()) {
-            throw new Error('No manuscript available. Approved chapter content could not be loaded. Try opening Write Chapters, then resume Full Auto.');
-          }
-          setStep(STAGE_NAMES['editorial'], stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['editorial'] ?? 5, 0);
-          let editorialResult;
-          try {
-            editorialResult = await generate('editorial', {
-              manuscript,
-              genre: project.genre,
-              chapterCount: useProjectStore.getState().chapters.length,
-            });
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Unknown error';
-            throw new Error(`Editorial analysis failed: ${msg}`);
-          }
-          let editorialDocId: string | null = null;
-          const latestEditorial = getLatestDocumentByType('editorial');
-          if (latestEditorial) {
-            await updateDocument(latestEditorial.id, { content: editorialResult.content });
-            editorialDocId = latestEditorial.id;
-          } else {
-            editorialDocId = await createDocument({
-              projectId,
-              type: 'editorial',
-              content: editorialResult.content,
-              version: 1,
-              approved: false,
-            });
-          }
-          await approveDocument(editorialDocId!);
-          let queueResult;
-          try {
-            queueResult = await generate('editorial', {
-              createQueue: true,
-              editorialReport: editorialResult.content,
-              chapterCount: useProjectStore.getState().chapters.length,
-            });
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Unknown error';
-            throw new Error(`Revision queue generation failed: ${msg}. You can retry or continue from the Revision stage.`);
-          }
-          let revisionQueueData: {
-            revisionTasks: Array<{
-              chapterNumber: number;
-              issueCount: number;
-              issues: Array<{ category: string; description: string; location: string; fix: string }>;
-              acceptanceCriteria: string[];
-              summary: string;
-            }>;
-          };
-          let jsonContent = queueResult.content;
-          const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-          if (jsonMatch) jsonContent = jsonMatch[1];
-          try {
-            revisionQueueData = JSON.parse(jsonContent);
-          } catch {
-            throw new Error('Revision queue response was not valid JSON. You can retry or continue from the Revision stage.');
-          }
-          if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
-            throw new Error('Revision queue missing task list. You can retry or continue from the Revision stage.');
-          }
-          for (const taskData of revisionQueueData.revisionTasks) {
-            const instructions = (taskData.issues || [])
-              .map((i) => `${i.category}: ${i.description}\nLocation: ${i.location}\nFix: ${i.fix}`)
+
+          const compileManuscriptFromStore = async (): Promise<string> => {
+            await Promise.all(editorialChapters.map((ch) => loadChapterVersions(ch.id)));
+            const chapterVersionsMap = useProjectStore.getState().chapterVersions;
+            return editorialChapters
+              .map((ch) => {
+                const versions = chapterVersionsMap.get(ch.id) || [];
+                const approved = versions.find((v) => v.approved);
+                return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${approved.content}` : '';
+              })
+              .filter(Boolean)
               .join('\n\n');
-            const finalInstructions =
-              taskData.issueCount > 0 ? instructions : taskData.summary || 'Review chapter for quality.';
-            await createRevisionTask({
-              projectId,
-              chapterNumber: taskData.chapterNumber,
-              issueIds: [],
-              instructions: finalInstructions,
-              acceptanceCriteria: taskData.acceptanceCriteria || [],
-              status: taskData.issueCount > 0 ? 'queued' : 'done',
-            });
+          };
+
+          const parseRevisionQueue = (content: string) => {
+            let jsonContent = content;
+            const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+            if (jsonMatch) jsonContent = jsonMatch[1];
+            const revisionQueueData = JSON.parse(jsonContent) as {
+              revisionTasks: Array<{
+                chapterNumber: number;
+                issueCount: number;
+                issues: Array<{ category: string; description: string; location: string; fix: string }>;
+                acceptanceCriteria: string[];
+                summary: string;
+              }>;
+            };
+            if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
+              throw new Error('Revision queue missing task list.');
+            }
+            return revisionQueueData;
+          };
+
+          for (const pass of EDITORIAL_PASSES as EditorialPass[]) {
+            const manuscript = await compileManuscriptFromStore();
+            if (!manuscript.trim()) {
+              throw new Error('No manuscript available. Approved chapter content could not be loaded. Try opening Write Chapters, then resume Full Auto.');
+            }
+            setStep(`Editorial: ${pass}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['editorial'] ?? 5, 0);
+            let editorialResult;
+            try {
+              editorialResult = await generate('editorial', {
+                manuscript,
+                genre: project.genre,
+                chapterCount: useProjectStore.getState().chapters.length,
+                editorialPass: pass,
+              });
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Unknown error';
+              throw new Error(`Editorial analysis failed (${pass}): ${msg}`);
+            }
+            const docType = documentTypeForEditorialPass(pass);
+            await loadProject(projectId);
+            const docsOfType = useProjectStore.getState().documents
+              .filter((d) => d.projectId === projectId && d.type === docType)
+              .sort((a, b) => b.version - a.version);
+            const latestPassDoc = docsOfType[0];
+            let editorialDocId: string;
+            if (latestPassDoc) {
+              await updateDocument(latestPassDoc.id, {
+                content: editorialResult.content,
+                version: latestPassDoc.version + 1,
+              });
+              editorialDocId = latestPassDoc.id;
+            } else {
+              editorialDocId = await createDocument({
+                projectId,
+                type: docType,
+                content: editorialResult.content,
+                version: 1,
+                approved: false,
+              });
+            }
+            await approveDocument(editorialDocId);
+            await deleteRevisionTasksForProjectAndPass(projectId, pass);
+            let queueResult;
+            try {
+              queueResult = await generate('editorial', {
+                createQueue: true,
+                editorialReport: editorialResult.content,
+                chapterCount: useProjectStore.getState().chapters.length,
+                editorialPass: pass,
+              });
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'Unknown error';
+              throw new Error(`Revision queue generation failed (${pass}): ${msg}`);
+            }
+            let revisionQueueData;
+            try {
+              revisionQueueData = parseRevisionQueue(queueResult.content);
+            } catch {
+              throw new Error(`Revision queue was not valid JSON (${pass}).`);
+            }
+            for (const taskData of revisionQueueData.revisionTasks) {
+              const instructions = (taskData.issues || [])
+                .map((i) => `${i.category}: ${i.description}\nLocation: ${i.location}\nFix: ${i.fix}`)
+                .join('\n\n');
+              const finalInstructions =
+                taskData.issueCount > 0 ? instructions : taskData.summary || 'Review chapter for quality.';
+              await createRevisionTask({
+                projectId,
+                chapterNumber: taskData.chapterNumber,
+                editPass: pass,
+                issueIds: [],
+                instructions: finalInstructions,
+                acceptanceCriteria: taskData.acceptanceCriteria || [],
+                status: taskData.issueCount > 0 ? 'queued' : 'done',
+              });
+            }
+            await loadRevisionTasks(projectId);
+            const tasksThisPass = useProjectStore.getState().revisionTasks.filter(
+              (t) => t.editPass === pass && t.status !== 'done'
+            );
+            for (const task of tasksThisPass) {
+              setStep(`Revision (${pass}): Ch. ${task.chapterNumber}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['revision-per'] ?? 3, 0);
+              const chapter = useProjectStore.getState().chapters.find((c) => c.chapterNumber === task.chapterNumber);
+              const versions = chapter ? useProjectStore.getState().chapterVersions.get(chapter.id) || [] : [];
+              const originalVersion = versions.find((v) => v.approved);
+              if (!chapter || !originalVersion) {
+                await updateRevisionTask(task.id, { status: 'done' });
+                continue;
+              }
+              await updateRevisionTask(task.id, { status: 'in_progress' });
+              const docs = useProjectStore.getState().documents;
+              const pick = (t: DocumentType) => docs.filter((d) => d.type === t && d.approved).sort((a, b) => b.version - a.version)[0];
+              const charactersDoc = pick('characters');
+              const endingDoc = pick('ending');
+              const structureDoc = pick('structure');
+              const nicheDoc = pick('niche');
+              const revResult = await generate(
+                'revision',
+                {
+                  genre: project.genre,
+                  chapterNumber: chapter.chapterNumber,
+                  chapterTitle: chapter.title,
+                  originalContent: originalVersion.content,
+                  revisionInstructions: task.instructions,
+                  acceptanceCriteria: task.acceptanceCriteria?.length ? task.acceptanceCriteria : ['Consistency with canon'],
+                  charactersReference: charactersDoc?.content || '',
+                  endingReference: endingDoc?.content || '',
+                  structureReference: structureDoc?.content || '',
+                  nicheReference: nicheDoc?.content || '',
+                  editorialPass: pass,
+                },
+                { model: getEffectiveModelForStage('revision').id }
+              );
+              const sorted = [...versions].sort((a, b) => b.version - a.version);
+              const newVer = (sorted[0]?.version || 0) + 1;
+              const versionId = await createChapterVersion({
+                chapterId: chapter.id,
+                projectId,
+                chapterNumber: chapter.chapterNumber,
+                version: newVer,
+                content: revResult.content,
+                wordCount: countWords(revResult.content),
+                approved: false,
+              });
+              await approveChapterVersion(versionId);
+              await updateRevisionTask(task.id, { status: 'done' });
+              stepIdx++;
+            }
           }
           await advanceStage(projectId, 'revision');
           currentStage = 'revision';
@@ -738,21 +815,25 @@ export default function FullAutoPage({
           await loadProject(projectId);
           await loadRevisionTasks(projectId);
         }
-        // Revision: apply each task
+        // Any remaining revision tasks (e.g. resumed mid-pipeline)
         const tasks = useProjectStore.getState().revisionTasks.filter((t) => t.status !== 'done');
         for (const task of tasks) {
           setStep(`Revision: Chapter ${task.chapterNumber}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['revision-per'] ?? 3, 0);
           const chapter = useProjectStore.getState().chapters.find((c) => c.chapterNumber === task.chapterNumber);
-          const originalVersion = chapter ? getApprovedChapterVersion(chapter.id) : null;
+          const versions = chapter ? useProjectStore.getState().chapterVersions.get(chapter.id) || [] : [];
+          const originalVersion = versions.find((v) => v.approved);
           if (!chapter || !originalVersion) {
             await updateRevisionTask(task.id, { status: 'done' });
             continue;
           }
           await updateRevisionTask(task.id, { status: 'in_progress' });
-          const charactersDoc = getDocumentByType('characters');
-          const endingDoc = getDocumentByType('ending');
-          const structureDoc = getDocumentByType('structure');
-          const nicheDoc = getDocumentByType('niche');
+          const docs = useProjectStore.getState().documents;
+          const pick = (t: DocumentType) => docs.filter((d) => d.type === t && d.approved).sort((a, b) => b.version - a.version)[0];
+          const charactersDoc = pick('characters');
+          const endingDoc = pick('ending');
+          const structureDoc = pick('structure');
+          const nicheDoc = pick('niche');
+          const pass = task.editPass;
           const revResult = await generate(
             'revision',
             {
@@ -766,10 +847,12 @@ export default function FullAutoPage({
               endingReference: endingDoc?.content || '',
               structureReference: structureDoc?.content || '',
               nicheReference: nicheDoc?.content || '',
+              editorialPass: pass,
             },
-            { model: 'claude-sonnet-4-5' }
+            { model: getEffectiveModelForStage('revision').id }
           );
-          const newVer = (getLatestChapterVersion(chapter.id)?.version || 0) + 1;
+          const sorted = [...versions].sort((a, b) => b.version - a.version);
+          const newVer = (sorted[0]?.version || 0) + 1;
           const versionId = await createChapterVersion({
             chapterId: chapter.id,
             projectId,
@@ -860,6 +943,7 @@ export default function FullAutoPage({
     approveChapterVersion,
     createRevisionTask,
     updateRevisionTask,
+    deleteRevisionTasksForProjectAndPass,
     updateProject,
     clearError,
     retryTrigger,

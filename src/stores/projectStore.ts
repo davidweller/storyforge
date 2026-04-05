@@ -7,6 +7,7 @@ import type {
   EditorialIssue,
   RevisionTask,
   WorkflowStage,
+  EditorialPass,
 } from '@/types';
 import * as firestore from '@/lib/db/client';
 
@@ -73,6 +74,7 @@ interface ProjectState {
   loadRevisionTasks: (projectId: string) => Promise<void>;
   createRevisionTask: (data: Omit<RevisionTask, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateRevisionTask: (taskId: string, data: Partial<RevisionTask>) => Promise<void>;
+  deleteRevisionTasksForProjectAndPass: (projectId: string, pass: EditorialPass) => Promise<void>;
   
   // Stage progression
   advanceStage: (projectId: string, newStage: WorkflowStage) => Promise<void>;
@@ -124,11 +126,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set(setOp('project', true));
     set({ error: null });
     try {
-      const [project, documents, chapters, approvedVersions] = await Promise.all([
+      const [project, documents, chapters, approvedVersions, revisionTasks] = await Promise.all([
         firestore.getProject(projectId),
         firestore.getProjectDocuments(projectId),
         firestore.getProjectChapters(projectId),
         firestore.getApprovedChapterVersions(projectId),
+        firestore.getProjectRevisionTasks(projectId),
       ]);
       if (!project) throw new Error('Project not found');
       const chapterVersions = new Map<string, ChapterVersion[]>();
@@ -141,7 +144,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         versions.sort((a, b) => b.version - a.version);
         chapterVersions.set(chapterId, versions);
       }
-      set({ currentProject: project, documents, chapters, chapterVersions });
+      set({ currentProject: project, documents, chapters, chapterVersions, revisionTasks });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load project' });
     } finally {
@@ -413,6 +416,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to update revision task' });
+    } finally {
+      set(setOp('revision', false));
+    }
+  },
+
+  deleteRevisionTasksForProjectAndPass: async (projectId: string, pass: EditorialPass) => {
+    set(setOp('revision', true));
+    set({ error: null });
+    try {
+      await firestore.deleteRevisionTasksForProjectAndPass(projectId, pass);
+      const { loadRevisionTasks } = get();
+      await loadRevisionTasks(projectId);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to delete revision tasks' });
+      throw error;
     } finally {
       set(setOp('revision', false));
     }

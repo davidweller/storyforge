@@ -8,6 +8,7 @@ import type {
   EditorialIssue,
   RevisionTask,
   DocumentType,
+  EditorialPass,
 } from '@/types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -33,6 +34,9 @@ function rowToProject(row: Record<string, unknown>): Project {
     status: row.status as Project['status'],
     currentStage: row.currentStage as Project['currentStage'],
     fullAutoMode: Boolean(row.fullAutoMode),
+    fourPassEditorial: row.fourPassEditorial !== undefined && row.fourPassEditorial !== null
+      ? Boolean(row.fourPassEditorial)
+      : false,
     finalExportedAt: row.finalExportedAt ? toDate(row.finalExportedAt as string) : undefined,
     blurb: (row.blurb as string) ?? undefined,
     amazonDescription: (row.amazonDescription as string) ?? undefined,
@@ -99,10 +103,14 @@ function rowToEditorialIssue(row: Record<string, unknown>): EditorialIssue {
 }
 
 function rowToRevisionTask(row: Record<string, unknown>): RevisionTask {
+  const ep = row.editPass as string | undefined;
+  const editPass: EditorialPass =
+    ep === 'line' || ep === 'copy' || ep === 'proofread' || ep === 'structural' ? ep : 'structural';
   return {
     id: row.id as string,
     projectId: row.projectId as string,
     chapterNumber: row.chapterNumber as number,
+    editPass,
     issueIds: JSON.parse(row.issueIds as string) as string[],
     instructions: row.instructions as string,
     acceptanceCriteria: JSON.parse(row.acceptanceCriteria as string) as string[],
@@ -124,9 +132,9 @@ export async function createProject(
   db.prepare(`
     INSERT INTO projects
       (id, title, genre, niche, microniche, premise, research, status, currentStage,
-       fullAutoMode, finalExportedAt, blurb, amazonDescription, createdAt, updatedAt)
+       fullAutoMode, fourPassEditorial, finalExportedAt, blurb, amazonDescription, createdAt, updatedAt)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.title ?? null,
@@ -138,6 +146,7 @@ export async function createProject(
     data.status,
     data.currentStage,
     data.fullAutoMode ? 1 : 0,
+    data.fourPassEditorial !== false ? 1 : 0,
     data.finalExportedAt ? data.finalExportedAt.toISOString() : null,
     data.blurb ?? null,
     data.amazonDescription ?? null,
@@ -176,6 +185,7 @@ export async function updateProject(
   if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
   if (data.currentStage !== undefined) { fields.push('currentStage = ?'); values.push(data.currentStage); }
   if (data.fullAutoMode !== undefined) { fields.push('fullAutoMode = ?'); values.push(data.fullAutoMode ? 1 : 0); }
+  if (data.fourPassEditorial !== undefined) { fields.push('fourPassEditorial = ?'); values.push(data.fourPassEditorial ? 1 : 0); }
   if (data.finalExportedAt !== undefined) { fields.push('finalExportedAt = ?'); values.push(data.finalExportedAt ? data.finalExportedAt.toISOString() : null); }
   if (data.blurb !== undefined) { fields.push('blurb = ?'); values.push(data.blurb ?? null); }
   if (data.amazonDescription !== undefined) { fields.push('amazonDescription = ?'); values.push(data.amazonDescription ?? null); }
@@ -434,12 +444,13 @@ export async function createRevisionTask(
   const ts = now();
   db.prepare(`
     INSERT INTO revision_tasks
-      (id, projectId, chapterNumber, issueIds, instructions, acceptanceCriteria, status, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, projectId, chapterNumber, editPass, issueIds, instructions, acceptanceCriteria, status, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.projectId,
     data.chapterNumber,
+    data.editPass,
     JSON.stringify(data.issueIds),
     data.instructions,
     JSON.stringify(data.acceptanceCriteria),
@@ -450,10 +461,21 @@ export async function createRevisionTask(
   return id;
 }
 
+export async function deleteRevisionTasksForProjectAndPass(
+  projectId: string,
+  pass: EditorialPass
+): Promise<void> {
+  const db = getDb();
+  db.prepare('DELETE FROM revision_tasks WHERE projectId = ? AND editPass = ?').run(projectId, pass);
+}
+
 export async function getProjectRevisionTasks(projectId: string): Promise<RevisionTask[]> {
   const db = getDb();
   const rows = db.prepare(
-    'SELECT * FROM revision_tasks WHERE projectId = ? ORDER BY chapterNumber ASC'
+    `SELECT * FROM revision_tasks WHERE projectId = ?
+     ORDER BY CASE editPass
+       WHEN 'structural' THEN 0 WHEN 'line' THEN 1 WHEN 'copy' THEN 2 WHEN 'proofread' THEN 3 ELSE 0 END,
+       chapterNumber ASC`
   ).all(projectId) as Record<string, unknown>[];
   return rows.map(rowToRevisionTask);
 }
@@ -470,6 +492,7 @@ export async function updateRevisionTask(
   if (data.instructions !== undefined) { fields.push('instructions = ?'); values.push(data.instructions); }
   if (data.acceptanceCriteria !== undefined) { fields.push('acceptanceCriteria = ?'); values.push(JSON.stringify(data.acceptanceCriteria)); }
   if (data.issueIds !== undefined) { fields.push('issueIds = ?'); values.push(JSON.stringify(data.issueIds)); }
+  if (data.editPass !== undefined) { fields.push('editPass = ?'); values.push(data.editPass); }
 
   if (fields.length === 0) return;
   fields.push('updatedAt = ?');

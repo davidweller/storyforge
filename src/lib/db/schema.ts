@@ -1,5 +1,22 @@
 import type Database from 'better-sqlite3';
 
+function columnNames(db: Database.Database, table: string): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return new Set(rows.map((r) => r.name));
+}
+
+/** Additive migrations after CREATE TABLE IF NOT EXISTS. */
+export function runMigrations(db: Database.Database): void {
+  const rt = columnNames(db, 'revision_tasks');
+  if (!rt.has('editPass')) {
+    db.exec(`ALTER TABLE revision_tasks ADD COLUMN editPass TEXT NOT NULL DEFAULT 'structural'`);
+  }
+  const pr = columnNames(db, 'projects');
+  if (!pr.has('fourPassEditorial')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN fourPassEditorial INTEGER NOT NULL DEFAULT 0`);
+  }
+}
+
 export function initSchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -86,4 +103,5 @@ export function initSchema(db: Database.Database): void {
       FOREIGN KEY (projectId) REFERENCES projects(id)
     );
   `);
+  runMigrations(db);
 }

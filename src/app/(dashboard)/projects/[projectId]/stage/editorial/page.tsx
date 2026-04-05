@@ -1,14 +1,23 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { use, useState, useEffect, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
 import { Button } from '@/components/ui';
 import { getNextStage } from '@/lib/utils';
-import type { WorkflowStage } from '@/types';
+import {
+  EDITORIAL_PASSES,
+  EDITORIAL_PASS_LABELS,
+  documentTypeForEditorialPass,
+  latestEditorialDocContentForPass,
+  approvedEditorialDocForPass,
+  canStartEditorialPass,
+  parseEditorialPass,
+} from '@/lib/editorial/passes';
+import type { WorkflowStage, EditorialPass } from '@/types';
 
 interface EditorialPageProps {
   params: Promise<{ projectId: string }>;
@@ -18,26 +27,49 @@ interface EditorialPageProps {
 export default function EditorialPage({ params }: EditorialPageProps) {
   const { projectId } = use(params);
   const router = useRouter();
-  
+  const searchParams = useSearchParams();
+  const editorialPass: EditorialPass = parseEditorialPass(searchParams.get('pass')) ?? 'structural';
+
   const {
     project,
     documents,
     chapters,
     editorialIssues,
+    revisionTasks,
     loading: projectLoading,
     error: projectError,
     getDocumentByType,
-    getLatestDocumentByType,
     getApprovedChapterVersion,
     getOpenIssuesCount,
   } = useProject(projectId);
   
-  const { createDocument, updateDocument, approveDocument, loadEditorialIssues, createEditorialIssue, advanceStage, loadChapterVersions, createRevisionTask } = useProjectStore();
+  const {
+    createDocument,
+    updateDocument,
+    approveDocument,
+    loadEditorialIssues,
+    advanceStage,
+    loadChapterVersions,
+    createRevisionTask,
+    deleteRevisionTasksForProjectAndPass,
+    loadRevisionTasks,
+  } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [editorialContent, setEditorialContent] = useState('');
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [modelSwitchMessage, setModelSwitchMessage] = useState<string | null>(null);
+
+  const docTypeForPass = useMemo(() => documentTypeForEditorialPass(editorialPass), [editorialPass]);
+
+  const getApprovedStub = (chapterId: string) =>
+    getApprovedChapterVersion(chapterId) ? { content: '' } : undefined;
+  const canStartThisPass = canStartEditorialPass(
+    editorialPass,
+    chapters,
+    getApprovedStub,
+    revisionTasks
+  );
   
   // Load versions for all chapters when chapters are available
   useEffect(() => {
@@ -48,16 +80,29 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     }
   }, [chapters, loadChapterVersions]);
   
-  // Load existing editorial content
   useEffect(() => {
-    if (documents.length > 0) {
-      const doc = getLatestDocumentByType('editorial');
-      if (doc) {
-        setEditorialContent(doc.content);
-        setCurrentDocId(doc.id);
-      }
+    if (projectId) loadRevisionTasks(projectId);
+  }, [projectId, loadRevisionTasks]);
+
+  // Load existing editorial content for this pass
+  useEffect(() => {
+    const loaded = latestEditorialDocContentForPass(documents, editorialPass);
+    if (loaded) {
+      setEditorialContent(loaded.content);
+      const t = docTypeForPass;
+      const match =
+        documents
+          .filter((d) => d.type === t)
+          .sort((a, b) => b.version - a.version)[0] ||
+        (editorialPass === 'structural'
+          ? documents.filter((d) => d.type === 'editorial').sort((a, b) => b.version - a.version)[0]
+          : undefined);
+      setCurrentDocId(match?.id ?? null);
+    } else {
+      setEditorialContent('');
+      setCurrentDocId(null);
     }
-  }, [documents, getLatestDocumentByType]);
+  }, [documents, editorialPass, docTypeForPass]);
   
   // Load editorial issues
   useEffect(() => {
@@ -77,8 +122,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     );
   }
   
-  const approvedDoc = getDocumentByType('editorial');
-  const isApproved = !!approvedDoc;
+  const isApproved = approvedEditorialDocForPass(documents, editorialPass);
   const openIssuesCount = getOpenIssuesCount();
   
   // Get approved chapter IDs
@@ -129,6 +173,10 @@ export default function EditorialPage({ params }: EditorialPageProps) {
   const handleGenerate = async () => {
     console.log('Re-analyze button clicked');
     clearError();
+
+    if (!canStartThisPass) {
+      throw new Error('Complete the previous editorial pass and its revisions before starting this pass.');
+    }
     
     // Clear existing content when starting a new analysis
     setEditorialContent('');
@@ -167,9 +215,10 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       const estimatedPromptOverhead = 2000; // System prompt + instructions
       const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
       
-      // Model context limits
-      const gpt52MaxTokens = 128000; // GPT-5.2 Thinking context limit
-      const claude45MaxTokens = 200000; // Claude Sonnet 4.5 context limit (fallback)
+      // Model context limits (client-side hints; API enforces app cap via MAX_MANUSCRIPT_TOKENS)
+      const gpt52ContextTokens = 128000; // GPT-5.2
+      const openaiLargeContextTokens = 1_000_000; // GPT-5.4 etc.
+      const claude46ContextTokens = 1_000_000; // Claude Sonnet 4.6 (fallback)
       
       console.log('[Editorial] Manuscript validation:', {
         totalLength: manuscript.length,
@@ -179,10 +228,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         estimatedManuscriptTokens,
         estimatedReferenceTokens,
         estimatedTotalTokens,
-        gpt52MaxTokens,
-        claude45MaxTokens,
-        willExceedGPT52: estimatedTotalTokens > gpt52MaxTokens,
-        willExceedClaude45: estimatedTotalTokens > claude45MaxTokens,
+        gpt52ContextTokens,
+        openaiLargeContextTokens,
+        claude46ContextTokens,
+        willExceedGPT52: estimatedTotalTokens > gpt52ContextTokens,
+        willExceedClaude46: estimatedTotalTokens > claude46ContextTokens,
         first100Chars: manuscript.substring(0, 100),
         last100Chars: manuscript.substring(Math.max(0, manuscript.length - 100)),
       });
@@ -192,42 +242,38 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         throw new Error('Manuscript does not contain any chapters. Please ensure chapters are properly formatted.');
       }
       
-      // Only block if it exceeds Claude's limit (since API will auto-switch to Claude if needed)
-      if (estimatedTotalTokens > claude45MaxTokens) {
+      if (estimatedTotalTokens > claude46ContextTokens) {
         const manuscriptWordCount = Math.ceil(manuscript.length / 5);
-        const maxWords = Math.floor((claude45MaxTokens - estimatedReferenceTokens - estimatedPromptOverhead) * 0.8);
+        const maxWords = Math.floor((claude46ContextTokens - estimatedReferenceTokens - estimatedPromptOverhead) * 0.8);
         throw new Error(
           `Manuscript is too long for editorial review.\n\n` +
           `• Your manuscript: ~${manuscriptWordCount.toLocaleString()} words (${estimatedTotalTokens.toLocaleString()} tokens)\n` +
-          `• Maximum supported: ~${maxWords.toLocaleString()} words (${claude45MaxTokens.toLocaleString()} tokens)\n\n` +
-          `Even with Claude Sonnet 4.5's larger context window (200k tokens), your manuscript exceeds the limit. Please consider reviewing in batches or focusing on specific sections.`
+          `• Maximum supported: ~${maxWords.toLocaleString()} words (${claude46ContextTokens.toLocaleString()} tokens)\n\n` +
+          `Your manuscript exceeds the supported context window. Please consider reviewing in batches or focusing on specific sections.`
         );
       }
       
-      // Log if model switching will occur (but don't block - let API handle it)
-      if (estimatedTotalTokens > gpt52MaxTokens) {
-        console.log('[Editorial] Manuscript exceeds GPT-5.2 limit, API will switch to Claude Sonnet 4.5:', {
+      if (estimatedTotalTokens > gpt52ContextTokens && estimatedTotalTokens <= openaiLargeContextTokens) {
+        console.log('[Editorial] Manuscript exceeds GPT-5.2 context; API may switch to Claude Sonnet 4.6 if the selected model is GPT-5.2:', {
           estimatedTotalTokens,
-          gpt52MaxTokens,
-          claude45MaxTokens,
+          gpt52ContextTokens,
+          claude46ContextTokens,
         });
       }
       
-      // Warn if approaching GPT-5.2 limit (will trigger switch)
-      if (estimatedTotalTokens > gpt52MaxTokens * 0.8 && estimatedTotalTokens <= gpt52MaxTokens) {
+      if (estimatedTotalTokens > gpt52ContextTokens * 0.8 && estimatedTotalTokens <= gpt52ContextTokens) {
         console.warn('[Editorial] Manuscript approaching GPT-5.2 context limit:', {
           estimatedTotalTokens,
-          gpt52MaxTokens,
-          percentage: ((estimatedTotalTokens / gpt52MaxTokens) * 100).toFixed(1) + '%',
+          gpt52ContextTokens,
+          percentage: ((estimatedTotalTokens / gpt52ContextTokens) * 100).toFixed(1) + '%',
         });
       }
       
-      // Warn if approaching Claude limit (after switch)
-      if (estimatedTotalTokens > gpt52MaxTokens && estimatedTotalTokens > claude45MaxTokens * 0.8) {
-        console.warn('[Editorial] Manuscript approaching Claude Sonnet 4.5 context limit:', {
+      if (estimatedTotalTokens > gpt52ContextTokens && estimatedTotalTokens > claude46ContextTokens * 0.8) {
+        console.warn('[Editorial] Manuscript approaching Claude Sonnet 4.6 context limit:', {
           estimatedTotalTokens,
-          claude45MaxTokens,
-          percentage: ((estimatedTotalTokens / claude45MaxTokens) * 100).toFixed(1) + '%',
+          claude46ContextTokens,
+          percentage: ((estimatedTotalTokens / claude46ContextTokens) * 100).toFixed(1) + '%',
         });
       }
       
@@ -261,6 +307,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         charactersReference: charactersDoc?.content,
         endingReference: endingDoc?.content,
         structureReference: structureDoc?.content,
+        editorialPass,
       });
       
       // Check if model was switched (the API will return this in the response)
@@ -273,18 +320,22 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       
       setEditorialContent(result.content);
       
-      // Save the document
+      const latestThisType = documents
+        .filter((d) => d.type === docTypeForPass)
+        .sort((a, b) => b.version - a.version)[0];
+      const nextVersion = (latestThisType?.version ?? 0) + 1;
+
       if (currentDocId) {
         await updateDocument(currentDocId, {
           content: result.content,
-          version: (getLatestDocumentByType('editorial')?.version || 0) + 1,
+          version: nextVersion,
         });
       } else {
         const newDocId = await createDocument({
           projectId,
-          type: 'editorial',
+          type: docTypeForPass,
           content: result.content,
-          version: 1,
+          version: nextVersion,
           approved: false,
         });
         setCurrentDocId(newDocId);
@@ -320,12 +371,15 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       }
       
       console.log('[Editorial] Creating revision queue from editorial report...');
+
+      await deleteRevisionTasksForProjectAndPass(projectId, editorialPass);
       
       // Generate revision queue from editorial report
       const result = await generate('editorial', {
         createQueue: true,
         editorialReport: editorialContent,
         chapterCount: chapters.length,
+        editorialPass,
       });
       
       console.log('[Editorial] Revision queue response received:', {
@@ -389,7 +443,8 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         await createRevisionTask({
           projectId,
           chapterNumber: taskData.chapterNumber,
-          issueIds: [], // Will be linked later if needed
+          editPass: editorialPass,
+          issueIds: [],
           instructions: finalInstructions,
           acceptanceCriteria: taskData.acceptanceCriteria || [],
           status: taskData.issueCount > 0 ? 'queued' : 'done',
@@ -406,8 +461,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
       
-      // Navigate to revision page
-      router.push(`/projects/${projectId}/stage/revision`);
+      router.push(`/projects/${projectId}/stage/revision?pass=${editorialPass}`);
     } catch (err) {
       console.error('[Editorial] Error creating revision queue:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to create revision queue';
@@ -426,9 +480,37 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       activeStage="editorial"
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
+      revisionTasks={revisionTasks}
+      documents={documents}
+      fourPassEditorial={!!project.fourPassEditorial}
       blurbFilled={!!project.blurb?.trim()}
       amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
+      <div className="flex flex-wrap gap-2 mb-6">
+        {EDITORIAL_PASSES.map((p) => {
+          const can = canStartEditorialPass(p, chapters, getApprovedStub, revisionTasks);
+          const active = p === editorialPass;
+          return (
+            <Button
+              key={p}
+              variant={active ? 'primary' : 'secondary'}
+              disabled={!can && !active}
+              onClick={() => router.push(`/projects/${projectId}/stage/editorial?pass=${p}`)}
+              className="text-sm"
+            >
+              {EDITORIAL_PASS_LABELS[p]}
+            </Button>
+          );
+        })}
+      </div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Pass: <strong>{EDITORIAL_PASS_LABELS[editorialPass]}</strong>
+        {!canStartThisPass && (
+          <span className="block mt-1 text-amber-700">
+            Complete the prior pass and approve all its chapter revisions before running this pass.
+          </span>
+        )}
+      </p>
       {/* Error */}
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
@@ -460,10 +542,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       {!isGenerating && !editorialContent && (
         <EmptyContent
           title="Generate Editorial Review"
-          description="Submit your manuscript for AI-powered editorial analysis. You'll receive detailed feedback on continuity, characters, pacing, prose, and plot logic."
+          description="Submit your manuscript for AI-powered editorial analysis. You'll receive detailed feedback scoped to this pass (structural through proofread)."
           actionLabel="Start Editorial Review"
           onAction={handleGenerate}
           isLoading={isGenerating}
+          disabled={!canStartThisPass}
         />
       )}
       
@@ -478,7 +561,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
             <Button 
               variant="secondary" 
               onClick={handleGenerate} 
-              disabled={isGenerating}
+              disabled={isGenerating || !canStartThisPass}
               loading={isGenerating}
             >
               {!isGenerating && (

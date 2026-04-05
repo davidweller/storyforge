@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from 'clsx';
+import { canProceedToExportFinal } from '@/lib/editorial/passes';
 
 // Simple cn function without tailwind-merge for now
 export function cn(...inputs: ClassValue[]) {
@@ -15,15 +16,18 @@ export function getStageStatus(
   chapters?: import('@/types').Chapter[],
   approvedChapterIds?: Set<string>,
   revisionTasks?: import('@/types').RevisionTask[],
-  finalExportedAt?: Date
+  finalExportedAt?: Date,
+  fourPassEditorial?: boolean
 ): import('@/types').StageStatus {
   const stageIndex = getStageIndex(stage);
   const currentIndex = getStageIndex(currentStage);
+  const projectStub = { fourPassEditorial: fourPassEditorial ?? false };
 
   if (stageIndex < currentIndex) return 'approved';
   if (stageIndex === currentIndex) {
     if (stage === 'revision' && revisionTasks && revisionTasks.length > 0) {
-      if (revisionTasks.every((t) => t.status === 'done')) return 'approved';
+      const allDone = revisionTasks.every((t) => t.status === 'done');
+      if (allDone && canProceedToExportFinal(projectStub, revisionTasks)) return 'approved';
     }
     if (stage === 'export-final' && finalExportedAt) return 'approved';
     return 'in_progress';
@@ -34,9 +38,9 @@ export function getStageStatus(
     if (chapters.length > 0 && chapters.every((ch) => approvedChapterIds.has(ch.id))) return 'not_started';
   }
 
-  // Allow export-final access early if all revision tasks are done
+  // Allow export-final when revision pipeline is complete
   if (stage === 'export-final' && currentStage === 'revision' && revisionTasks && revisionTasks.length > 0) {
-    if (revisionTasks.every((t) => t.status === 'done')) return 'not_started';
+    if (canProceedToExportFinal(projectStub, revisionTasks)) return 'not_started';
   }
 
   if (isStageAccessible(currentStage, stage)) return 'not_started';

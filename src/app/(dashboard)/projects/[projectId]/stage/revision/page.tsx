@@ -1,7 +1,8 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
@@ -9,7 +10,15 @@ import { StageLayout } from '@/components/stages';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import * as Diff from 'diff';
-import type { ChapterVersion } from '@/types';
+import type { ChapterVersion, EditorialPass } from '@/types';
+import { getEffectiveModelForStage } from '@/lib/data/models';
+import {
+  EDITORIAL_PASSES,
+  EDITORIAL_PASS_LABELS,
+  tasksForPass,
+  canProceedToExportFinal,
+  parseEditorialPass,
+} from '@/lib/editorial/passes';
 
 interface RevisionPageProps {
   params: Promise<{ projectId: string }>;
@@ -17,19 +26,26 @@ interface RevisionPageProps {
 
 export default function RevisionPage({ params }: RevisionPageProps) {
   const { projectId } = use(params);
-  
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editorialPass: EditorialPass = parseEditorialPass(searchParams.get('pass')) ?? 'structural';
+
   const {
     project,
     chapters,
+    documents,
     revisionTasks,
-    editorialIssues,
     loading: projectLoading,
     error: projectError,
     getApprovedChapterVersion,
     getLatestChapterVersion,
-    getPendingRevisionTasksCount,
     getDocumentByType,
   } = useProject(projectId);
+
+  const passTasks = useMemo(
+    () => tasksForPass(revisionTasks, editorialPass),
+    [revisionTasks, editorialPass]
+  );
   
   const { loadRevisionTasks, createChapterVersion, approveChapterVersion, updateRevisionTask, loadChapterVersions, advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
@@ -47,13 +63,10 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     }
   }, [projectId, loadRevisionTasks]);
   
-  // Auto-advance to export-final when all revisions are complete
   useEffect(() => {
-    if (project && revisionTasks.length > 0) {
-      const allComplete = revisionTasks.every(task => task.status === 'done');
-      if (allComplete && project.currentStage === 'revision') {
-        advanceStage(projectId, 'export-final');
-      }
+    if (!project || revisionTasks.length === 0 || project.currentStage !== 'revision') return;
+    if (canProceedToExportFinal(project, revisionTasks)) {
+      advanceStage(projectId, 'export-final');
     }
   }, [project, revisionTasks, projectId, advanceStage]);
   
@@ -84,7 +97,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     );
   }
   
-  const pendingCount = getPendingRevisionTasksCount();
+  const pendingCount = passTasks.filter((t) => t.status !== 'done').length;
   
   // Get approved chapter IDs
   const approvedChapterIds = new Set<string>();
@@ -98,14 +111,14 @@ export default function RevisionPage({ params }: RevisionPageProps) {
   const selectedChapter = chapters.find((c) => c.id === selectedChapterId);
   const originalVersion = selectedChapter ? getApprovedChapterVersion(selectedChapter.id) : null;
   const selectedTask = selectedTaskId 
-    ? revisionTasks.find((t) => t.id === selectedTaskId)
+    ? passTasks.find((t) => t.id === selectedTaskId)
     : selectedChapter
-    ? revisionTasks.find((t) => t.chapterNumber === selectedChapter.chapterNumber)
+    ? passTasks.find((t) => t.chapterNumber === selectedChapter.chapterNumber)
     : null;
   
-  // Get revision tasks grouped by chapter
-  const tasksByChapter = new Map<number, typeof revisionTasks>();
-  for (const task of revisionTasks) {
+  // Get revision tasks grouped by chapter (current pass only)
+  const tasksByChapter = new Map<number, typeof passTasks>();
+  for (const task of passTasks) {
     if (!tasksByChapter.has(task.chapterNumber)) {
       tasksByChapter.set(task.chapterNumber, []);
     }
@@ -113,7 +126,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
   }
   
   // Handle Apply button click - show confirmation
-  const handleApplyClick = (task: typeof revisionTasks[0]) => {
+  const handleApplyClick = (task: typeof passTasks[0]) => {
     const chapter = chapters.find((c) => c.chapterNumber === task.chapterNumber);
     if (!chapter) return;
     
@@ -175,9 +188,10 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         throw new Error('Original chapter content is empty. Cannot generate revision.');
       }
       
-      console.log('[Revision] Calling generate API with Sonnet 4.5:', {
+      const revisionModelId = getEffectiveModelForStage('revision').id;
+      console.log('[Revision] Calling generate API:', {
         stage: 'revision',
-        model: 'claude-sonnet-4-5',
+        model: revisionModelId,
         originalContentLength: originalVersion.content.length,
         instructionsLength: selectedTask.instructions.length,
       });
@@ -195,8 +209,9 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         endingReference: endingDoc?.content || '',
         structureReference: structureDoc?.content || '',
         nicheReference: nicheDoc?.content || '',
+        editorialPass,
       }, {
-        model: 'claude-sonnet-4-5', // Explicitly use Sonnet 4.5
+        model: revisionModelId,
       });
       
       console.log('[Revision] API response received:', {
@@ -205,7 +220,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         model: result.model,
         provider: result.provider,
         tokensUsed: result.tokensUsed,
-        isSonnet45: result.model === 'claude-sonnet-4-5',
+        usedExpectedModel: result.model === revisionModelId,
       });
       
       if (!result || !result.content) {
@@ -216,9 +231,8 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         throw new Error('API returned empty content. This may indicate an error with the LLM call.');
       }
       
-      // Verify Sonnet 4.5 was used
-      if (result.model !== 'claude-sonnet-4-5') {
-        console.warn('[Revision] Warning: Expected Sonnet 4.5 but got', result.model);
+      if (result.model !== revisionModelId) {
+        console.warn('[Revision] Warning: Expected', revisionModelId, 'but got', result.model);
       }
       
       // Check if content is suspiciously similar to original (might indicate no actual revision)
@@ -341,9 +355,23 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       chapters={chapters}
       approvedChapterIds={approvedChapterIds}
       revisionTasks={revisionTasks}
+      documents={documents}
+      fourPassEditorial={!!project.fourPassEditorial}
       blurbFilled={!!project.blurb?.trim()}
       amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
+      <div className="flex flex-wrap gap-2 mb-6">
+        {EDITORIAL_PASSES.map((p) => (
+          <Button
+            key={p}
+            variant={p === editorialPass ? 'primary' : 'secondary'}
+            onClick={() => router.push(`/projects/${projectId}/stage/revision?pass=${p}`)}
+            className="text-sm"
+          >
+            {EDITORIAL_PASS_LABELS[p]} — Revisions
+          </Button>
+        ))}
+      </div>
       {/* Error */}
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
@@ -360,12 +388,15 @@ export default function RevisionPage({ params }: RevisionPageProps) {
             </CardHeader>
             <CardContent>
               <p className="text-[var(--muted-foreground)] mb-4">
-                Review and apply revisions by chapter. Click &quot;Apply&quot; to generate revisions using Sonnet 4.5.
+                Pass: <strong>{EDITORIAL_PASS_LABELS[editorialPass]}</strong>. Review and apply revisions by chapter.
               </p>
               
-              {revisionTasks.length === 0 ? (
+              {passTasks.length === 0 ? (
                 <div className="text-center py-8 text-[var(--muted-foreground)]">
-                  <p>No revision tasks found. Please create a revision queue from the editorial page.</p>
+                  <p>No revision tasks for this pass. Create a revision queue from the editorial page for {EDITORIAL_PASS_LABELS[editorialPass]}.</p>
+                  <Button className="mt-4" onClick={() => router.push(`/projects/${projectId}/stage/editorial?pass=${editorialPass}`)}>
+                    Go to editorial
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -459,26 +490,43 @@ export default function RevisionPage({ params }: RevisionPageProps) {
             </CardContent>
           </Card>
           
-          {pendingCount === 0 && (
+          {pendingCount === 0 && passTasks.length > 0 && (
             <Card className="bg-[rgba(92,124,92,0.1)] border-[var(--status-approved)]">
               <CardContent className="py-8 text-center">
                 <svg className="w-16 h-16 mx-auto text-[var(--status-approved)] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">
-                  All Revisions Complete!
+                  {EDITORIAL_PASS_LABELS[editorialPass]} revisions complete
                 </h3>
-                <p className="text-[var(--muted-foreground)] mb-4">
-                  Your manuscript has been revised. You can now export the final version.
-                </p>
-                <Link href={`/projects/${projectId}/stage/export-final`}>
-                  <Button>
-                    Go to Export Final
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Button>
-                </Link>
+                {canProceedToExportFinal(project, revisionTasks) ? (
+                  <>
+                    <p className="text-[var(--muted-foreground)] mb-4">
+                      All editorial passes are done. You can export the final manuscript.
+                    </p>
+                    <Link href={`/projects/${projectId}/stage/export-final`}>
+                      <Button>
+                        Go to Export Final
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[var(--muted-foreground)] mb-4">
+                      Continue with the next editorial pass when you are ready.
+                    </p>
+                    <Button onClick={() => {
+                      const idx = EDITORIAL_PASSES.indexOf(editorialPass);
+                      const next = EDITORIAL_PASSES[idx + 1];
+                      if (next) router.push(`/projects/${projectId}/stage/editorial?pass=${next}`);
+                    }}>
+                      Next pass: editorial review
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -542,7 +590,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-[var(--foreground)] mb-4">
-                  Generate revision for Chapter {selectedChapter?.chapterNumber}: {selectedChapter?.title} using Sonnet 4.5?
+                  Generate revision for Chapter {selectedChapter?.chapterNumber}: {selectedChapter?.title} using Sonnet 4.6 (Thinking)?
                 </p>
                 <p className="text-xs text-[var(--muted-foreground)] mb-4">
                   This will create a revised version of the chapter based on the revision instructions. You&apos;ll be able to review and approve the changes.
@@ -580,7 +628,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                   Generating Revision...
                 </h3>
                 <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
-                  Sonnet 4.5 is revising this chapter based on the revision instructions. This may take a minute.
+                  Sonnet 4.6 (Thinking) is revising this chapter based on the revision instructions. This may take a minute.
                 </p>
               </CardContent>
             </Card>

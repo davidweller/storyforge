@@ -140,6 +140,13 @@ export async function POST(request: NextRequest) {
         );
         return NextResponse.json({ ok: true });
       }
+      case 'deleteRevisionTasksForProjectAndPass': {
+        await q.deleteRevisionTasksForProjectAndPass(
+          body.projectId as string,
+          body.pass as Parameters<typeof q.deleteRevisionTasksForProjectAndPass>[1]
+        );
+        return NextResponse.json({ ok: true });
+      }
 
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

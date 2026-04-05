@@ -3,7 +3,16 @@ import { z } from 'zod';
 import { generateForStage } from '@/lib/llm';
 import { getModelById, getDefaultModelForStage, ALL_MODELS } from '@/lib/data/models';
 import { MAX_MANUSCRIPT_TOKENS, TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
-import type { WorkflowStage } from '@/types';
+import type { WorkflowStage, EditorialPass } from '@/types';
+
+const EDITORIAL_PASS_VALUES: EditorialPass[] = ['structural', 'line', 'copy', 'proofread'];
+
+function parseEditorialPass(value: unknown): EditorialPass {
+  if (typeof value === 'string' && EDITORIAL_PASS_VALUES.includes(value as EditorialPass)) {
+    return value as EditorialPass;
+  }
+  return 'structural';
+}
 import {
   GENRE_RESEARCH_SYSTEM, buildGenreResearchPrompt,
   NICHE_SYSTEM, buildNichePrompt,
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
       case 'editorial':
         systemPrompt = EDITORIAL_SYSTEM;
         
-        // Use requested model or stage default (e.g. Claude Opus 4.5)
+        // Use requested model or stage default (e.g. Claude Sonnet 4.6 Thinking)
         let selectedModel = model || getDefaultModelForStage('editorial').id;
         // modelSwitched and switchMessage are already declared at function scope
         
@@ -117,6 +126,7 @@ export async function POST(request: NextRequest) {
           prompt = buildRevisionQueuePrompt({
             editorialReport: data.editorialReport as string,
             chapterCount: data.chapterCount as number,
+            editorialPass: parseEditorialPass(data.editorialPass),
           });
         } else {
           // Validate manuscript is provided
@@ -144,10 +154,10 @@ export async function POST(request: NextRequest) {
           const estimatedPromptOverhead = 2000; // System prompt + instructions
           const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
           
-          // Get selected model context limit; use fallback (Claude Sonnet 4.5, 200k) if manuscript exceeds it
+          // Get selected model context limit; use fallback (Claude Sonnet 4.6) if manuscript exceeds it
           const selectedModelConfig = getModelById(selectedModel);
           const selectedMaxContext = selectedModelConfig?.maxContextTokens || 128000;
-          const fallbackModelId = 'claude-sonnet-4-5';
+          const fallbackModelId = 'claude-sonnet-4-6-thinking';
           const fallbackModelConfig = getModelById(fallbackModelId);
           const fallbackMaxContext = fallbackModelConfig?.maxContextTokens || 200000;
           
@@ -217,6 +227,7 @@ export async function POST(request: NextRequest) {
             charactersReference: data.charactersReference as string | undefined,
             endingReference: data.endingReference as string | undefined,
             structureReference: data.structureReference as string | undefined,
+            editorialPass: parseEditorialPass(data.editorialPass),
           });
           
           console.log('[API] Editorial prompt built:', {
@@ -257,6 +268,7 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string || '',
           structureReference: data.structureReference as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+          editorialPass: parseEditorialPass(data.editorialPass),
         });
         break;
 

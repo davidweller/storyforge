@@ -17,6 +17,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
     project,
     documents,
     chapters,
+    revisionTasks,
     loading,
     error,
     getTotalWordCount,
@@ -122,6 +123,9 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
         currentStage={project.currentStage}
         chapters={chapters}
         approvedChapterIds={approvedChapterIds}
+        revisionTasks={revisionTasks}
+        documents={documents}
+        fourPassEditorial={!!project.fourPassEditorial}
         blurbFilled={!!project.blurb?.trim()}
         amazonDescriptionFilled={!!project.amazonDescription?.trim()}
       />

@@ -1,3 +1,5 @@
+import type { EditorialPass } from '@/types';
+
 export const EDITORIAL_SYSTEM = `You are a senior developmental editor with decades of experience in commercial fiction. You provide thorough, constructive feedback that helps authors strengthen their manuscripts.
 
 Your feedback is:
@@ -9,6 +11,17 @@ Your feedback is:
 
 You identify issues at both macro (story) and micro (scene/prose) levels.`;
 
+const PASS_FOCUS: Record<EditorialPass, string> = {
+  structural:
+    '**Pass: Structural / developmental edit.** Focus on story architecture: plot logic, character arcs and motivation, scene purpose, pacing at act/chapter level, continuity, and whether the manuscript delivers on its premise. Defer sentence-level polish to later passes.',
+  line:
+    '**Pass: Line edit.** Focus on clarity, readability, rhythm, dialogue mechanics, paragraph flow, and scene-level tightening. Do NOT restructure plot or change story beats unless a clarity-breaking problem requires a minimal fix.',
+  copy:
+    '**Pass: Copy edit.** Focus on grammar, syntax, punctuation, internal consistency (names, ages, timelines, capitalization), word choice, repetition, and style consistency. Do not rewrite for voice unless fixing an error.',
+  proofread:
+    '**Pass: Proofread.** Focus on residual typos, misspellings, wrong words, punctuation errors, formatting glitches, and obvious mistakes only. Assume story and sentences are locked; flag substantive issues only if they are clear errors.',
+};
+
 export function buildEditorialPrompt(params: {
   manuscript: string;
   genre: string;
@@ -16,6 +29,7 @@ export function buildEditorialPrompt(params: {
   charactersReference?: string;
   endingReference?: string;
   structureReference?: string;
+  editorialPass?: EditorialPass;
 }): string {
   const {
     manuscript,
@@ -24,6 +38,7 @@ export function buildEditorialPrompt(params: {
     charactersReference,
     endingReference,
     structureReference,
+    editorialPass = 'structural',
   } = params;
   
   // Validate manuscript is provided
@@ -34,13 +49,16 @@ export function buildEditorialPrompt(params: {
   console.log('[Editorial Prompt] Building prompt:', {
     manuscriptLength: manuscript.length,
     genre,
+    editorialPass,
     hasNiche: !!nicheReference,
     hasCharacters: !!charactersReference,
     hasEnding: !!endingReference,
     hasStructure: !!structureReference,
   });
   
-  let prompt = `Provide a comprehensive editorial review of this ${genre} manuscript.
+  let prompt = `Provide an editorial review of this ${genre} manuscript.
+
+${PASS_FOCUS[editorialPass]}
 
 ## CRITICAL: You MUST Reference the Actual Manuscript
 
@@ -55,7 +73,7 @@ export function buildEditorialPrompt(params: {
 
 ## Manuscript Content
 
-The complete manuscript text is provided below. Review it thoroughly for continuity, character consistency, pacing, prose quality, and plot logic.
+The complete manuscript text is provided below.
 
 ${manuscript}
 
@@ -92,8 +110,22 @@ ${structureReference}
 `;
   }
 
-  prompt += `
-## Editorial Review Requirements
+  if (editorialPass === 'structural') {
+    prompt += structuralRequirementsBlock();
+  } else if (editorialPass === 'line') {
+    prompt += lineRequirementsBlock();
+  } else if (editorialPass === 'copy') {
+    prompt += copyRequirementsBlock();
+  } else {
+    prompt += proofreadRequirementsBlock();
+  }
+
+  return prompt;
+}
+
+function structuralRequirementsBlock(): string {
+  return `
+## Editorial Review Requirements (Structural)
 
 Provide your feedback in the following structured format:
 
@@ -128,56 +160,119 @@ Identify sections with pacing problems. **MUST reference specific chapters and s
 - **Scene/passage reference:** [specific location]
 - **Recommended fix:** [action]
 
-### 5. Prose & Style Issues
-Note recurring prose-level issues. **MUST provide actual examples from the manuscript.** For each issue list:
-- **Issue type:** telling_not_showing | weak_verbs | repetitive_phrases | dialogue_tags | filter_words
-- **Frequency:** [how often it appears]
-- **Examples from manuscript:** [quotes]
-- **Recommendation:** [action]
+### 5. Prose & Style Issues (macro patterns only)
+Note recurring patterns worth a later line pass; **MUST provide examples from the manuscript.**
 
 ### 6. Logic & Plot Issues
-Identify plot holes or logical inconsistencies. **MUST reference specific plot points from the manuscript.** For each issue list:
-- **Chapter:** [number]
-- **Issue:** [description]
-- **Plot point reference:** [specific reference]
-- **Recommended fix:** [action]
+Identify plot holes or logical inconsistencies. **MUST reference specific plot points from the manuscript.**
 
 ### 7. Chapter-by-Chapter Notes
-For each chapter, provide detailed analysis based on the actual manuscript content:
-- Chapter #: [Title]
-- Strengths: [Cite specific scenes, lines, or passages that work well]
-- Issues to Address: [Reference specific problems with examples from the chapter]
-- Specific Line Notes (if any): [Quote or reference exact problematic passages]
+For each chapter: strengths, structural issues, preserve-list.
 
 ### 8. Revision Priority List
-Rank the top 10 issues by importance:
-1. [Issue] - [Chapter(s)] - [Why it's critical]
-...
+Rank the top 10 issues by importance.
 
 ### 9. Positive Highlights
-List 5-10 specific things that work well and should be preserved. **MUST reference actual passages, scenes, or lines from the manuscript**.
+List 5-10 specific strengths with manuscript references.
 
 ## Validation Checklist
+- [ ] Every issue references specific manuscript content
+- [ ] Recommendations stay within structural / developmental scope
 
-Before submitting your review, verify:
-- [ ] Every issue references specific content from the manuscript
-- [ ] Chapter numbers and approximate locations are provided for all issues
-- [ ] Examples are actual quotes or references from the manuscript text
-- [ ] No generic advice without manuscript context
-- [ ] All recommendations are actionable and specific to this manuscript
+Be thorough but constructive.`;
+}
 
-Be thorough but constructive. The goal is to help the author improve, not discourage them.`;
+function lineRequirementsBlock(): string {
+  return `
+## Line Edit Review Requirements
 
-  return prompt;
+### 1. Executive Summary
+Brief overview of line-level strengths and priorities (1-2 paragraphs).
+
+### 2. Clarity & Flow
+Per issue: **Chapter**, **Location**, **Issue**, **Example from manuscript**, **Suggested revision** (direction, not full rewrite unless short).
+
+### 3. Dialogue & Voice
+Tag mechanics, clarity, subtext, rhythm—**with quotes.**
+
+### 4. Paragraph & Beat Rhythm
+Scenes that drag, choppy passages, white-space issues—cite locations.
+
+### 5. Chapter-by-Chapter Line Notes
+For each chapter: top line-level fixes and **preserve** voice notes.
+
+### 6. Priority List
+Top 10 line issues by impact.
+
+### 7. Highlights
+Passages that already read strongly.
+
+Stay within line-edit scope; do not propose new plot events or characters.`;
+}
+
+function copyRequirementsBlock(): string {
+  return `
+## Copy Edit Review Requirements
+
+### 1. Executive Summary
+Patterns of copy issues (1-2 paragraphs).
+
+### 2. Grammar, Syntax, Punctuation
+Per issue: **Chapter**, **Location**, **Rule/example**, **Manuscript quote**, **Fix**.
+
+### 3. Consistency
+Names, spelling of terms, numbers, timelines, capitalization, series style—table or list with chapter refs.
+
+### 4. Word Choice & Repetition
+Unintended repetition, weak words, clichés—**with quotes.**
+
+### 5. Chapter-by-Chapter Copy Notes
+Brief checklist per chapter.
+
+### 6. Priority List
+Top copy issues.
+
+### 7. Highlights
+Clean, effective sentences to keep.
+
+Do not rewrite for style preference alone; flag copy-standard problems.`;
+}
+
+function proofreadRequirementsBlock(): string {
+  return `
+## Proofread Review Requirements
+
+### 1. Executive Summary
+Residual error density and any systemic typo pattern (short).
+
+### 2. Typos & Wrong Words
+Per item: **Chapter**, **Location**, **Error**, **Correction** (quote the manuscript).
+
+### 3. Punctuation & Formatting
+Straight/curly quotes, em dashes, scene break markers, spacing—only clear mistakes.
+
+### 4. Chapter-by-Chapter Proofing Notes
+Quick pass results per chapter.
+
+### 5. Final Checklist
+Confirm no new story suggestions; errors only.
+
+If unsure, prefer flagging over rewriting.`;
 }
 
 export function buildRevisionQueuePrompt(params: {
   editorialReport: string;
   chapterCount: number;
+  editorialPass?: EditorialPass;
 }): string {
-  const { editorialReport, chapterCount } = params;
-  
-  return `Convert the following editorial report into a structured revision queue:
+  const { editorialReport, chapterCount, editorialPass = 'structural' } = params;
+  const scope = PASS_FOCUS[editorialPass];
+
+  return `Convert the following editorial report into a structured revision queue.
+
+${scope}
+
+Only include revision tasks and issues that belong to this pass. Omit issues outside this pass's scope (e.g. for proofread, only typos/punctuation/formatting—no plot notes).
 
 ## Editorial Report
 ${editorialReport}

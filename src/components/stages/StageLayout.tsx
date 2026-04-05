@@ -1,10 +1,10 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, Suspense } from 'react';
 import { WorkflowSidebar } from '@/components/layout';
 import { ModelSelector } from './ModelSelector';
 import { STAGE_NAMES, STAGE_DESCRIPTIONS } from '@/lib/utils';
-import type { WorkflowStage, Chapter, RevisionTask } from '@/types';
+import type { WorkflowStage, Chapter, RevisionTask, ProjectDocument } from '@/types';
 
 interface StageLayoutProps {
   projectId: string;
@@ -16,6 +16,8 @@ interface StageLayoutProps {
   chapters?: Chapter[];
   approvedChapterIds?: Set<string>;
   revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
+  documents?: ProjectDocument[];
+  fourPassEditorial?: boolean;
   finalExportedAt?: Date;  // Optional - timestamp when final export was completed
   blurbFilled?: boolean;
   amazonDescriptionFilled?: boolean;
@@ -32,6 +34,8 @@ export function StageLayout({
   chapters = [],
   approvedChapterIds = new Set(),
   revisionTasks = [],
+  documents = [],
+  fourPassEditorial = false,
   finalExportedAt,
   blurbFilled = false,
   amazonDescriptionFilled = false,
@@ -39,23 +43,31 @@ export function StageLayout({
 }: StageLayoutProps) {
   // Don't show model selector for setup stage (no generation)
   const showModelSelector = activeStage !== 'setup';
+
+  const sidebar = (
+    <WorkflowSidebar
+      projectId={projectId}
+      projectTitle={projectTitle}
+      genre={genre}
+      niche={niche}
+      currentStage={currentStage}
+      chapters={chapters}
+      approvedChapterIds={approvedChapterIds}
+      revisionTasks={revisionTasks}
+      documents={documents}
+      fourPassEditorial={fourPassEditorial}
+      finalExportedAt={finalExportedAt}
+      blurbFilled={blurbFilled}
+      amazonDescriptionFilled={amazonDescriptionFilled}
+    />
+  );
   
   return (
     <div className="flex h-[calc(100vh-var(--header-height))]">
-      {/* Sidebar */}
-      <WorkflowSidebar
-        projectId={projectId}
-        projectTitle={projectTitle}
-        genre={genre}
-        niche={niche}
-        currentStage={currentStage}
-        chapters={chapters}
-        approvedChapterIds={approvedChapterIds}
-        revisionTasks={revisionTasks}
-        finalExportedAt={finalExportedAt}
-        blurbFilled={blurbFilled}
-        amazonDescriptionFilled={amazonDescriptionFilled}
-      />
+      {/* Sidebar — Suspense for useSearchParams in nested pass links */}
+      <Suspense fallback={<aside className="w-[var(--sidebar-width)] h-full shrink-0 bg-card border-r border-border" aria-hidden />}>
+        {sidebar}
+      </Suspense>
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
