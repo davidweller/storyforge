@@ -123,7 +123,7 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Used for GPT-4o and other OpenAI models. Get yours at{' '}
+              Used for GPT-5.2+ and other OpenAI models. Get yours at{' '}
               <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="underline hover:text-foreground">
                 platform.openai.com
               </a>

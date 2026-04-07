@@ -81,6 +81,7 @@ interface EmptyContentProps {
   actionLabel: string;
   onAction: () => void;
   isLoading?: boolean;
+  disabled?: boolean;
 }
 
 export function EmptyContent({
@@ -89,6 +90,7 @@ export function EmptyContent({
   actionLabel,
   onAction,
   isLoading = false,
+  disabled = false,
 }: EmptyContentProps) {
   return (
     <div className="bg-card border border-border rounded-xl p-12 text-center">
@@ -101,7 +103,7 @@ export function EmptyContent({
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">{description}</p>
       <button
         onClick={onAction}
-        disabled={isLoading}
+        disabled={isLoading || disabled}
         className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium bg-primary text-primary-foreground border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
       >
         {isLoading ? (

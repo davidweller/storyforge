@@ -178,3 +178,10 @@ export async function updateRevisionTask(
 ): Promise<void> {
   await dbCall<{ ok: true }>('updateRevisionTask', { taskId, data });
 }
+
+export async function deleteRevisionTasksForProjectAndPass(
+  projectId: string,
+  pass: import('@/types').EditorialPass
+): Promise<void> {
+  await dbCall<{ ok: true }>('deleteRevisionTasksForProjectAndPass', { projectId, pass });
+}

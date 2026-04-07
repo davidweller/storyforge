@@ -5,7 +5,11 @@ import type { NextRequest } from 'next/server';
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 30; // 30 requests per minute for API routes
+// Default cap for production; dev bypasses below. Override with API_RATE_LIMIT_MAX (integer).
+const MAX_REQUESTS_PER_WINDOW = Math.max(
+  1,
+  parseInt(process.env.API_RATE_LIMIT_MAX ?? '', 10) || 120
+);
 
 function getRateLimitKey(request: NextRequest): string {
   // Use IP address or forwarded header
@@ -34,8 +38,12 @@ function checkRateLimit(key: string): { allowed: boolean; remaining: number } {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Apply rate limiting to API routes
+  // Apply rate limiting to API routes (skip in dev — HMR, Strict Mode, and polling burn 30/min fast)
   if (pathname.startsWith('/api/')) {
+    if (process.env.NODE_ENV === 'development') {
+      return NextResponse.next();
+    }
+
     const key = getRateLimitKey(request);
     const { allowed, remaining } = checkRateLimit(key);
     

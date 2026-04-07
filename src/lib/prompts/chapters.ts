@@ -10,6 +10,7 @@ export const CHAPTERS_SYSTEM = `You are a skilled fiction writer with a gift for
 Write prose that transports readers and makes them feel deeply.`;
 
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import type { EditorialPass } from '@/types';
 
 export const CHAPTER_OUTLINES_SYSTEM = `You are a story architect who specializes in converting plot blueprints into detailed chapter outlines. You understand how to break down Save the Cat beats into specific, actionable chapter plans that guide the writing process.
 
@@ -238,6 +239,17 @@ Write the complete chapter now. Focus on immersive, engaging prose that serves b
   return prompt;
 }
 
+const REVISION_PASS_NOTE: Record<EditorialPass, string> = {
+  structural:
+    '**Editing mode: structural.** You may adjust scenes, beats, and clarity for story-level fixes. Preserve canon and voice where instructions do not require change.',
+  line:
+    '**Editing mode: line edit.** Improve clarity, flow, and dialogue at sentence and paragraph level. Do not change plot, character arcs, or story outcomes unless an instruction explicitly requires it.',
+  copy:
+    '**Editing mode: copy edit.** Apply grammar, consistency, and word-level fixes. Preserve authorial voice; avoid unnecessary rephrasing.',
+  proofread:
+    '**Editing mode: proofread.** Apply only corrections for typos, punctuation, and clear errors. Minimal change elsewhere.',
+};
+
 export function buildChapterRevisionPrompt(params: {
   originalChapter: string;
   revisionInstructions: string;
@@ -246,6 +258,7 @@ export function buildChapterRevisionPrompt(params: {
   endingReference: string;
   structureReference?: string;
   nicheReference?: string;
+  editorialPass?: EditorialPass;
 }): string {
   const {
     originalChapter,
@@ -255,9 +268,14 @@ export function buildChapterRevisionPrompt(params: {
     endingReference,
     structureReference,
     nicheReference,
+    editorialPass = 'structural',
   } = params;
+
+  const passNote = REVISION_PASS_NOTE[editorialPass];
   
   return `Revise the following chapter according to the revision instructions provided below.
+
+${passNote}
 
 ## Original Chapter
 

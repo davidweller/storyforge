@@ -12,83 +12,87 @@ export interface LLMModel {
   maxTokens: number; // Max OUTPUT tokens
   maxContextTokens?: number; // Max INPUT context window
   isDefault?: boolean;
+  /** Anthropic API model ID when it differs from `id` (e.g. thinking preset). */
+  apiModelId?: string;
+  /** Anthropic extended thinking budget (must be less than max_tokens on the API request). */
+  thinkingBudgetTokens?: number;
 }
 
-// OpenAI Models
+// OpenAI Models (GPT-5.2+ only)
 export const OPENAI_MODELS: LLMModel[] = [
   {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2 Thinking',
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
     provider: 'openai',
-    description: 'Advanced reasoning model with deep thinking capabilities',
-    maxTokens: 16384, // Output limit
-    maxContextTokens: 128000, // Input context window (128k tokens)
+    description: 'Flagship reasoning and coding model',
+    maxTokens: 16384,
+    maxContextTokens: 1_000_000,
     isDefault: true,
   },
   {
-    id: 'gpt-4.1',
-    name: 'GPT-4.1',
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
     provider: 'openai',
-    description: 'Powerful general-purpose model',
+    description: 'Lower latency and cost; strong for most workflows',
     maxTokens: 16384,
+    maxContextTokens: 400_000,
   },
   {
-    id: 'gpt-4.1-mini',
-    name: 'GPT-4.1 Mini',
+    id: 'gpt-5.4-nano',
+    name: 'GPT-5.4 Nano',
     provider: 'openai',
-    description: 'Faster and more cost-effective',
+    description: 'Fastest GPT-5.4 family option for lighter tasks',
     maxTokens: 16384,
+    maxContextTokens: 400_000,
   },
   {
-    id: 'gpt-4.1-nano',
-    name: 'GPT-4.1 Nano',
+    id: 'gpt-5.2',
+    name: 'GPT-5.2',
     provider: 'openai',
-    description: 'Fastest responses, best for simple tasks',
-    maxTokens: 8192,
+    description: 'Reasoning-focused model (GPT-5.2 generation)',
+    maxTokens: 16384,
+    maxContextTokens: 128_000,
   },
 ];
 
-// Anthropic Models
-// Using actual model IDs from Anthropic API
+// Anthropic Models (Claude Sonnet / Opus 4.6 only; thinking presets = extended thinking)
 export const ANTHROPIC_MODELS: LLMModel[] = [
   {
-    id: 'claude-opus-4-5-20251101',
-    name: 'Claude Opus 4.5',
+    id: 'claude-sonnet-4-6-thinking',
+    name: 'Claude Sonnet 4.6 (Thinking)',
     provider: 'anthropic',
-    description: 'Flagship Claude model, best for long-form writing and analysis',
-    maxTokens: 16384, // Output limit
-    maxContextTokens: 200000, // Input context window (200k tokens)
+    description: 'Default: Sonnet 4.6 with extended thinking for reasoning-heavy generation',
+    apiModelId: 'claude-sonnet-4-6',
+    thinkingBudgetTokens: 10_000,
+    maxTokens: 32_768,
+    maxContextTokens: 1_000_000,
     isDefault: true,
   },
   {
-    id: 'claude-sonnet-4-5',
-    name: 'Claude Sonnet 4.5',
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
     provider: 'anthropic',
-    description: 'Latest Claude model, excellent for creative writing',
-    maxTokens: 16384, // Output limit
-    maxContextTokens: 200000, // Input context window (200k tokens)
+    description: 'Most capable Claude tier for complex writing and analysis',
+    maxTokens: 128_000,
+    maxContextTokens: 1_000_000,
   },
   {
-    id: 'claude-3-5-sonnet-20241022',
-    name: 'Claude 3.5 Sonnet',
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6 (Thinking)',
     provider: 'anthropic',
-    description: 'Previous generation Claude model',
-    maxTokens: 16384,
-    maxContextTokens: 200000, // 200k context window
+    description: 'Same model with extended thinking enabled for harder reasoning',
+    apiModelId: 'claude-opus-4-6',
+    thinkingBudgetTokens: 10_000,
+    maxTokens: 32_768,
+    maxContextTokens: 1_000_000,
   },
   {
-    id: 'claude-3-5-haiku-20241022',
-    name: 'Claude 3.5 Haiku',
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
     provider: 'anthropic',
-    description: 'Fastest Claude model, great for quick tasks',
-    maxTokens: 8192,
-  },
-  {
-    id: 'claude-3-opus-20240229',
-    name: 'Claude 3 Opus',
-    provider: 'anthropic',
-    description: 'Most capable Claude 3 model',
-    maxTokens: 16384,
+    description: 'High quality and speed for long-form creative writing',
+    maxTokens: 64_000,
+    maxContextTokens: 1_000_000,
   },
 ];
 
@@ -114,27 +118,27 @@ export function getModelsByProvider(provider: LLMProvider): LLMModel[] {
 // Default LLM provider per workflow stage.
 // TypeScript will error if a WorkflowStage value is missing from this map.
 export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
-  'setup': 'openai',
-  'genre-research': 'openai',
-  'niche': 'openai',
+  'setup': 'anthropic',
+  'genre-research': 'anthropic',
+  'niche': 'anthropic',
   'ending': 'anthropic',
-  'characters': 'openai',
-  'structure': 'openai',
-  'title': 'openai',
-  'chapter-outlines': 'openai',
+  'characters': 'anthropic',
+  'structure': 'anthropic',
+  'title': 'anthropic',
+  'chapter-outlines': 'anthropic',
   'chapters': 'anthropic',
-  'compilation': 'openai',
-  'export-draft': 'openai',
+  'compilation': 'anthropic',
+  'export-draft': 'anthropic',
   'editorial': 'anthropic',
   'revision': 'anthropic',
-  'export-final': 'openai',
-  'blurb': 'openai',
-  'amazon-description': 'openai',
+  'export-final': 'anthropic',
+  'blurb': 'anthropic',
+  'amazon-description': 'anthropic',
 };
 
 // Get default model for a stage
 export function getDefaultModelForStage(stage: WorkflowStage): LLMModel {
-  const provider = STAGE_DEFAULT_PROVIDERS[stage] ?? 'openai';
+  const provider = STAGE_DEFAULT_PROVIDERS[stage] ?? 'anthropic';
   return getDefaultModel(provider);
 }
 

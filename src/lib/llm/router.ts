@@ -49,12 +49,12 @@ const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
 
 /**
  * Determine the provider for a given model ID.
- * Falls back to 'openai' for unrecognised model IDs.
+ * Falls back to 'anthropic' for unrecognised model IDs.
  */
 function getProviderForModel(modelId: string): LLMProvider {
   if (OPENAI_MODELS.some((m) => m.id === modelId)) return 'openai';
   if (ANTHROPIC_MODELS.some((m) => m.id === modelId)) return 'anthropic';
-  return 'openai';
+  return 'anthropic';
 }
 
 interface ResolvedModel {

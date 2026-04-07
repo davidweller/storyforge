@@ -28,7 +28,14 @@ export type DocumentType =
   | 'characters'
   | 'structure'
   | 'chapter-outlines'
-  | 'editorial';
+  | 'editorial' // legacy single editorial report (treated as structural pass)
+  | 'editorial-structural'
+  | 'editorial-line'
+  | 'editorial-copy'
+  | 'editorial-proofread';
+
+/** Ordered editorial pipeline passes (structural → line → copy → proofread). */
+export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread';
 
 export type EditorialCategory = 
   | 'continuity'
@@ -52,6 +59,8 @@ export interface Project {
   status: 'active' | 'completed' | 'archived';
   currentStage: WorkflowStage;
   fullAutoMode?: boolean;  // When true, pipeline runs without intervention; cleared on completion
+  /** When true, revision/export-final unlock only after proofread pass tasks complete. */
+  fourPassEditorial?: boolean;
   finalExportedAt?: Date;  // Timestamp when final export was completed
   blurb?: string;          // Back-cover / marketing blurb
   amazonDescription?: string;  // Amazon product description
@@ -112,6 +121,8 @@ export interface RevisionTask {
   id: string;
   projectId: string;
   chapterNumber: number;
+  /** Which editorial pass this task belongs to. */
+  editPass: EditorialPass;
   issueIds: string[];
   instructions: string;
   acceptanceCriteria: string[];
