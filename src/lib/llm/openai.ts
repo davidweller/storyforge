@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { OPENAI_MODELS } from '@/lib/data/models';
+import { OPENAI_MODELS, getModelById } from '@/lib/data/models';
 
 let openaiClient: OpenAI | null = null;
 
@@ -36,7 +36,7 @@ export async function generateWithOpenAI(
   options: OpenAIGenerateOptions = {}
 ): Promise<{ content: string; tokensUsed: number }> {
   const {
-    model = 'gpt-4-turbo-preview',
+    model = 'gpt-5.4',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
@@ -58,8 +58,7 @@ export async function generateWithOpenAI(
   // Reasoning models (o3-mini, o1, etc.) use different parameters
   const isReasoning = isReasoningModel(model);
   
-  // Get model display name for logging
-  const modelDisplayName = model === 'gpt-5.2' ? 'GPT-5.2 Thinking' : model;
+  const modelDisplayName = getModelById(model)?.name ?? model;
   
   console.log('[OpenAI] Calling API:', {
     model: modelDisplayName,
@@ -118,7 +117,7 @@ export async function* streamWithOpenAI(
   options: OpenAIGenerateOptions = {}
 ): AsyncGenerator<string, { tokensUsed: number }, unknown> {
   const {
-    model = 'gpt-4-turbo-preview',
+    model = 'gpt-5.4',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,

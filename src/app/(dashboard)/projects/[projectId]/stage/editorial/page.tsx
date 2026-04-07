@@ -18,6 +18,7 @@ import {
   parseEditorialPass,
 } from '@/lib/editorial/passes';
 import type { WorkflowStage, EditorialPass } from '@/types';
+import { MAX_MANUSCRIPT_TOKENS } from '@/lib/constants';
 
 interface EditorialPageProps {
   params: Promise<{ projectId: string }>;
@@ -215,7 +216,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       const estimatedPromptOverhead = 2000; // System prompt + instructions
       const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
       
-      // Model context limits (client-side hints; API enforces app cap via MAX_MANUSCRIPT_TOKENS)
+      // Model context limits (client-side hints; API enforces min(model, MAX_MANUSCRIPT_TOKENS))
       const gpt52ContextTokens = 128000; // GPT-5.2
       const openaiLargeContextTokens = 1_000_000; // GPT-5.4 etc.
       const claude46ContextTokens = 1_000_000; // Claude Sonnet 4.6 (fallback)
@@ -233,6 +234,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         claude46ContextTokens,
         willExceedGPT52: estimatedTotalTokens > gpt52ContextTokens,
         willExceedClaude46: estimatedTotalTokens > claude46ContextTokens,
+        willExceedEditorialCap: estimatedTotalTokens > MAX_MANUSCRIPT_TOKENS,
         first100Chars: manuscript.substring(0, 100),
         last100Chars: manuscript.substring(Math.max(0, manuscript.length - 100)),
       });
@@ -242,13 +244,15 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         throw new Error('Manuscript does not contain any chapters. Please ensure chapters are properly formatted.');
       }
       
-      if (estimatedTotalTokens > claude46ContextTokens) {
+      if (estimatedTotalTokens > MAX_MANUSCRIPT_TOKENS) {
         const manuscriptWordCount = Math.ceil(manuscript.length / 5);
-        const maxWords = Math.floor((claude46ContextTokens - estimatedReferenceTokens - estimatedPromptOverhead) * 0.8);
+        const maxWords = Math.floor(
+          (MAX_MANUSCRIPT_TOKENS - estimatedReferenceTokens - estimatedPromptOverhead) * (4 / 5)
+        );
         throw new Error(
           `Manuscript is too long for editorial review.\n\n` +
           `• Your manuscript: ~${manuscriptWordCount.toLocaleString()} words (${estimatedTotalTokens.toLocaleString()} tokens)\n` +
-          `• Maximum supported: ~${maxWords.toLocaleString()} words (${claude46ContextTokens.toLocaleString()} tokens)\n\n` +
+          `• Maximum supported: ~${maxWords.toLocaleString()} words (${MAX_MANUSCRIPT_TOKENS.toLocaleString()} tokens)\n\n` +
           `Your manuscript exceeds the supported context window. Please consider reviewing in batches or focusing on specific sections.`
         );
       }
@@ -269,11 +273,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         });
       }
       
-      if (estimatedTotalTokens > gpt52ContextTokens && estimatedTotalTokens > claude46ContextTokens * 0.8) {
-        console.warn('[Editorial] Manuscript approaching Claude Sonnet 4.6 context limit:', {
+      if (estimatedTotalTokens > gpt52ContextTokens && estimatedTotalTokens > MAX_MANUSCRIPT_TOKENS * 0.8) {
+        console.warn('[Editorial] Manuscript approaching editorial input cap:', {
           estimatedTotalTokens,
-          claude46ContextTokens,
-          percentage: ((estimatedTotalTokens / claude46ContextTokens) * 100).toFixed(1) + '%',
+          maxManuscriptTokens: MAX_MANUSCRIPT_TOKENS,
+          percentage: ((estimatedTotalTokens / MAX_MANUSCRIPT_TOKENS) * 100).toFixed(1) + '%',
         });
       }
       

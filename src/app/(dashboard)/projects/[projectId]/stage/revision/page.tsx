@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useMemo } from 'react';
+import { use, useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
@@ -10,7 +10,7 @@ import { StageLayout } from '@/components/stages';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import * as Diff from 'diff';
-import type { ChapterVersion, EditorialPass } from '@/types';
+import type { ChapterVersion, EditorialPass, RevisionTask } from '@/types';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import {
   EDITORIAL_PASSES,
@@ -55,6 +55,13 @@ export default function RevisionPage({ params }: RevisionPageProps) {
   const [revisedContent, setRevisedContent] = useState('');
   const [showDiff, setShowDiff] = useState(true);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showApplyAllConfirm, setShowApplyAllConfirm] = useState(false);
+  const [applyAllRunning, setApplyAllRunning] = useState(false);
+  const [applyAllProgress, setApplyAllProgress] = useState<{
+    current: number;
+    total: number;
+    chapterNumber: number;
+  } | null>(null);
   
   // Load revision tasks
   useEffect(() => {
@@ -85,6 +92,125 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       loadChapterVersions(selectedChapterId);
     }
   }, [selectedChapterId, loadChapterVersions]);
+
+  const runRevisionPipelineForTask = useCallback(
+    async (task: RevisionTask) => {
+      if (!project) throw new Error('Project not loaded');
+
+      const chapter = chapters.find((c) => c.chapterNumber === task.chapterNumber);
+      if (!chapter) {
+        throw new Error(`Chapter ${task.chapterNumber} not found.`);
+      }
+
+      await loadChapterVersions(chapter.id);
+      const versions = useProjectStore.getState().chapterVersions.get(chapter.id) || [];
+      const originalVersion = versions.find((v) => v.approved);
+      if (!originalVersion?.content?.trim()) {
+        await updateRevisionTask(task.id, { status: 'done' });
+        return;
+      }
+
+      await updateRevisionTask(task.id, { status: 'in_progress' });
+
+      const charactersDoc = getDocumentByType('characters');
+      const endingDoc = getDocumentByType('ending');
+      const structureDoc = getDocumentByType('structure');
+      const nicheDoc = getDocumentByType('niche');
+
+      const revisionModelId = getEffectiveModelForStage('revision').id;
+      const result = await generate(
+        'revision',
+        {
+          genre: project.genre,
+          chapterNumber: chapter.chapterNumber,
+          chapterTitle: chapter.title,
+          originalContent: originalVersion.content,
+          revisionInstructions:
+            task.instructions || 'Review the chapter for overall quality and consistency.',
+          acceptanceCriteria:
+            task.acceptanceCriteria.length > 0
+              ? task.acceptanceCriteria
+              : ['The chapter should maintain consistency with established canon and character voices.'],
+          charactersReference: charactersDoc?.content || '',
+          endingReference: endingDoc?.content || '',
+          structureReference: structureDoc?.content || '',
+          nicheReference: nicheDoc?.content || '',
+          editorialPass,
+        },
+        { model: revisionModelId }
+      );
+
+      if (!result?.content?.trim()) {
+        throw new Error(`Empty revision returned for chapter ${chapter.chapterNumber}.`);
+      }
+
+      await loadChapterVersions(chapter.id);
+      const refreshed = useProjectStore.getState().chapterVersions.get(chapter.id) || [];
+      const latestSorted = [...refreshed].sort((a, b) => b.version - a.version);
+      const latestVersion = latestSorted[0];
+      const newVersion = (latestVersion?.version ?? 0) + 1;
+
+      const versionData: Omit<ChapterVersion, 'id' | 'createdAt'> = {
+        chapterId: chapter.id,
+        projectId,
+        chapterNumber: chapter.chapterNumber,
+        version: newVersion,
+        content: result.content,
+        wordCount: result.content.split(/\s+/).filter(Boolean).length,
+        approved: true,
+      };
+      if (latestVersion?.id) {
+        versionData.parentVersionId = latestVersion.id;
+      }
+
+      await createChapterVersion(versionData);
+      await updateRevisionTask(task.id, { status: 'done' });
+    },
+    [
+      chapters,
+      project,
+      projectId,
+      editorialPass,
+      getDocumentByType,
+      loadChapterVersions,
+      generate,
+      createChapterVersion,
+      updateRevisionTask,
+    ]
+  );
+
+  const handleConfirmApplyAll = useCallback(async () => {
+    const queued = passTasks
+      .filter((t) => t.status === 'queued')
+      .sort((a, b) => a.chapterNumber - b.chapterNumber);
+    if (queued.length === 0) {
+      setShowApplyAllConfirm(false);
+      return;
+    }
+    setShowApplyAllConfirm(false);
+    setApplyAllRunning(true);
+    clearError();
+    try {
+      for (let i = 0; i < queued.length; i++) {
+        const task = queued[i];
+        setApplyAllProgress({
+          current: i + 1,
+          total: queued.length,
+          chapterNumber: task.chapterNumber,
+        });
+        try {
+          await runRevisionPipelineForTask(task);
+        } catch (err) {
+          await updateRevisionTask(task.id, { status: 'queued' }).catch(() => {});
+          throw err;
+        }
+      }
+    } finally {
+      setApplyAllRunning(false);
+      setApplyAllProgress(null);
+      await loadRevisionTasks(projectId);
+    }
+  }, [passTasks, runRevisionPipelineForTask, clearError, loadRevisionTasks, projectId, updateRevisionTask]);
   
   if (projectLoading || !project) {
     return (
@@ -98,6 +224,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
   }
   
   const pendingCount = passTasks.filter((t) => t.status !== 'done').length;
+  const queuedCount = passTasks.filter((t) => t.status === 'queued').length;
   
   // Get approved chapter IDs
   const approvedChapterIds = new Set<string>();
@@ -379,17 +506,61 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         </div>
       )}
       
+      {/* Apply-all confirmation */}
+      {showApplyAllConfirm && !selectedChapterId && (
+        <Card className="mb-6 border-[var(--accent)]">
+          <CardHeader>
+            <CardTitle>Apply all revisions?</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-[var(--foreground)] mb-4">
+              This will generate revised text for <strong>{queuedCount}</strong> queued chapter
+              {queuedCount === 1 ? '' : 's'}, then save and approve each new version automatically. Per-chapter
+              review will be skipped.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleConfirmApplyAll} loading={applyAllRunning} disabled={applyAllRunning}>
+                Apply all {queuedCount} chapter{queuedCount === 1 ? '' : 's'}
+              </Button>
+              <Button variant="secondary" onClick={() => setShowApplyAllConfirm(false)} disabled={applyAllRunning}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Revision queue */}
       {!selectedChapterId && (
         <>
           <Card className="mb-6">
-            <CardHeader>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
               <CardTitle>Revision Queue</CardTitle>
+              {passTasks.length > 0 && queuedCount > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={applyAllRunning || isGenerating}
+                  onClick={() => setShowApplyAllConfirm(true)}
+                >
+                  Apply all
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <p className="text-[var(--muted-foreground)] mb-4">
                 Pass: <strong>{EDITORIAL_PASS_LABELS[editorialPass]}</strong>. Review and apply revisions by chapter.
               </p>
+
+              {applyAllRunning && applyAllProgress && (
+                <div className="mb-4 p-4 rounded-lg border border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]">
+                  <p className="text-sm font-medium text-foreground">
+                    Applying revisions… Chapter {applyAllProgress.chapterNumber} ({applyAllProgress.current} of{' '}
+                    {applyAllProgress.total})
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Do not close this page until finished.</p>
+                </div>
+              )}
               
               {passTasks.length === 0 ? (
                 <div className="text-center py-8 text-[var(--muted-foreground)]">
@@ -459,6 +630,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                                 <Button
                                   onClick={() => handleApplyClick(activeTask)}
                                   size="sm"
+                                  disabled={applyAllRunning}
                                 >
                                   Apply
                                 </Button>

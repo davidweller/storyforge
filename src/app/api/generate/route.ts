@@ -27,6 +27,9 @@ import {
   AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt,
 } from '@/lib/prompts';
 
+/** Long editorials need headroom on Vercel and similar hosts (local dev usually ignores this). */
+export const maxDuration = 800;
+
 const WORKFLOW_STAGES = [
   'setup', 'genre-research', 'niche', 'ending', 'characters', 'structure',
   'title', 'chapter-outlines', 'chapters', 'compilation', 'export-draft',
