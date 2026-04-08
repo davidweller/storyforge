@@ -128,6 +128,38 @@ Generate the complete chapter outlines now.`;
   return prompt;
 }
 
+export function buildChapterSummaryPrompt(params: {
+  genre: string;
+  chapterNumber: number;
+  chapterTitle: string;
+  chapterContent: string;
+}): string {
+  const { genre, chapterNumber, chapterTitle, chapterContent } = params;
+
+  return `Summarize Chapter ${chapterNumber}: "${chapterTitle}" from this ${genre} novel.
+
+## Chapter Content
+${chapterContent}
+
+## Task
+
+Write a concise continuity summary (150-200 words) that captures:
+- What events happened in sequence
+- Which characters acted and what they decided
+- New information revealed
+- Emotional and relationship shifts
+- Unresolved threads that carry into later chapters
+
+## Constraints
+
+- Ground every point in the chapter text
+- Use plain prose (no bullet list)
+- Keep names, places, timeline facts, and outcomes exact
+- Do not invent events or motives not present in the chapter
+
+Output only the summary text.`;
+}
+
 export function buildChapterPrompt(params: {
   genre: string;
   chapterNumber: number;
@@ -137,7 +169,7 @@ export function buildChapterPrompt(params: {
   pov?: string;
   charactersReference: string;
   endingReference: string;
-  previousChapterSummary?: string;
+  previousChapterSummaries?: Array<{ chapterNumber: number; title: string; summary: string }>;
   structureContext: string;
   genreResearch?: string;
   nicheReference?: string;
@@ -152,7 +184,7 @@ export function buildChapterPrompt(params: {
     pov,
     charactersReference,
     endingReference,
-    previousChapterSummary,
+    previousChapterSummaries,
     structureContext,
     genreResearch,
     nicheReference,
@@ -191,10 +223,14 @@ ${charactersReference}
 ${endingReference}
 `;
 
-  if (previousChapterSummary) {
+  if (previousChapterSummaries?.length) {
+    const continuityContext = [...previousChapterSummaries]
+      .sort((a, b) => b.chapterNumber - a.chapterNumber)
+      .map((entry) => `- Chapter ${entry.chapterNumber}: "${entry.title}"\n${entry.summary}`)
+      .join('\n\n');
     prompt += `
-**Previous Chapter Summary:**
-${previousChapterSummary}
+## Story So Far (Continuity Summaries)
+${continuityContext}
 `;
   }
 
@@ -260,6 +296,8 @@ export function buildChapterRevisionPrompt(params: {
   endingReference: string;
   structureReference?: string;
   nicheReference?: string;
+  previousChapterContext?: string;
+  nextChapterContext?: string;
   editorialPass?: EditorialPass;
 }): string {
   const {
@@ -270,6 +308,8 @@ export function buildChapterRevisionPrompt(params: {
     endingReference,
     structureReference,
     nicheReference,
+    previousChapterContext,
+    nextChapterContext,
     editorialPass = 'structural',
   } = params;
 
@@ -315,7 +355,9 @@ ${structureReference}
 ` : ''}${nicheReference ? `**Target Audience & Positioning:**
 ${nicheReference}
 
-` : ''}## Revision Guidelines
+` : ''}${previousChapterContext || nextChapterContext ? `## Continuity Reference (Adjacent Chapters)
+
+${previousChapterContext ? `**Previous Chapter Snapshot:**\n${previousChapterContext}\n\n` : ''}${nextChapterContext ? `**Next Chapter Snapshot:**\n${nextChapterContext}\n\n` : ''}` : ''}## Revision Guidelines
 
 1. **Address ALL Instructions**: Every point in the revision instructions must be addressed. Do not skip any issues.
 

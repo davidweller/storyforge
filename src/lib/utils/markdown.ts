@@ -208,3 +208,39 @@ export function formatMarkdown(text: string): string {
 
   return result.join('\n');
 }
+
+/** Convert chapter HTML/markdown into editorial-friendly plain text with structure preserved. */
+export function htmlToEditorialText(input: string): string {
+  if (!input) return '';
+  if (!/<[a-z][\s\S]*>/i.test(input)) return input;
+
+  let text = input;
+
+  text = text.replace(/\r\n/g, '\n');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<hr\s*\/?>/gi, '\n---\n');
+  text = text.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n');
+  text = text.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n');
+  text = text.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n');
+  text = text.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n#### $1\n');
+  text = text.replace(/<h5[^>]*>([\s\S]*?)<\/h5>/gi, '\n##### $1\n');
+  text = text.replace(/<h6[^>]*>([\s\S]*?)<\/h6>/gi, '\n###### $1\n');
+  text = text.replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**');
+  text = text.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '_$2_');
+  text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n');
+  text = text.replace(/<\/?(div|section|article|blockquote|ul|ol|li|pre|code)[^>]*>/gi, '\n');
+  text = text.replace(/<[^>]+>/g, '');
+
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+  return text
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}

@@ -15,6 +15,7 @@ export type WorkflowStage =
   | 'editorial'       // Stage 11
   | 'revision'        // Stage 12
   | 'export-final'    // Stage 13
+  | 'chapter-summary' // Internal helper stage for chapter context summaries
   | 'blurb'           // Marketing: back-cover blurb
   | 'amazon-description';  // Marketing: Amazon product description
 

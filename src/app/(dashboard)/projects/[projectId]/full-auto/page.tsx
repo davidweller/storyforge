@@ -14,6 +14,7 @@ import { countWords, capOutlineWordTargets } from '@/lib/utils';
 import { EDITORIAL_PASSES, documentTypeForEditorialPass } from '@/lib/editorial/passes';
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import { getEffectiveModelForStage } from '@/lib/data/models';
+import { htmlToEditorialText } from '@/lib/utils/markdown';
 
 /** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
 const FullAutoSpinner = memo(function FullAutoSpinner() {
@@ -160,6 +161,12 @@ function parseChapterOutlines(content: string): ChapterOutline[] {
     });
   }
   return outlines;
+}
+
+function chapterSnapshot(text: string, maxChars = 600): string {
+  const normalized = htmlToEditorialText(text).trim();
+  if (normalized.length <= maxChars) return normalized;
+  return normalized.slice(0, maxChars) + '...';
 }
 
 const stageToDocType: Record<string, DocumentType> = {
@@ -564,6 +571,7 @@ export default function FullAutoPage({
             currentStage = (next || currentStage) as WorkflowStage;
             await loadProject(projectId);
           } else {
+          const chapterSummaries = new Map<number, { title: string; summary: string }>();
           for (let i = 0; i < outlines.length; i++) {
             const outline = outlines[i];
             const chs = useProjectStore.getState().chapters;
@@ -588,13 +596,13 @@ export default function FullAutoPage({
             const endingDoc = getDocumentByType('ending');
             const genreDoc = getDocumentByType('genre');
             const nicheDoc = getDocumentByType('niche');
-            const allChs = useProjectStore.getState().chapters;
-            const prevChapter = allChs.filter((c) => c.chapterNumber < outline.chapterNumber).sort((a, b) => b.chapterNumber - a.chapterNumber)[0];
-            let previousChapterSummary: string | undefined;
-            if (prevChapter) {
-              const prevVer = getApprovedChapterVersion(prevChapter.id);
-              if (prevVer) previousChapterSummary = prevVer.content.slice(0, 1000) + '...';
-            }
+            const previousChapterSummaries = Array.from(chapterSummaries.entries())
+              .sort(([a], [b]) => b - a)
+              .map(([chapterNumber, data]) => ({
+                chapterNumber,
+                title: data.title,
+                summary: data.summary,
+              }));
             const chapterResult = await generate('chapters', {
               genre: project.genre,
               chapterNumber: outline.chapterNumber,
@@ -604,7 +612,7 @@ export default function FullAutoPage({
               pov: outline.pov,
               charactersReference: charactersDoc?.content || '',
               endingReference: endingDoc?.content || '',
-              previousChapterSummary,
+              previousChapterSummaries,
               structureContext: structureDoc?.content || '',
               genreResearch: genreDoc?.content || '',
               nicheReference: nicheDoc?.content || '',
@@ -622,6 +630,16 @@ export default function FullAutoPage({
               approved: false,
             });
             await approveChapterVersion(versionId);
+            const chapterSummaryResult = await generate('chapter-summary', {
+              genre: project.genre,
+              chapterNumber: chapter.chapterNumber,
+              chapterTitle: chapter.title,
+              chapterContent: chapterResult.content,
+            });
+            chapterSummaries.set(chapter.chapterNumber, {
+              title: chapter.title,
+              summary: chapterSummaryResult.content.trim(),
+            });
             stepIdx++;
           }
           const next = getNextStage('chapters');
@@ -655,7 +673,7 @@ export default function FullAutoPage({
               .map((ch) => {
                 const versions = chapterVersionsMap.get(ch.id) || [];
                 const approved = versions.find((v) => v.approved);
-                return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${approved.content}` : '';
+                return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${htmlToEditorialText(approved.content)}` : '';
               })
               .filter(Boolean)
               .join('\n\n');
@@ -669,7 +687,13 @@ export default function FullAutoPage({
               revisionTasks: Array<{
                 chapterNumber: number;
                 issueCount: number;
-                issues: Array<{ category: string; description: string; location: string; fix: string }>;
+                issues: Array<{
+                  category: string;
+                  description: string;
+                  manuscriptQuote?: string;
+                  location: string;
+                  fix: string;
+                }>;
                 acceptanceCriteria: string[];
                 summary: string;
               }>;
@@ -783,7 +807,16 @@ export default function FullAutoPage({
             }
             for (const taskData of revisionQueueData.revisionTasks) {
               const instructions = (taskData.issues || [])
-                .map((i) => `${i.category}: ${i.description}\nLocation: ${i.location}\nFix: ${i.fix}`)
+                .map((i) =>
+                  [
+                    `${i.category}: ${i.description}`,
+                    i.manuscriptQuote ? `Original text: "${i.manuscriptQuote}"` : null,
+                    `Location: ${i.location}`,
+                    `Fix: ${i.fix}`,
+                  ]
+                    .filter(Boolean)
+                    .join('\n')
+                )
                 .join('\n\n');
               const finalInstructions =
                 taskData.issueCount > 0 ? instructions : taskData.summary || 'Review chapter for quality.';
@@ -794,7 +827,7 @@ export default function FullAutoPage({
                 issueIds: [],
                 instructions: finalInstructions,
                 acceptanceCriteria: taskData.acceptanceCriteria || [],
-                status: taskData.issueCount > 0 ? 'queued' : 'done',
+                status: 'queued',
               });
             }
             await loadRevisionTasks(projectId);
@@ -817,6 +850,19 @@ export default function FullAutoPage({
               const endingDoc = pick('ending');
               const structureDoc = pick('structure');
               const nicheDoc = pick('niche');
+              const orderedChapters = [...useProjectStore.getState().chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+              const chapterIndex = orderedChapters.findIndex((c) => c.id === chapter.id);
+              const prevChapter = chapterIndex > 0 ? orderedChapters[chapterIndex - 1] : undefined;
+              const nextChapter =
+                chapterIndex >= 0 && chapterIndex < orderedChapters.length - 1
+                  ? orderedChapters[chapterIndex + 1]
+                  : undefined;
+              const prevApproved = prevChapter
+                ? (useProjectStore.getState().chapterVersions.get(prevChapter.id) || []).find((v) => v.approved)
+                : undefined;
+              const nextApproved = nextChapter
+                ? (useProjectStore.getState().chapterVersions.get(nextChapter.id) || []).find((v) => v.approved)
+                : undefined;
               const revResult = await generate(
                 'revision',
                 {
@@ -830,6 +876,8 @@ export default function FullAutoPage({
                   endingReference: endingDoc?.content || '',
                   structureReference: structureDoc?.content || '',
                   nicheReference: nicheDoc?.content || '',
+                  previousChapterContext: prevApproved ? chapterSnapshot(prevApproved.content) : undefined,
+                  nextChapterContext: nextApproved ? chapterSnapshot(nextApproved.content) : undefined,
                   editorialPass: pass,
                 },
                 { model: getEffectiveModelForStage('revision').id }
@@ -875,6 +923,19 @@ export default function FullAutoPage({
           const structureDoc = pick('structure');
           const nicheDoc = pick('niche');
           const pass = task.editPass;
+          const orderedChapters = [...useProjectStore.getState().chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+          const chapterIndex = orderedChapters.findIndex((c) => c.id === chapter.id);
+          const prevChapter = chapterIndex > 0 ? orderedChapters[chapterIndex - 1] : undefined;
+          const nextChapter =
+            chapterIndex >= 0 && chapterIndex < orderedChapters.length - 1
+              ? orderedChapters[chapterIndex + 1]
+              : undefined;
+          const prevApproved = prevChapter
+            ? (useProjectStore.getState().chapterVersions.get(prevChapter.id) || []).find((v) => v.approved)
+            : undefined;
+          const nextApproved = nextChapter
+            ? (useProjectStore.getState().chapterVersions.get(nextChapter.id) || []).find((v) => v.approved)
+            : undefined;
           const revResult = await generate(
             'revision',
             {
@@ -888,6 +949,8 @@ export default function FullAutoPage({
               endingReference: endingDoc?.content || '',
               structureReference: structureDoc?.content || '',
               nicheReference: nicheDoc?.content || '',
+              previousChapterContext: prevApproved ? chapterSnapshot(prevApproved.content) : undefined,
+              nextChapterContext: nextApproved ? chapterSnapshot(nextApproved.content) : undefined,
               editorialPass: pass,
             },
             { model: getEffectiveModelForStage('revision').id }
