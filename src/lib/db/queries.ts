@@ -21,6 +21,21 @@ function toDate(iso: string | null | undefined): Date {
   return iso ? new Date(iso) : new Date();
 }
 
+/** Persist optional timestamps: callers may pass Date, ISO string, or epoch from JSON. */
+function optionalDateToIso(value: Date | string | number | undefined | null): string | null {
+  if (value == null) return null;
+  const d =
+    value instanceof Date
+      ? value
+      : typeof value === 'number'
+        ? new Date(value)
+        : typeof value === 'string' && value.trim() !== ''
+          ? new Date(value)
+          : null;
+  if (d == null || Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 function rowToProject(row: Record<string, unknown>): Project {
   return {
     id: row.id as string,
@@ -105,7 +120,9 @@ function rowToEditorialIssue(row: Record<string, unknown>): EditorialIssue {
 function rowToRevisionTask(row: Record<string, unknown>): RevisionTask {
   const ep = row.editPass as string | undefined;
   const editPass: EditorialPass =
-    ep === 'line' || ep === 'copy' || ep === 'proofread' || ep === 'structural' ? ep : 'structural';
+    ep === 'line' || ep === 'copy' || ep === 'proofread' || ep === 'structural' || ep === 'final_report'
+      ? ep
+      : 'structural';
   return {
     id: row.id as string,
     projectId: row.projectId as string,
@@ -147,7 +164,7 @@ export async function createProject(
     data.currentStage,
     data.fullAutoMode ? 1 : 0,
     data.fourPassEditorial !== false ? 1 : 0,
-    data.finalExportedAt ? data.finalExportedAt.toISOString() : null,
+    optionalDateToIso(data.finalExportedAt ?? null),
     data.blurb ?? null,
     data.amazonDescription ?? null,
     ts,
@@ -186,7 +203,10 @@ export async function updateProject(
   if (data.currentStage !== undefined) { fields.push('currentStage = ?'); values.push(data.currentStage); }
   if (data.fullAutoMode !== undefined) { fields.push('fullAutoMode = ?'); values.push(data.fullAutoMode ? 1 : 0); }
   if (data.fourPassEditorial !== undefined) { fields.push('fourPassEditorial = ?'); values.push(data.fourPassEditorial ? 1 : 0); }
-  if (data.finalExportedAt !== undefined) { fields.push('finalExportedAt = ?'); values.push(data.finalExportedAt ? data.finalExportedAt.toISOString() : null); }
+  if (data.finalExportedAt !== undefined) {
+    fields.push('finalExportedAt = ?');
+    values.push(optionalDateToIso(data.finalExportedAt ?? null));
+  }
   if (data.blurb !== undefined) { fields.push('blurb = ?'); values.push(data.blurb ?? null); }
   if (data.amazonDescription !== undefined) { fields.push('amazonDescription = ?'); values.push(data.amazonDescription ?? null); }
 
@@ -474,7 +494,7 @@ export async function getProjectRevisionTasks(projectId: string): Promise<Revisi
   const rows = db.prepare(
     `SELECT * FROM revision_tasks WHERE projectId = ?
      ORDER BY CASE editPass
-       WHEN 'structural' THEN 0 WHEN 'line' THEN 1 WHEN 'copy' THEN 2 WHEN 'proofread' THEN 3 ELSE 0 END,
+       WHEN 'structural' THEN 0 WHEN 'line' THEN 1 WHEN 'copy' THEN 2 WHEN 'proofread' THEN 3 WHEN 'final_report' THEN 4 ELSE 0 END,
        chapterNumber ASC`
   ).all(projectId) as Record<string, unknown>[];
   return rows.map(rowToRevisionTask);

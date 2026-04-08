@@ -243,11 +243,13 @@ const REVISION_PASS_NOTE: Record<EditorialPass, string> = {
   structural:
     '**Editing mode: structural.** You may adjust scenes, beats, and clarity for story-level fixes. Preserve canon and voice where instructions do not require change.',
   line:
-    '**Editing mode: line edit.** Improve clarity, flow, and dialogue at sentence and paragraph level. Do not change plot, character arcs, or story outcomes unless an instruction explicitly requires it.',
+    '**Editing mode: line edit.** Improve clarity, flow, and dialogue at sentence and paragraph level. Do not change plot, character arcs, or story outcomes unless an instruction explicitly requires it. Prefer refinements over wholesale rewrites.',
   copy:
-    '**Editing mode: copy edit.** Apply grammar, consistency, and word-level fixes. Preserve authorial voice; avoid unnecessary rephrasing.',
+    '**Editing mode: copy edit.** Apply grammar, consistency, and word-level fixes to publishing standards. Preserve authorial voice; fix ambiguity and errors, not stylistic preference.',
   proofread:
-    '**Editing mode: proofread.** Apply only corrections for typos, punctuation, and clear errors. Minimal change elsewhere.',
+    '**Editing mode: proofread.** Apply only corrections for typos, punctuation, clear errors, and formatting glitches. Do not rewrite for style or substance.',
+  final_report:
+    '**Editing mode: final report.** This task is informational only — if you are asked to revise, apply only what the instructions explicitly require; otherwise preserve the chapter.',
 };
 
 export function buildChapterRevisionPrompt(params: {

@@ -304,6 +304,9 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       // Log that manuscript will be included in prompt
       console.log('[Editorial] Manuscript will be included in prompt. First 200 chars:', manuscript.substring(0, 200));
       
+      const audienceParts = [project.niche, project.microniche].filter(Boolean) as string[];
+      const intendedAudience = audienceParts.length > 0 ? audienceParts.join(' · ') : undefined;
+
       const result = await generate('editorial', {
         manuscript,
         genre: project.genre,
@@ -312,6 +315,9 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         endingReference: endingDoc?.content,
         structureReference: structureDoc?.content,
         editorialPass,
+        intendedAudience,
+        premise: project.premise,
+        research: project.research,
       });
       
       // Check if model was switched (the API will return this in the response)
@@ -377,84 +383,96 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       console.log('[Editorial] Creating revision queue from editorial report...');
 
       await deleteRevisionTasksForProjectAndPass(projectId, editorialPass);
-      
-      // Generate revision queue from editorial report
-      const result = await generate('editorial', {
-        createQueue: true,
-        editorialReport: editorialContent,
-        chapterCount: chapters.length,
-        editorialPass,
-      });
-      
-      console.log('[Editorial] Revision queue response received:', {
-        contentLength: result.content?.length || 0,
-        hasContent: !!result.content,
-      });
-      
-      // Parse JSON response
-      let revisionQueueData: {
-        revisionTasks: Array<{
-          chapterNumber: number;
-          issueCount: number;
-          priority: string;
-          summary: string;
-          issues: Array<{
-            category: string;
-            description: string;
-            location: string;
-            fix: string;
-          }>;
-          acceptanceCriteria: string[];
-          preserveElements: string[];
-        }>;
-      };
-      
-      try {
-        // Extract JSON from markdown code blocks if present
-        let jsonContent = result.content;
-        const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-        if (jsonMatch) {
-          jsonContent = jsonMatch[1];
+
+      if (editorialPass === 'final_report') {
+        const sorted = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+        for (const ch of sorted) {
+          await createRevisionTask({
+            projectId,
+            chapterNumber: ch.chapterNumber,
+            editPass: 'final_report',
+            issueIds: [],
+            instructions:
+              'Final editorial report pass: advisory only. No automated chapter revisions. See the Final report document.',
+            acceptanceCriteria: ['Final report reviewed'],
+            status: 'done',
+          });
         }
-        
-        revisionQueueData = JSON.parse(jsonContent);
-      } catch (parseError) {
-        console.error('[Editorial] Failed to parse revision queue JSON:', parseError);
-        console.error('[Editorial] Raw response:', result.content);
-        throw new Error('Failed to parse revision queue. The AI response was not in the expected format.');
-      }
-      
-      if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
-        throw new Error('Invalid revision queue format. Expected revisionTasks array.');
-      }
-      
-      console.log('[Editorial] Creating revision tasks:', {
-        taskCount: revisionQueueData.revisionTasks.length,
-      });
-      
-      // Create revision tasks in Firestore
-      for (const taskData of revisionQueueData.revisionTasks) {
-        // Build instructions from issues
-        const instructions = taskData.issues
-          .map((issue) => `${issue.category}: ${issue.description}\nLocation: ${issue.location}\nFix: ${issue.fix}`)
-          .join('\n\n');
-        
-        // If no issues, use summary as instructions
-        const finalInstructions = taskData.issueCount > 0 
-          ? instructions 
-          : taskData.summary || 'Review chapter for overall quality and consistency.';
-        
-        await createRevisionTask({
-          projectId,
-          chapterNumber: taskData.chapterNumber,
-          editPass: editorialPass,
-          issueIds: [],
-          instructions: finalInstructions,
-          acceptanceCriteria: taskData.acceptanceCriteria || [],
-          status: taskData.issueCount > 0 ? 'queued' : 'done',
+      } else {
+        // Generate revision queue from editorial report
+        const result = await generate('editorial', {
+          createQueue: true,
+          editorialReport: editorialContent,
+          chapterCount: chapters.length,
+          editorialPass,
         });
-        
-        console.log('[Editorial] Created revision task for chapter', taskData.chapterNumber);
+
+        console.log('[Editorial] Revision queue response received:', {
+          contentLength: result.content?.length || 0,
+          hasContent: !!result.content,
+        });
+
+        let revisionQueueData: {
+          revisionTasks: Array<{
+            chapterNumber: number;
+            issueCount: number;
+            priority: string;
+            summary: string;
+            issues: Array<{
+              category: string;
+              description: string;
+              location: string;
+              fix: string;
+            }>;
+            acceptanceCriteria: string[];
+            preserveElements: string[];
+          }>;
+        };
+
+        try {
+          let jsonContent = result.content;
+          const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+          if (jsonMatch) {
+            jsonContent = jsonMatch[1];
+          }
+
+          revisionQueueData = JSON.parse(jsonContent);
+        } catch (parseError) {
+          console.error('[Editorial] Failed to parse revision queue JSON:', parseError);
+          console.error('[Editorial] Raw response:', result.content);
+          throw new Error('Failed to parse revision queue. The AI response was not in the expected format.');
+        }
+
+        if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
+          throw new Error('Invalid revision queue format. Expected revisionTasks array.');
+        }
+
+        console.log('[Editorial] Creating revision tasks:', {
+          taskCount: revisionQueueData.revisionTasks.length,
+        });
+
+        for (const taskData of revisionQueueData.revisionTasks) {
+          const instructions = taskData.issues
+            .map((issue) => `${issue.category}: ${issue.description}\nLocation: ${issue.location}\nFix: ${issue.fix}`)
+            .join('\n\n');
+
+          const finalInstructions =
+            taskData.issueCount > 0
+              ? instructions
+              : taskData.summary || 'Review chapter for overall quality and consistency.';
+
+          await createRevisionTask({
+            projectId,
+            chapterNumber: taskData.chapterNumber,
+            editPass: editorialPass,
+            issueIds: [],
+            instructions: finalInstructions,
+            acceptanceCriteria: taskData.acceptanceCriteria || [],
+            status: taskData.issueCount > 0 ? 'queued' : 'done',
+          });
+
+          console.log('[Editorial] Created revision task for chapter', taskData.chapterNumber);
+        }
       }
       
       console.log('[Editorial] All revision tasks created successfully');
@@ -546,7 +564,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       {!isGenerating && !editorialContent && (
         <EmptyContent
           title="Generate Editorial Review"
-          description="Submit your manuscript for AI-powered editorial analysis. You'll receive detailed feedback scoped to this pass (structural through proofread)."
+          description="Submit your manuscript for AI-powered editorial analysis. You'll receive detailed feedback scoped to this pass (structural through final report)."
           actionLabel="Start Editorial Review"
           onAction={handleGenerate}
           isLoading={isGenerating}
@@ -577,7 +595,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
             </Button>
             
             <Button onClick={handleContinueToRevision}>
-              Create Revision Queue
+              {editorialPass === 'final_report' ? 'Continue' : 'Create Revision Queue'}
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>

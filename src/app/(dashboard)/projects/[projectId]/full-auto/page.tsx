@@ -643,7 +643,7 @@ export default function FullAutoPage({
           currentStage = 'editorial';
           stepIdx++;
         }
-        // Editorial + revision: four passes (structural → line → copy → proofread), each analyze → queue → apply
+        // Editorial + revision: five passes (structural → line → copy → proofread → final_report); final_report is analyze + stub tasks only
         if (currentStage === 'editorial') {
           await loadProject(projectId);
           const editorialChapters = useProjectStore.getState().chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
@@ -685,14 +685,37 @@ export default function FullAutoPage({
             if (!manuscript.trim()) {
               throw new Error('No manuscript available. Approved chapter content could not be loaded. Try opening Write Chapters, then resume Full Auto.');
             }
+            await loadProject(projectId);
+            const editorialStore = useProjectStore.getState();
+            const editorialProject = editorialStore.currentProject;
+            if (!editorialProject) {
+              throw new Error('Project not loaded for editorial stage.');
+            }
+            const projDocs = editorialStore.documents.filter((d) => d.projectId === projectId);
+            const pickDoc = (t: DocumentType) =>
+              projDocs.filter((d) => d.type === t && d.approved).sort((a, b) => b.version - a.version)[0];
+            const nicheDoc = pickDoc('niche');
+            const charactersDoc = pickDoc('characters');
+            const endingDoc = pickDoc('ending');
+            const structureDoc = pickDoc('structure');
+            const audienceParts = [editorialProject.niche, editorialProject.microniche].filter(Boolean) as string[];
+            const intendedAudience = audienceParts.length > 0 ? audienceParts.join(' · ') : undefined;
+
             setStep(`Editorial: ${pass}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['editorial'] ?? 5, 0);
             let editorialResult;
             try {
               editorialResult = await generate('editorial', {
                 manuscript,
-                genre: project.genre,
+                genre: editorialProject.genre,
                 chapterCount: useProjectStore.getState().chapters.length,
                 editorialPass: pass,
+                nicheReference: nicheDoc?.content,
+                charactersReference: charactersDoc?.content,
+                endingReference: endingDoc?.content,
+                structureReference: structureDoc?.content,
+                intendedAudience,
+                premise: editorialProject.premise,
+                research: editorialProject.research,
               });
             } catch (e) {
               const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -722,6 +745,24 @@ export default function FullAutoPage({
             }
             await approveDocument(editorialDocId);
             await deleteRevisionTasksForProjectAndPass(projectId, pass);
+
+            if (pass === 'final_report') {
+              for (const ch of editorialChapters) {
+                await createRevisionTask({
+                  projectId,
+                  chapterNumber: ch.chapterNumber,
+                  editPass: 'final_report',
+                  issueIds: [],
+                  instructions:
+                    'Final editorial report pass: advisory only. No automated chapter revisions. See the Final report document.',
+                  acceptanceCriteria: ['Final report reviewed'],
+                  status: 'done',
+                });
+              }
+              await loadRevisionTasks(projectId);
+              continue;
+            }
+
             let queueResult;
             try {
               queueResult = await generate('editorial', {

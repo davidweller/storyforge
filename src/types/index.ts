@@ -32,10 +32,11 @@ export type DocumentType =
   | 'editorial-structural'
   | 'editorial-line'
   | 'editorial-copy'
-  | 'editorial-proofread';
+  | 'editorial-proofread'
+  | 'editorial-final';
 
-/** Ordered editorial pipeline passes (structural → line → copy → proofread). */
-export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread';
+/** Ordered editorial pipeline passes (structural → line → copy → proofread → final_report). */
+export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread' | 'final_report';
 
 export type EditorialCategory = 
   | 'continuity'
@@ -59,7 +60,7 @@ export interface Project {
   status: 'active' | 'completed' | 'archived';
   currentStage: WorkflowStage;
   fullAutoMode?: boolean;  // When true, pipeline runs without intervention; cleared on completion
-  /** When true, revision/export-final unlock only after proofread pass tasks complete. */
+  /** When true, revision/export-final unlock only after final_report pass tasks complete. */
   fourPassEditorial?: boolean;
   finalExportedAt?: Date;  // Timestamp when final export was completed
   blurb?: string;          // Back-cover / marketing blurb
@@ -136,7 +137,7 @@ export interface StageInfo {
   id: WorkflowStage;
   name: string;
   description: string;
-  model: 'openai' | 'claude';
+  model: 'openai' | 'claude' | 'openrouter';
   status: StageStatus;
 }
 
@@ -158,6 +159,8 @@ export interface GenerationResponse {
  *  optional model-switch metadata (editorial stage auto-fallback). */
 export interface GenerateApiResponse extends GenerationResponse {
   provider: string;
+  /** Optional low-level provider route (e.g. openrouter-fallback-alibaba-model-studio). */
+  providerRoute?: string;
   modelSwitched?: boolean;
   switchMessage?: string;
 }

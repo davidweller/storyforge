@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import {
   OPENAI_MODELS,
   ANTHROPIC_MODELS,
+  OPENROUTER_MODELS,
   getEffectiveModelForStage,
   saveModelPreference,
-  getModelById,
   type LLMModel,
 } from '@/lib/data/models';
 import type { WorkflowStage } from '@/types';
@@ -49,19 +49,22 @@ export function ModelSelector({ stage, onModelChange }: ModelSelectorProps) {
   if (!selectedModel) return null;
 
   const isOpenAI = selectedModel.provider === 'openai';
+  const isAnthropic = selectedModel.provider === 'anthropic';
+  const selectedTone = isOpenAI
+    ? 'bg-[color-mix(in_srgb,var(--status-approved)_10%,transparent)] border-[color-mix(in_srgb,var(--status-approved)_30%,transparent)] text-[var(--color-green-600)]'
+    : isAnthropic
+    ? 'bg-[color-mix(in_srgb,#6366f1_10%,transparent)] border-[color-mix(in_srgb,#6366f1_30%,transparent)] text-indigo-500'
+    : 'bg-[color-mix(in_srgb,#f59e0b_10%,transparent)] border-[color-mix(in_srgb,#f59e0b_30%,transparent)] text-amber-500';
+  const selectedDot = isOpenAI ? 'bg-[var(--status-approved)]' : isAnthropic ? 'bg-indigo-500' : 'bg-amber-500';
 
   return (
     <div ref={dropdownRef} className="relative">
       {/* Trigger button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[0.8125rem] font-medium cursor-pointer transition-all border ${
-          isOpenAI
-            ? 'bg-[color-mix(in_srgb,var(--status-approved)_10%,transparent)] border-[color-mix(in_srgb,var(--status-approved)_30%,transparent)] text-[var(--color-green-600)]'
-            : 'bg-[color-mix(in_srgb,#6366f1_10%,transparent)] border-[color-mix(in_srgb,#6366f1_30%,transparent)] text-indigo-500'
-        }`}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[0.8125rem] font-medium cursor-pointer transition-all border ${selectedTone}`}
       >
-        <span className={`w-1.5 h-1.5 rounded-full ${isOpenAI ? 'bg-[var(--status-approved)]' : 'bg-indigo-500'}`} />
+        <span className={`w-1.5 h-1.5 rounded-full ${selectedDot}`} />
         {selectedModel.name}
         <svg
           className={`w-3.5 h-3.5 transition-transform duration-150 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
@@ -154,6 +157,47 @@ export function ModelSelector({ stage, onModelChange }: ModelSelectorProps) {
                   </div>
                   {selectedModel.id === model.id && (
                     <svg className="w-4 h-4 text-indigo-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="h-px bg-border mx-2" />
+
+          {/* OpenRouter Models */}
+          <div className="p-2">
+            <div className="px-3 py-2 text-[0.6875rem] font-semibold text-amber-500 uppercase tracking-wider">
+              OpenRouter
+            </div>
+            {OPENROUTER_MODELS.map((model) => (
+              <button
+                key={model.id}
+                onClick={() => handleSelectModel(model)}
+                className={`w-full px-3 py-2.5 rounded-lg border-none cursor-pointer text-left transition-colors ${
+                  selectedModel.id === model.id
+                    ? 'bg-[color-mix(in_srgb,#f59e0b_12%,transparent)]'
+                    : 'bg-transparent hover:bg-muted'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-foreground mb-0.5">
+                      {model.name}
+                      {model.isDefault && (
+                        <span className="ml-2 text-[0.625rem] px-1.5 py-0.5 rounded bg-amber-500 text-white font-semibold">
+                          DEFAULT
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {model.description}
+                    </div>
+                  </div>
+                  {selectedModel.id === model.id && (
+                    <svg className="w-4 h-4 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
                   )}

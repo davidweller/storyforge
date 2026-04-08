@@ -5,6 +5,7 @@ export const EDITORIAL_PASSES: readonly EditorialPass[] = [
   'line',
   'copy',
   'proofread',
+  'final_report',
 ] as const;
 
 export const EDITORIAL_PASS_LABELS: Record<EditorialPass, string> = {
@@ -12,6 +13,7 @@ export const EDITORIAL_PASS_LABELS: Record<EditorialPass, string> = {
   line: 'Line edit',
   copy: 'Copy edit',
   proofread: 'Proofread',
+  final_report: 'Final report',
 };
 
 export const DOCUMENT_TYPE_BY_PASS: Record<EditorialPass, DocumentType> = {
@@ -19,6 +21,7 @@ export const DOCUMENT_TYPE_BY_PASS: Record<EditorialPass, DocumentType> = {
   line: 'editorial-line',
   copy: 'editorial-copy',
   proofread: 'editorial-proofread',
+  final_report: 'editorial-final',
 };
 
 export function documentTypeForEditorialPass(pass: EditorialPass): DocumentType {
@@ -86,7 +89,7 @@ export function hasMultiPassRevisionTasks(tasks: RevisionTask[]): boolean {
 }
 
 /**
- * User may export after revision when: legacy project and all tasks done, or four-pass pipeline complete (proofread pass existed and all tasks done).
+ * User may export after revision when: legacy project and all tasks done, or multi-pass pipeline complete (final_report pass existed and all tasks done).
  */
 export function canProceedToExportFinal(
   project: Pick<Project, 'fourPassEditorial'> | null | undefined,
@@ -97,7 +100,7 @@ export function canProceedToExportFinal(
   if (!allDone) return false;
   if (!project?.fourPassEditorial) return true;
   if (!hasMultiPassRevisionTasks(revisionTasks)) return false;
-  return revisionTasks.some((t) => t.editPass === 'proofread');
+  return revisionTasks.some((t) => t.editPass === 'final_report');
 }
 
 export function canStartEditorialPass(

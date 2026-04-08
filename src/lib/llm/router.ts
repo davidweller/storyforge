@@ -1,5 +1,6 @@
 import { generateWithOpenAI, streamWithOpenAI } from './openai';
 import { generateWithClaude, streamWithClaude } from './anthropic';
+import { generateWithOpenRouter, streamWithOpenRouter } from './openrouter';
 import type { WorkflowStage } from '@/types';
 import { 
   getModelById,
@@ -7,6 +8,7 @@ import {
   getDefaultModelForStage, 
   OPENAI_MODELS,
   ANTHROPIC_MODELS,
+  OPENROUTER_MODELS,
   type LLMProvider 
 } from '@/lib/data/models';
 
@@ -25,6 +27,7 @@ export interface GenerateResult {
   tokensUsed: number;
   model: string;
   provider: LLMProvider;
+  providerRoute?: string;
 }
 
 // Default max tokens per stage (can be overridden by model or options)
@@ -49,12 +52,13 @@ const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
 
 /**
  * Determine the provider for a given model ID.
- * Falls back to 'anthropic' for unrecognised model IDs.
+ * Falls back to 'openrouter' for unrecognised model IDs.
  */
 function getProviderForModel(modelId: string): LLMProvider {
   if (OPENAI_MODELS.some((m) => m.id === modelId)) return 'openai';
   if (ANTHROPIC_MODELS.some((m) => m.id === modelId)) return 'anthropic';
-  return 'anthropic';
+  if (OPENROUTER_MODELS.some((m) => m.id === modelId)) return 'openrouter';
+  return 'openrouter';
 }
 
 interface ResolvedModel {
@@ -112,9 +116,19 @@ export async function generateForStage(
   if (provider === 'openai') {
     const result = await generateWithOpenAI(prompt, mergedOptions);
     return { ...result, model: modelId, provider: 'openai' };
-  } else {
+  } else if (provider === 'anthropic') {
     const result = await generateWithClaude(prompt, mergedOptions);
     return { ...result, model: modelId, provider: 'anthropic' };
+  } else {
+    const result = await generateWithOpenRouter(prompt, mergedOptions);
+    return {
+      ...result,
+      model: modelId,
+      provider: 'openrouter',
+      ...(result.fallbackProvider
+        ? { providerRoute: `openrouter-fallback-${result.fallbackProvider}` }
+        : {}),
+    };
   }
 }
 
@@ -137,13 +151,28 @@ export async function* streamForStage(
       yield result.value;
     }
     return { content: '', tokensUsed: result.value.tokensUsed, model: modelId, provider: 'openai' };
-  } else {
+  } else if (provider === 'anthropic') {
     const generator = streamWithClaude(prompt, mergedOptions);
     let result: IteratorResult<string, { tokensUsed: number }>;
     while (!(result = await generator.next()).done) {
       yield result.value;
     }
     return { content: '', tokensUsed: result.value.tokensUsed, model: modelId, provider: 'anthropic' };
+  } else {
+    const generator = streamWithOpenRouter(prompt, mergedOptions);
+    let result: IteratorResult<string, { tokensUsed: number; fallbackProvider?: 'alibaba-model-studio' }>;
+    while (!(result = await generator.next()).done) {
+      yield result.value;
+    }
+    return {
+      content: '',
+      tokensUsed: result.value.tokensUsed,
+      model: modelId,
+      provider: 'openrouter',
+      ...(result.value.fallbackProvider
+        ? { providerRoute: `openrouter-fallback-${result.value.fallbackProvider}` }
+        : {}),
+    };
   }
 }
 
@@ -166,12 +195,22 @@ export async function generate(
       model: modelId,
       provider: 'openai',
     };
-  } else {
+  } else if (provider === 'anthropic') {
     const result = await generateWithClaude(prompt, { ...options, model: modelId });
     return {
       ...result,
       model: modelId,
       provider: 'anthropic',
+    };
+  } else {
+    const result = await generateWithOpenRouter(prompt, { ...options, model: modelId });
+    return {
+      ...result,
+      model: modelId,
+      provider: 'openrouter',
+      ...(result.fallbackProvider
+        ? { providerRoute: `openrouter-fallback-${result.fallbackProvider}` }
+        : {}),
     };
   }
 }

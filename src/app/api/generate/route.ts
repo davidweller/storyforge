@@ -5,7 +5,13 @@ import { getModelById, getDefaultModelForStage, ALL_MODELS } from '@/lib/data/mo
 import { MAX_MANUSCRIPT_TOKENS, TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { WorkflowStage, EditorialPass } from '@/types';
 
-const EDITORIAL_PASS_VALUES: EditorialPass[] = ['structural', 'line', 'copy', 'proofread'];
+const EDITORIAL_PASS_VALUES: EditorialPass[] = [
+  'structural',
+  'line',
+  'copy',
+  'proofread',
+  'final_report',
+];
 
 function parseEditorialPass(value: unknown): EditorialPass {
   if (typeof value === 'string' && EDITORIAL_PASS_VALUES.includes(value as EditorialPass)) {
@@ -231,6 +237,10 @@ export async function POST(request: NextRequest) {
             endingReference: data.endingReference as string | undefined,
             structureReference: data.structureReference as string | undefined,
             editorialPass: parseEditorialPass(data.editorialPass),
+            intendedAudience:
+              typeof data.intendedAudience === 'string' ? data.intendedAudience : undefined,
+            premise: typeof data.premise === 'string' ? data.premise : undefined,
+            research: typeof data.research === 'string' ? data.research : undefined,
           });
           
           console.log('[API] Editorial prompt built:', {
@@ -311,6 +321,7 @@ export async function POST(request: NextRequest) {
       model: resultModelDisplayName,
       modelId: result.model,
       provider: result.provider,
+      providerRoute: result.providerRoute || result.provider,
       tokensUsed: result.tokensUsed,
       modelSwitched: stage === 'editorial' ? modelSwitched : false,
     });
@@ -320,6 +331,7 @@ export async function POST(request: NextRequest) {
       content: result.content,
       model: result.model,
       provider: result.provider,
+      ...(result.providerRoute ? { providerRoute: result.providerRoute } : {}),
       tokensUsed: result.tokensUsed,
       ...(stage === 'editorial' && modelSwitched && switchMessage
         ? { modelSwitched: true, switchMessage }
