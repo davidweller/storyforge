@@ -37,20 +37,25 @@ interface OpenRouterCallResult {
   fallbackProvider?: 'alibaba-model-studio';
 }
 
+function normalizeDeprecatedOpenRouterModel(modelId: string): string {
+  const trimmed = modelId.trim();
+  if (trimmed === 'qwen/qwen3.6-plus:free') return 'qwen/qwen3.6-plus';
+  return trimmed;
+}
+
 function resolveOpenRouterApiModel(modelId: string): string {
-  return getModelById(modelId)?.apiModelId ?? modelId;
+  return normalizeDeprecatedOpenRouterModel(getModelById(modelId)?.apiModelId ?? modelId);
 }
 
 function openRouterModelCandidates(primaryModel: string): string[] {
   const envFallback = (process.env.OPENROUTER_QWEN_FALLBACK_MODELS || '')
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => normalizeDeprecatedOpenRouterModel(s))
     .filter(Boolean);
 
   const defaults = [
-    'qwen/qwen3.6-plus:free',
+    'qwen/qwen3.6-plus',
     'qwen/qwen3-235b-a22b',
-    'qwen/qwen3-235b-a22b:free',
   ];
 
   return Array.from(new Set([primaryModel, ...envFallback, ...defaults]));
@@ -89,7 +94,7 @@ export async function generateWithOpenRouter(
   options: OpenRouterGenerateOptions = {}
 ): Promise<OpenRouterCallResult> {
   const {
-    model = 'qwen-3.6-openrouter',
+    model = 'qwen-3.6-thinking-openrouter',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
@@ -177,7 +182,7 @@ export async function* streamWithOpenRouter(
   options: OpenRouterGenerateOptions = {}
 ): AsyncGenerator<string, { tokensUsed: number; fallbackProvider?: 'alibaba-model-studio' }, unknown> {
   const {
-    model = 'qwen-3.6-openrouter',
+    model = 'qwen-3.6-thinking-openrouter',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
