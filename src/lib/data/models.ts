@@ -2,7 +2,7 @@
 
 import type { WorkflowStage } from '@/types';
 
-export type LLMProvider = 'openai' | 'anthropic';
+export type LLMProvider = 'openai' | 'anthropic' | 'openrouter';
 
 export interface LLMModel {
   id: string;
@@ -16,6 +16,8 @@ export interface LLMModel {
   apiModelId?: string;
   /** Anthropic extended thinking budget (must be less than max_tokens on the API request). */
   thinkingBudgetTokens?: number;
+  /** OpenRouter reasoning effort for models that support dual thinking modes. */
+  openRouterReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 // OpenAI Models (GPT-5.2+ only)
@@ -96,8 +98,33 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
   },
 ];
 
+// OpenRouter Models
+export const OPENROUTER_MODELS: LLMModel[] = [
+  {
+    id: 'qwen-3.6-thinking-openrouter',
+    name: 'Qwen 3.6 (Thinking, OpenRouter)',
+    provider: 'openrouter',
+    description: 'Default: Qwen 3.6 via OpenRouter with higher reasoning effort',
+    apiModelId: 'qwen/qwen3.6-plus:free',
+    openRouterReasoningEffort: 'high',
+    maxTokens: 16384,
+    maxContextTokens: 262_144,
+    isDefault: true,
+  },
+  {
+    id: 'qwen-3.6-openrouter',
+    name: 'Qwen 3.6 (Non-thinking, OpenRouter)',
+    provider: 'openrouter',
+    description: 'Qwen 3.6 via OpenRouter with reasoning disabled for faster responses',
+    apiModelId: 'qwen/qwen3.6-plus:free',
+    openRouterReasoningEffort: 'none',
+    maxTokens: 16384,
+    maxContextTokens: 262_144,
+  },
+];
+
 // All models combined
-export const ALL_MODELS: LLMModel[] = [...OPENAI_MODELS, ...ANTHROPIC_MODELS];
+export const ALL_MODELS: LLMModel[] = [...OPENAI_MODELS, ...ANTHROPIC_MODELS, ...OPENROUTER_MODELS];
 
 // Get model by ID
 export function getModelById(modelId: string): LLMModel | undefined {
@@ -106,39 +133,48 @@ export function getModelById(modelId: string): LLMModel | undefined {
 
 // Get default model for a provider
 export function getDefaultModel(provider: LLMProvider): LLMModel {
-  const models = provider === 'openai' ? OPENAI_MODELS : ANTHROPIC_MODELS;
+  const models =
+    provider === 'openai'
+      ? OPENAI_MODELS
+      : provider === 'anthropic'
+      ? ANTHROPIC_MODELS
+      : OPENROUTER_MODELS;
   return models.find((m) => m.isDefault) || models[0];
 }
 
 // Get models by provider
 export function getModelsByProvider(provider: LLMProvider): LLMModel[] {
-  return provider === 'openai' ? OPENAI_MODELS : ANTHROPIC_MODELS;
+  return provider === 'openai'
+    ? OPENAI_MODELS
+    : provider === 'anthropic'
+    ? ANTHROPIC_MODELS
+    : OPENROUTER_MODELS;
 }
 
 // Default LLM provider per workflow stage.
 // TypeScript will error if a WorkflowStage value is missing from this map.
 export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
-  'setup': 'anthropic',
-  'genre-research': 'anthropic',
-  'niche': 'anthropic',
-  'ending': 'anthropic',
-  'characters': 'anthropic',
-  'structure': 'anthropic',
-  'title': 'anthropic',
-  'chapter-outlines': 'anthropic',
-  'chapters': 'anthropic',
-  'compilation': 'anthropic',
-  'export-draft': 'anthropic',
-  'editorial': 'anthropic',
-  'revision': 'anthropic',
-  'export-final': 'anthropic',
-  'blurb': 'anthropic',
-  'amazon-description': 'anthropic',
+  'setup': 'openrouter',
+  'genre-research': 'openrouter',
+  'niche': 'openrouter',
+  'ending': 'openrouter',
+  'characters': 'openrouter',
+  'structure': 'openrouter',
+  'title': 'openrouter',
+  'chapter-outlines': 'openrouter',
+  'chapters': 'openrouter',
+  'compilation': 'openrouter',
+  'export-draft': 'openrouter',
+  'editorial': 'openrouter',
+  'revision': 'openrouter',
+  'export-final': 'openrouter',
+  'blurb': 'openrouter',
+  'amazon-description': 'openrouter',
 };
 
 // Get default model for a stage
 export function getDefaultModelForStage(stage: WorkflowStage): LLMModel {
-  const provider = STAGE_DEFAULT_PROVIDERS[stage] ?? 'anthropic';
+  const provider = STAGE_DEFAULT_PROVIDERS[stage] ?? 'openrouter';
   return getDefaultModel(provider);
 }
 

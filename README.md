@@ -104,6 +104,8 @@ Marketing tools (available from the project dashboard after the pipeline):
 - **Blurb for back of book** (`blurb`)
 - **Amazon Description** (`amazon-description`)
 
+For developers: what each generation stage passes to the LLM (system prompt, user prompt, and `data` keys) is documented in [docs/ai-stages-and-prompts.md](docs/ai-stages-and-prompts.md).
+
 ## Project Structure
 ```
 electron/                 # Electron main/preload code
