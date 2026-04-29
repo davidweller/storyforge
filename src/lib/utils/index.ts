@@ -186,7 +186,7 @@ export const STAGE_DESCRIPTIONS: Record<string, string> = {
   'setup': 'Review your genre and niche selection. Add an optional premise or research notes to guide the AI.',
   'genre-research': 'AI analyzes current market trends, reader demand, and competitive positioning. You\'ll receive actionable insights about opportunities in your genre.',
   'niche': 'Define your ideal reader avatar and emotional promise. AI generates a detailed profile of who will love your book and what tropes to include or avoid.',
-  'ending': 'AI generates 8-10 potential endings for your story. Select the one that resonates, then expand it into a detailed blueprint. You\'ll also name your project here.',
+  'ending': 'AI generates 8-10 potential endings for your story. Select the one that resonates, then expand it into a detailed blueprint.',
   'characters': 'Design your protagonist, antagonist, and supporting cast. AI creates detailed character profiles including motivations, arcs, and relationships.',
   'structure': 'Build your story structure using the Save the Cat beat sheet. AI generates a scene-by-scene breakdown to guide your chapter writing.',
   'title': 'Generate title ideas for your novel. Choose your favourite and it becomes the name of your book.',

@@ -343,6 +343,7 @@ Create a revision task for each chapter (${chapterCount} chapters total) in the 
         {
           "category": "continuity|character|pacing|prose|logic",
           "description": "Specific issue description",
+          "manuscriptQuote": "Exact quoted manuscript passage tied to this issue",
           "location": "Approximate location in chapter",
           "fix": "Specific instruction for fixing"
         }
@@ -361,8 +362,10 @@ Create a revision task for each chapter (${chapterCount} chapters total) in the 
 
 Guidelines:
 - Include ALL chapters, even those with no issues (issueCount: 0)
+- For chapters with issueCount 0, set summary to: "Verify continuity: confirm this chapter is consistent with established character voices, timeline, and the preceding/following chapters. No structural issues were flagged but token constraints may have limited coverage."
 - Priority levels: "high", "medium", "low", "none"
 - Be specific in fix instructions — vague feedback is unhelpful
+- For each issue, include manuscriptQuote with the exact problematic passage quoted from the editorial report; if no quote is available, use an empty string.
 - Acceptance criteria should be verifiable
 - preserveElements prevents over-revision
 

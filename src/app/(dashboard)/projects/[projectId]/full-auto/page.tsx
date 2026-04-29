@@ -14,6 +14,7 @@ import { countWords, capOutlineWordTargets } from '@/lib/utils';
 import { EDITORIAL_PASSES, documentTypeForEditorialPass } from '@/lib/editorial/passes';
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import { getEffectiveModelForStage } from '@/lib/data/models';
+import { htmlToEditorialText } from '@/lib/utils/markdown';
 
 /** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
 const FullAutoSpinner = memo(function FullAutoSpinner() {
@@ -162,6 +163,12 @@ function parseChapterOutlines(content: string): ChapterOutline[] {
   return outlines;
 }
 
+function chapterSnapshot(text: string, maxChars = 600): string {
+  const normalized = htmlToEditorialText(text).trim();
+  if (normalized.length <= maxChars) return normalized;
+  return normalized.slice(0, maxChars) + '...';
+}
+
 const stageToDocType: Record<string, DocumentType> = {
   'genre-research': 'genre',
   niche: 'niche',
@@ -172,6 +179,17 @@ const stageToDocType: Record<string, DocumentType> = {
 };
 
 type OverlayStatus = 'idle' | 'running' | 'complete' | 'error';
+type AutoControlAction = 'none' | 'pause' | 'stop';
+
+class AutoControlError extends Error {
+  action: Exclude<AutoControlAction, 'none'>;
+
+  constructor(action: Exclude<AutoControlAction, 'none'>) {
+    super(action === 'pause' ? 'Full auto paused' : 'Full auto stopped');
+    this.name = 'AutoControlError';
+    this.action = action;
+  }
+}
 
 export default function FullAutoPage({
   params,
@@ -219,7 +237,9 @@ export default function FullAutoPage({
   const [timeLeftTotal, setTimeLeftTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
+  const [controlActionPending, setControlActionPending] = useState<AutoControlAction>('none');
   const pipelineStarted = useRef(false);
+  const controlActionRef = useRef<AutoControlAction>('none');
   const lastStepUpdate = useRef(0);
   const stepThrottleMs = 600;
 
@@ -237,6 +257,27 @@ export default function FullAutoPage({
     },
     []
   );
+
+  const requestPause = useCallback(() => {
+    if (controlActionRef.current !== 'none') return;
+    controlActionRef.current = 'pause';
+    setControlActionPending('pause');
+  }, []);
+
+  const requestStop = useCallback(() => {
+    if (controlActionRef.current !== 'none') return;
+    controlActionRef.current = 'stop';
+    setControlActionPending('stop');
+  }, []);
+
+  const throwIfControlRequested = useCallback(() => {
+    if (controlActionRef.current === 'pause') {
+      throw new AutoControlError('pause');
+    }
+    if (controlActionRef.current === 'stop') {
+      throw new AutoControlError('stop');
+    }
+  }, []);
 
   // Redirect if not in full auto or already done
   useEffect(() => {
@@ -270,6 +311,8 @@ export default function FullAutoPage({
 
     const run = async () => {
       pipelineStarted.current = true;
+      controlActionRef.current = 'none';
+      setControlActionPending('none');
       setOverlayStatus('running');
       setError(null);
       clearError();
@@ -327,6 +370,7 @@ export default function FullAutoPage({
       };
 
       const runDocStage = async (stage: WorkflowStage): Promise<void> => {
+        throwIfControlRequested();
         const docType = stageToDocType[stage];
         if (!docType) return;
         const mins = getEstimatedMinutesForStep(stage === 'genre-research' ? 'genre-research' : stage);
@@ -356,6 +400,7 @@ export default function FullAutoPage({
           currentStage = next as WorkflowStage;
         }
         stepIdx++;
+        throwIfControlRequested();
       };
 
       try {
@@ -454,6 +499,7 @@ export default function FullAutoPage({
         }
         // Ending: concepts then expand first
         if (currentStage === 'ending') {
+          throwIfControlRequested();
           setStep('Choose Your Ending (concepts)', stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['ending-concepts'] ?? 2, initialTotal);
           const nicheDoc = getDocumentByType('niche');
           const conceptsResult = await generate('ending', {
@@ -478,6 +524,30 @@ export default function FullAutoPage({
           const concepts = parseEndingConcepts(conceptsResult.content);
           const first = concepts[0];
           if (!first) throw new Error('No ending concepts parsed');
+          const latestChoice = getLatestDocumentByType('ending-choice');
+          const choicePayload = JSON.stringify({
+            id: first.id,
+            title: first.title,
+            summary: first.summary,
+            emotionalPayoff: first.emotionalPayoff,
+            characterResolution: first.characterResolution,
+            thematicStatement: first.thematicStatement,
+          });
+          if (latestChoice) {
+            await updateDocument(latestChoice.id, {
+              content: choicePayload,
+              version: (latestChoice.version || 0) + 1,
+              approved: true,
+            });
+          } else {
+            await createDocument({
+              projectId,
+              type: 'ending-choice',
+              content: choicePayload,
+              version: 1,
+              approved: true,
+            });
+          }
           setStep('Choose Your Ending (expanding)', stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['ending-expand'] ?? 3, initialTotal);
           const expandResult = await generate('ending', {
             premise: project.premise,
@@ -495,6 +565,7 @@ export default function FullAutoPage({
           currentStage = (next || currentStage) as WorkflowStage;
           stepIdx += 2;
           await loadProject(projectId);
+          throwIfControlRequested();
         }
         // Characters, structure
         if (currentStage === 'characters') {
@@ -507,6 +578,7 @@ export default function FullAutoPage({
         }
         // Title
         if (currentStage === 'title') {
+          throwIfControlRequested();
           setStep(STAGE_NAMES['title'], stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['title'] ?? 1, initialTotal);
           const structureDoc = getDocumentByType('structure');
           const endingDoc = getDocumentByType('ending');
@@ -528,12 +600,14 @@ export default function FullAutoPage({
           currentStage = (next || currentStage) as WorkflowStage;
           stepIdx++;
           await loadProject(projectId);
+          throwIfControlRequested();
         }
         // Chapter-outlines (then run chapters in same pipeline run)
         if (currentStage === 'chapter-outlines') {
           await runDocStage('chapter-outlines');
           await loadProject(projectId);
           currentStage = 'chapters';
+          throwIfControlRequested();
         }
         // Chapters: create chapter records and generate each (read from store so we see just-saved chapter-outlines)
         if (currentStage === 'chapters') {
@@ -564,7 +638,9 @@ export default function FullAutoPage({
             currentStage = (next || currentStage) as WorkflowStage;
             await loadProject(projectId);
           } else {
+          const chapterSummaries = new Map<number, { title: string; summary: string }>();
           for (let i = 0; i < outlines.length; i++) {
+            throwIfControlRequested();
             const outline = outlines[i];
             const chs = useProjectStore.getState().chapters;
             setStep(`Writing Chapter ${outline.chapterNumber} of ${outlines.length}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['chapter-per'] ?? 6, Math.max(0, initialTotal - stepIdx * 5));
@@ -588,13 +664,13 @@ export default function FullAutoPage({
             const endingDoc = getDocumentByType('ending');
             const genreDoc = getDocumentByType('genre');
             const nicheDoc = getDocumentByType('niche');
-            const allChs = useProjectStore.getState().chapters;
-            const prevChapter = allChs.filter((c) => c.chapterNumber < outline.chapterNumber).sort((a, b) => b.chapterNumber - a.chapterNumber)[0];
-            let previousChapterSummary: string | undefined;
-            if (prevChapter) {
-              const prevVer = getApprovedChapterVersion(prevChapter.id);
-              if (prevVer) previousChapterSummary = prevVer.content.slice(0, 1000) + '...';
-            }
+            const previousChapterSummaries = Array.from(chapterSummaries.entries())
+              .sort(([a], [b]) => b - a)
+              .map(([chapterNumber, data]) => ({
+                chapterNumber,
+                title: data.title,
+                summary: data.summary,
+              }));
             const chapterResult = await generate('chapters', {
               genre: project.genre,
               chapterNumber: outline.chapterNumber,
@@ -604,7 +680,7 @@ export default function FullAutoPage({
               pov: outline.pov,
               charactersReference: charactersDoc?.content || '',
               endingReference: endingDoc?.content || '',
-              previousChapterSummary,
+              previousChapterSummaries,
               structureContext: structureDoc?.content || '',
               genreResearch: genreDoc?.content || '',
               nicheReference: nicheDoc?.content || '',
@@ -622,7 +698,18 @@ export default function FullAutoPage({
               approved: false,
             });
             await approveChapterVersion(versionId);
+            const chapterSummaryResult = await generate('chapter-summary', {
+              genre: project.genre,
+              chapterNumber: chapter.chapterNumber,
+              chapterTitle: chapter.title,
+              chapterContent: chapterResult.content,
+            });
+            chapterSummaries.set(chapter.chapterNumber, {
+              title: chapter.title,
+              summary: chapterSummaryResult.content.trim(),
+            });
             stepIdx++;
+            throwIfControlRequested();
           }
           const next = getNextStage('chapters');
           if (next) await advanceStage(projectId, next as WorkflowStage);
@@ -632,12 +719,14 @@ export default function FullAutoPage({
         }
         // Compilation, export-draft: advance only
         if (currentStage === 'compilation') {
+          throwIfControlRequested();
           setStep(STAGE_NAMES['compilation'], stepIdx, 20, 0, 0);
           await advanceStage(projectId, 'export-draft');
           currentStage = 'export-draft';
           stepIdx++;
         }
         if (currentStage === 'export-draft') {
+          throwIfControlRequested();
           setStep(STAGE_NAMES['export-draft'], stepIdx, 20, 0, 0);
           await advanceStage(projectId, 'editorial');
           currentStage = 'editorial';
@@ -645,6 +734,7 @@ export default function FullAutoPage({
         }
         // Editorial + revision: five passes (structural → line → copy → proofread → final_report); final_report is analyze + stub tasks only
         if (currentStage === 'editorial') {
+          throwIfControlRequested();
           await loadProject(projectId);
           const editorialChapters = useProjectStore.getState().chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
 
@@ -655,7 +745,7 @@ export default function FullAutoPage({
               .map((ch) => {
                 const versions = chapterVersionsMap.get(ch.id) || [];
                 const approved = versions.find((v) => v.approved);
-                return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${approved.content}` : '';
+                return approved ? `## Chapter ${ch.chapterNumber}: ${ch.title}\n\n${htmlToEditorialText(approved.content)}` : '';
               })
               .filter(Boolean)
               .join('\n\n');
@@ -669,7 +759,13 @@ export default function FullAutoPage({
               revisionTasks: Array<{
                 chapterNumber: number;
                 issueCount: number;
-                issues: Array<{ category: string; description: string; location: string; fix: string }>;
+                issues: Array<{
+                  category: string;
+                  description: string;
+                  manuscriptQuote?: string;
+                  location: string;
+                  fix: string;
+                }>;
                 acceptanceCriteria: string[];
                 summary: string;
               }>;
@@ -681,6 +777,7 @@ export default function FullAutoPage({
           };
 
           for (const pass of EDITORIAL_PASSES as EditorialPass[]) {
+            throwIfControlRequested();
             const manuscript = await compileManuscriptFromStore();
             if (!manuscript.trim()) {
               throw new Error('No manuscript available. Approved chapter content could not be loaded. Try opening Write Chapters, then resume Full Auto.');
@@ -783,7 +880,16 @@ export default function FullAutoPage({
             }
             for (const taskData of revisionQueueData.revisionTasks) {
               const instructions = (taskData.issues || [])
-                .map((i) => `${i.category}: ${i.description}\nLocation: ${i.location}\nFix: ${i.fix}`)
+                .map((i) =>
+                  [
+                    `${i.category}: ${i.description}`,
+                    i.manuscriptQuote ? `Original text: "${i.manuscriptQuote}"` : null,
+                    `Location: ${i.location}`,
+                    `Fix: ${i.fix}`,
+                  ]
+                    .filter(Boolean)
+                    .join('\n')
+                )
                 .join('\n\n');
               const finalInstructions =
                 taskData.issueCount > 0 ? instructions : taskData.summary || 'Review chapter for quality.';
@@ -794,7 +900,7 @@ export default function FullAutoPage({
                 issueIds: [],
                 instructions: finalInstructions,
                 acceptanceCriteria: taskData.acceptanceCriteria || [],
-                status: taskData.issueCount > 0 ? 'queued' : 'done',
+                status: 'queued',
               });
             }
             await loadRevisionTasks(projectId);
@@ -802,6 +908,7 @@ export default function FullAutoPage({
               (t) => t.editPass === pass && t.status !== 'done'
             );
             for (const task of tasksThisPass) {
+              throwIfControlRequested();
               setStep(`Revision (${pass}): Ch. ${task.chapterNumber}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['revision-per'] ?? 3, 0);
               const chapter = useProjectStore.getState().chapters.find((c) => c.chapterNumber === task.chapterNumber);
               const versions = chapter ? useProjectStore.getState().chapterVersions.get(chapter.id) || [] : [];
@@ -817,6 +924,19 @@ export default function FullAutoPage({
               const endingDoc = pick('ending');
               const structureDoc = pick('structure');
               const nicheDoc = pick('niche');
+              const orderedChapters = [...useProjectStore.getState().chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+              const chapterIndex = orderedChapters.findIndex((c) => c.id === chapter.id);
+              const prevChapter = chapterIndex > 0 ? orderedChapters[chapterIndex - 1] : undefined;
+              const nextChapter =
+                chapterIndex >= 0 && chapterIndex < orderedChapters.length - 1
+                  ? orderedChapters[chapterIndex + 1]
+                  : undefined;
+              const prevApproved = prevChapter
+                ? (useProjectStore.getState().chapterVersions.get(prevChapter.id) || []).find((v) => v.approved)
+                : undefined;
+              const nextApproved = nextChapter
+                ? (useProjectStore.getState().chapterVersions.get(nextChapter.id) || []).find((v) => v.approved)
+                : undefined;
               const revResult = await generate(
                 'revision',
                 {
@@ -830,6 +950,8 @@ export default function FullAutoPage({
                   endingReference: endingDoc?.content || '',
                   structureReference: structureDoc?.content || '',
                   nicheReference: nicheDoc?.content || '',
+                  previousChapterContext: prevApproved ? chapterSnapshot(prevApproved.content) : undefined,
+                  nextChapterContext: nextApproved ? chapterSnapshot(nextApproved.content) : undefined,
                   editorialPass: pass,
                 },
                 { model: getEffectiveModelForStage('revision').id }
@@ -848,6 +970,7 @@ export default function FullAutoPage({
               await approveChapterVersion(versionId);
               await updateRevisionTask(task.id, { status: 'done' });
               stepIdx++;
+              throwIfControlRequested();
             }
           }
           await advanceStage(projectId, 'revision');
@@ -859,6 +982,7 @@ export default function FullAutoPage({
         // Any remaining revision tasks (e.g. resumed mid-pipeline)
         const tasks = useProjectStore.getState().revisionTasks.filter((t) => t.status !== 'done');
         for (const task of tasks) {
+          throwIfControlRequested();
           setStep(`Revision: Chapter ${task.chapterNumber}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['revision-per'] ?? 3, 0);
           const chapter = useProjectStore.getState().chapters.find((c) => c.chapterNumber === task.chapterNumber);
           const versions = chapter ? useProjectStore.getState().chapterVersions.get(chapter.id) || [] : [];
@@ -875,6 +999,19 @@ export default function FullAutoPage({
           const structureDoc = pick('structure');
           const nicheDoc = pick('niche');
           const pass = task.editPass;
+          const orderedChapters = [...useProjectStore.getState().chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+          const chapterIndex = orderedChapters.findIndex((c) => c.id === chapter.id);
+          const prevChapter = chapterIndex > 0 ? orderedChapters[chapterIndex - 1] : undefined;
+          const nextChapter =
+            chapterIndex >= 0 && chapterIndex < orderedChapters.length - 1
+              ? orderedChapters[chapterIndex + 1]
+              : undefined;
+          const prevApproved = prevChapter
+            ? (useProjectStore.getState().chapterVersions.get(prevChapter.id) || []).find((v) => v.approved)
+            : undefined;
+          const nextApproved = nextChapter
+            ? (useProjectStore.getState().chapterVersions.get(nextChapter.id) || []).find((v) => v.approved)
+            : undefined;
           const revResult = await generate(
             'revision',
             {
@@ -888,6 +1025,8 @@ export default function FullAutoPage({
               endingReference: endingDoc?.content || '',
               structureReference: structureDoc?.content || '',
               nicheReference: nicheDoc?.content || '',
+              previousChapterContext: prevApproved ? chapterSnapshot(prevApproved.content) : undefined,
+              nextChapterContext: nextApproved ? chapterSnapshot(nextApproved.content) : undefined,
               editorialPass: pass,
             },
             { model: getEffectiveModelForStage('revision').id }
@@ -906,6 +1045,7 @@ export default function FullAutoPage({
           await approveChapterVersion(versionId);
           await updateRevisionTask(task.id, { status: 'done' });
           stepIdx++;
+          throwIfControlRequested();
         }
         if (currentStage === 'revision') {
           await advanceStage(projectId, 'export-final');
@@ -934,6 +1074,7 @@ export default function FullAutoPage({
         });
         await updateProject(projectId, { blurb: blurbResult.content });
         stepIdx++;
+        throwIfControlRequested();
         // Amazon description
         setStep('Amazon Description', stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['amazon-description'] ?? 1, 0);
         const amazonResult = await generate('amazon-description', {
@@ -954,6 +1095,19 @@ export default function FullAutoPage({
         setTimeLeftTotal(0);
         setTimeout(() => router.replace(`/projects/${projectId}`), 1500);
       } catch (err) {
+        if (err instanceof AutoControlError) {
+          if (err.action === 'stop') {
+            await updateProject(projectId, { fullAutoMode: false });
+            setCurrentStepLabel('Stopped');
+          } else {
+            setCurrentStepLabel('Paused');
+          }
+          setOverlayStatus('complete');
+          setTimeLeftThisStep(0);
+          setTimeLeftTotal(0);
+          setTimeout(() => router.replace(`/projects/${projectId}`), 500);
+          return;
+        }
         const message = err instanceof Error ? err.message : 'Something went wrong';
         setError(message);
         setOverlayStatus('error');
@@ -1062,8 +1216,24 @@ export default function FullAutoPage({
                   ~{timeLeftTotal} min left total
                 </p>
               )}
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
+                <Button
+                  variant="secondary"
+                  onClick={requestPause}
+                  disabled={controlActionPending !== 'none'}
+                >
+                  {controlActionPending === 'pause' ? 'Pausing...' : 'Pause'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={requestStop}
+                  disabled={controlActionPending !== 'none'}
+                >
+                  {controlActionPending === 'stop' ? 'Stopping...' : 'Stop'}
+                </Button>
+              </div>
               <p style={{ fontSize: '0.8125rem', color: 'var(--destructive)', marginTop: '1.5rem', fontWeight: 500 }}>
-                Do not refresh or close this tab. You can resume from the project dashboard if you need to stop.
+                Pause or stop takes effect after the current in-flight step completes.
               </p>
             </>
           )}

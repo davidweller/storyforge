@@ -7,6 +7,8 @@ The UI must support a **structured, human-in-the-loop fiction production workflo
 
 This UI PRD is intentionally opinionated: the product should *guide* users, not overwhelm them.
 
+The product is local-first and currently implemented as a Next.js application with optional Electron desktop packaging.
+
 ---
 
 ## Design Principles (Non-Negotiable)
@@ -127,7 +129,8 @@ Design requirements:
 ### Header
 - Stage name
 - Description
-- Model used (ChatGPT)
+- Model used (provider + model ID, e.g., OpenAI / Anthropic / OpenRouter route)
+- Optional "Model override active" indicator when user selected a non-default model
 
 ### Main content
 - AI-generated structured output
@@ -193,6 +196,16 @@ Each issue shows:
 **Primary CTA:**
 - “Create Revision Queue”
 
+### Editorial pass controls (required)
+- Pass selector with clear labels:
+  - Structural
+  - Line
+  - Copy
+  - Proofread
+  - Final report
+- Helper text explaining pass scope before generation
+- Persist currently selected pass in the screen state
+
 ---
 
 ## 5. Revision Queue Screen
@@ -205,6 +218,10 @@ Each issue shows:
 - Status badge (queued / in progress / done)
 
 Selecting a chapter opens the Revision Workspace.
+
+### Queue source transparency
+- When queue is created from editorial output, show that it was generated from structured output mode
+- Surface generation timestamp and pass type used to create the queue
 
 ---
 
@@ -256,6 +273,36 @@ Selecting a chapter opens the Revision Workspace.
 - Regeneration is always scoped
 - Approved content is immutable
 - Clear visual confirmation for approvals
+- For actions that trigger generation, show stage ID and effective model in advanced details ("What the AI sees")
+
+---
+
+## Generation Surface Mapping (Current)
+
+The UI should map workflow screens to generation stage IDs used by `POST /api/generate`.
+
+### Generation-backed stage IDs
+- `genre-research`
+- `niche`
+- `ending`
+- `characters`
+- `structure`
+- `title`
+- `chapter-outlines`
+- `chapters`
+- `editorial`
+- `revision`
+- `blurb`
+- `amazon-description`
+
+### Workflow screens without direct `/api/generate` calls
+- Setup
+- Compilation
+- Export Draft
+- Export Final
+
+### UX requirement
+- If a stage appears in the workflow but is not generation-backed, avoid showing model selectors or generation-specific controls on that screen.
 
 ---
 

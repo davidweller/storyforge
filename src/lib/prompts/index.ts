@@ -4,7 +4,7 @@ export { ENDING_SYSTEM, buildEndingConceptsPrompt, buildEndingExpansionPrompt } 
 export { CHARACTERS_SYSTEM, buildCharactersPrompt } from './characters';
 export { STRUCTURE_SYSTEM, buildStructurePrompt } from './structure';
 export { TITLE_IDEAS_SYSTEM, buildTitleIdeasPrompt } from './title';
-export { CHAPTERS_SYSTEM, CHAPTER_OUTLINES_SYSTEM, buildChapterPrompt, buildChapterOutlinesPrompt, buildChapterRevisionPrompt } from './chapters';
+export { CHAPTERS_SYSTEM, CHAPTER_OUTLINES_SYSTEM, buildChapterPrompt, buildChapterOutlinesPrompt, buildChapterSummaryPrompt, buildChapterRevisionPrompt } from './chapters';
 export { EDITORIAL_SYSTEM, buildEditorialPrompt, buildRevisionQueuePrompt } from './editorial';
 export { BLURB_SYSTEM, buildBlurbPrompt, AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt } from './marketing';
 export { contextBlock } from './utils';

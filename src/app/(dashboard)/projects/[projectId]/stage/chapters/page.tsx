@@ -87,10 +87,12 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     getApprovedChapterVersion,
     getTotalWordCount,
     getApprovedChaptersCount,
+    updateProject,
   } = useProject(projectId);
   
   const { createChapter, loadChapterVersions } = useProjectStore();
   const [startingChapter1, setStartingChapter1] = useState(false);
+  const [startingAutoMode, setStartingAutoMode] = useState(false);
 
   // Load versions for all chapters when chapters are available
   useEffect(() => {
@@ -209,6 +211,20 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
       setStartingChapter1(false);
     }
   };
+
+  const handleStartAutoMode = async () => {
+    try {
+      setStartingAutoMode(true);
+      if (!project.fullAutoMode) {
+        await updateProject({ fullAutoMode: true });
+      }
+      router.push(`/projects/${projectId}/full-auto`);
+    } catch (err) {
+      console.error('Error starting auto mode:', err);
+    } finally {
+      setStartingAutoMode(false);
+    }
+  };
   
   // We have an outlines doc with content (even if parser returned 0)
   const hasOutlinesDoc = (outlinesDoc?.content?.trim()?.length ?? 0) > 0;
@@ -252,6 +268,27 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
       
       {/* Write chapters: main CTA and where to find it */}
       <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Write chapters</h2>
+      {hasOutlinesDoc && (
+        <div className="mb-6 p-4 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="font-semibold text-[var(--foreground)]">Auto mode</h3>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Let StoryForge run chapters automatically from your current point.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleStartAutoMode}
+              disabled={startingAutoMode}
+            >
+              {startingAutoMode
+                ? 'Opening Auto Mode...'
+                : (project.fullAutoMode ? 'Resume Auto Mode' : 'Start Auto Mode')}
+            </Button>
+          </div>
+        </div>
+      )}
       {hasOutlinesDoc ? (
         hasOutlines ? (
           nextChapter ? (

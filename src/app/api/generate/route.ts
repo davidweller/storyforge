@@ -27,6 +27,7 @@ import {
   STRUCTURE_SYSTEM, buildStructurePrompt,
   TITLE_IDEAS_SYSTEM, buildTitleIdeasPrompt,
   CHAPTER_OUTLINES_SYSTEM, buildChapterOutlinesPrompt,
+  buildChapterSummaryPrompt,
   CHAPTERS_SYSTEM, buildChapterPrompt, buildChapterRevisionPrompt,
   EDITORIAL_SYSTEM, buildEditorialPrompt, buildRevisionQueuePrompt,
   BLURB_SYSTEM, buildBlurbPrompt,
@@ -38,7 +39,7 @@ export const maxDuration = 800;
 
 const WORKFLOW_STAGES = [
   'setup', 'genre-research', 'niche', 'ending', 'characters', 'structure',
-  'title', 'chapter-outlines', 'chapters', 'compilation', 'export-draft',
+  'title', 'chapter-outlines', 'chapter-summary', 'chapters', 'compilation', 'export-draft',
   'editorial', 'revision', 'export-final', 'blurb', 'amazon-description',
 ] as const;
 
@@ -62,7 +63,16 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
   'structure': (d) => ({ system: STRUCTURE_SYSTEM, prompt: buildStructurePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string, charactersReference: d.charactersReference as string, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
   'title': (d) => ({ system: TITLE_IDEAS_SYSTEM, prompt: buildTitleIdeasPrompt({ genre: d.genre as string, premise: d.premise as string | undefined, nicheReference: d.nicheReference as string | undefined, structureReference: d.structureReference as string | undefined, endingReference: d.endingReference as string | undefined, charactersReference: d.charactersReference as string | undefined }) }),
   'chapter-outlines': (d) => ({ system: CHAPTER_OUTLINES_SYSTEM, prompt: buildChapterOutlinesPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, structureReference: d.structureReference as string, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
-  'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummary: d.previousChapterSummary as string | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, wordTarget: d.wordTarget as number | undefined }) }),
+  'chapter-summary': (d) => ({
+    system: CHAPTERS_SYSTEM,
+    prompt: buildChapterSummaryPrompt({
+      genre: d.genre as string,
+      chapterNumber: d.chapterNumber as number,
+      chapterTitle: d.chapterTitle as string,
+      chapterContent: d.chapterContent as string,
+    }),
+  }),
+  'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummaries: d.previousChapterSummaries as Array<{ chapterNumber: number; title: string; summary: string }> | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, wordTarget: d.wordTarget as number | undefined }) }),
   'blurb': (d) => ({ system: BLURB_SYSTEM, prompt: buildBlurbPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined }) }),
   'amazon-description': (d) => ({ system: AMAZON_DESCRIPTION_SYSTEM, prompt: buildAmazonDescriptionPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined }) }),
 };
@@ -281,6 +291,8 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string || '',
           structureReference: data.structureReference as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+          previousChapterContext: data.previousChapterContext as string | undefined,
+          nextChapterContext: data.nextChapterContext as string | undefined,
           editorialPass: parseEditorialPass(data.editorialPass),
         });
         break;

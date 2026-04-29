@@ -80,7 +80,23 @@ function shouldUseAlibabaFallback(error: unknown): boolean {
   if (!process.env.ALIBABA_MODEL_STUDIO_API_KEY) return false;
   if (!(error instanceof Error)) return true;
   const msg = error.message || '';
-  return /openrouter|provider|rate limit|429|timeout|timed out|ECONNRESET|503|502|504|network/i.test(msg);
+  return /openrouter|provider|rate limit|429|timeout|timed out|ECONNRESET|503|502|504|network|terminated|UND_ERR_SOCKET|socket/i.test(msg);
+}
+
+function isTransientNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message || '';
+  const causeMsg =
+    typeof (error as Error & { cause?: unknown }).cause === 'object'
+      ? String((error as Error & { cause?: { message?: string; code?: string } }).cause?.message || (error as Error & { cause?: { message?: string; code?: string } }).cause?.code || '')
+      : '';
+  return /terminated|UND_ERR_SOCKET|ECONNRESET|socket|other side closed|timed out|timeout|network/i.test(
+    `${msg} ${causeMsg}`
+  );
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** DashScope / some proxies may omit `choices`; avoid `choices[0]` throwing when `choices` is undefined. */
@@ -117,13 +133,27 @@ export async function generateWithOpenRouter(
 
     for (const candidate of candidates) {
       try {
-        response = await getOpenRouter().chat.completions.create({
-          model: candidate,
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-          ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-        } as any);
+        let attempt = 0;
+        const maxAttempts = 2;
+        while (attempt < maxAttempts) {
+          try {
+            response = await getOpenRouter().chat.completions.create({
+              model: candidate,
+              messages,
+              temperature,
+              max_tokens: maxTokens,
+              ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+            } as any);
+            break;
+          } catch (err) {
+            attempt += 1;
+            if (!isTransientNetworkError(err) || attempt >= maxAttempts) {
+              throw err;
+            }
+            // Brief backoff for socket-reset/terminated races.
+            await delay(600 * attempt);
+          }
+        }
         break;
       } catch (err) {
         lastError = err;
@@ -201,14 +231,27 @@ export async function* streamWithOpenRouter(
 
     for (const candidate of candidates) {
       try {
-        stream = await getOpenRouter().chat.completions.create({
-          model: candidate,
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-          stream: true,
-          ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-        } as any);
+        let attempt = 0;
+        const maxAttempts = 2;
+        while (attempt < maxAttempts) {
+          try {
+            stream = await getOpenRouter().chat.completions.create({
+              model: candidate,
+              messages,
+              temperature,
+              max_tokens: maxTokens,
+              stream: true,
+              ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+            } as any);
+            break;
+          } catch (err) {
+            attempt += 1;
+            if (!isTransientNetworkError(err) || attempt >= maxAttempts) {
+              throw err;
+            }
+            await delay(600 * attempt);
+          }
+        }
         break;
       } catch (err) {
         lastError = err;

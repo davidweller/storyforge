@@ -10,6 +10,7 @@ interface StageActionsProps {
   isGenerating?: boolean;
   canApprove?: boolean;
   showEdit?: boolean;
+  approveLabel?: string;
 }
 
 export function StageActions({
@@ -20,6 +21,7 @@ export function StageActions({
   isGenerating = false,
   canApprove = true,
   showEdit = true,
+  approveLabel = 'Approve & Continue',
 }: StageActionsProps) {
   if (isApproved) {
     return (
@@ -70,7 +72,7 @@ export function StageActions({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          Approve &amp; Continue
+          {approveLabel}
         </Button>
       </div>
     </div>

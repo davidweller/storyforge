@@ -15,6 +15,7 @@ export type WorkflowStage =
   | 'editorial'       // Stage 11
   | 'revision'        // Stage 12
   | 'export-final'    // Stage 13
+  | 'chapter-summary' // Internal helper stage for chapter context summaries
   | 'blurb'           // Marketing: back-cover blurb
   | 'amazon-description';  // Marketing: Amazon product description
 
@@ -51,7 +52,7 @@ export type RevisionTaskStatus = 'queued' | 'in_progress' | 'done';
 export interface Project {
   id: string;
   userId: string;
-  title?: string;  // Optional - deferred until after ending stage
+  title?: string;  // Optional until selected in the dedicated title stage
   genre: string;
   niche?: string;  // Selected niche/subgenre
   microniche?: string;  // Selected microniche (optional)
@@ -173,7 +174,7 @@ export interface EndingOption {
 
 // Form Types
 export interface ProjectFormData {
-  title?: string;  // Optional - deferred until after ending stage
+  title?: string;  // Optional until selected in the dedicated title stage
   genre: string;
   niche?: string;  // Selected niche/subgenre
   microniche?: string;  // Selected microniche (optional)
