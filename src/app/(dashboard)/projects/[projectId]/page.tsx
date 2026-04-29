@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
 import { Button, Badge, useToast } from '@/components/ui';
 import { WorkflowSidebar } from '@/components/layout';
-import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime } from '@/lib/utils';
+import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime, getStageRouteForDocument } from '@/lib/utils';
 
 interface ProjectDashboardProps {
   params: Promise<{ projectId: string }>;
@@ -23,6 +23,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
     getTotalWordCount,
     getApprovedChaptersCount,
     getOpenIssuesCount,
+    getApprovedChapterVersion,
     updateProject,
   } = useProject(projectId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -88,7 +89,11 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   
   // Get approved chapter IDs for sidebar
   const approvedChapterIds = new Set<string>();
-  // Note: This would need to be populated from chapter versions in a real implementation
+  for (const chapter of chapters) {
+    if (getApprovedChapterVersion(chapter.id)) {
+      approvedChapterIds.add(chapter.id);
+    }
+  }
 
   const startEditingTitle = () => {
     setDraftTitle(displayTitle);
@@ -297,31 +302,36 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
             <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem', marginBottom: '2.5rem' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem', color: '#171717' }}>Reference Documents</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {approvedDocs.map((doc) => (
-                  <div
-                    key={doc.id}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#f5f5f5', borderRadius: '8px' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ width: '2rem', height: '2rem', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <svg style={{ width: '1rem', height: '1rem', color: '#10b981' }} fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                {approvedDocs.map((doc) => {
+                  const stageRoute = getStageRouteForDocument(doc.type);
+                  return (
+                    <div
+                      key={doc.id}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#f5f5f5', borderRadius: '8px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '2rem', height: '2rem', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg style={{ width: '1rem', height: '1rem', color: '#10b981' }} fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p style={{ fontWeight: 500, color: '#171717', textTransform: 'capitalize' }}>
+                            Reference – {doc.type}
+                          </p>
+                          <p style={{ fontSize: '0.75rem', color: '#737373' }}>
+                            v{doc.version} • {formatRelativeTime(doc.updatedAt)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p style={{ fontWeight: 500, color: '#171717', textTransform: 'capitalize' }}>
-                          Reference – {doc.type}
-                        </p>
-                        <p style={{ fontSize: '0.75rem', color: '#737373' }}>
-                          v{doc.version} • {formatRelativeTime(doc.updatedAt)}
-                        </p>
-                      </div>
+                      {stageRoute && (
+                        <Link href={`/projects/${project.id}/stage/${stageRoute}`}>
+                          <Button variant="ghost" size="sm">View</Button>
+                        </Link>
+                      )}
                     </div>
-                    <Link href={`/projects/${project.id}/stage/${doc.type}`}>
-                      <Button variant="ghost" size="sm">View</Button>
-                    </Link>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

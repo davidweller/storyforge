@@ -639,6 +639,16 @@ export default function FullAutoPage({
             await loadProject(projectId);
           } else {
           const chapterSummaries = new Map<number, { title: string; summary: string }>();
+          for (const existingChapter of chs) {
+            const versions = chapterVersionsMap.get(existingChapter.id) || [];
+            const approved = versions.find((v) => v.approved);
+            if (approved?.notes?.trim()) {
+              chapterSummaries.set(existingChapter.chapterNumber, {
+                title: existingChapter.title,
+                summary: approved.notes.trim(),
+              });
+            }
+          }
           for (let i = 0; i < outlines.length; i++) {
             throwIfControlRequested();
             const outline = outlines[i];
@@ -686,6 +696,13 @@ export default function FullAutoPage({
               nicheReference: nicheDoc?.content || '',
               wordTarget: outline.wordTarget || 3000,
             });
+            const chapterSummaryResult = await generate('chapter-summary', {
+              genre: project.genre,
+              chapterNumber: chapter.chapterNumber,
+              chapterTitle: chapter.title,
+              chapterContent: chapterResult.content,
+            });
+            const chapterSummary = chapterSummaryResult.content.trim();
             const latestVer = getLatestChapterVersion(chapter.id);
             const newVer = (latestVer?.version || 0) + 1;
             const versionId = await createChapterVersion({
@@ -696,17 +713,12 @@ export default function FullAutoPage({
               content: chapterResult.content,
               wordCount: countWords(chapterResult.content),
               approved: false,
+              notes: chapterSummary,
             });
             await approveChapterVersion(versionId);
-            const chapterSummaryResult = await generate('chapter-summary', {
-              genre: project.genre,
-              chapterNumber: chapter.chapterNumber,
-              chapterTitle: chapter.title,
-              chapterContent: chapterResult.content,
-            });
             chapterSummaries.set(chapter.chapterNumber, {
               title: chapter.title,
-              summary: chapterSummaryResult.content.trim(),
+              summary: chapterSummary,
             });
             stepIdx++;
             throwIfControlRequested();
@@ -956,6 +968,12 @@ export default function FullAutoPage({
                 },
                 { model: getEffectiveModelForStage('revision').id }
               );
+              const revisionSummaryResult = await generate('chapter-summary', {
+                genre: project.genre,
+                chapterNumber: chapter.chapterNumber,
+                chapterTitle: chapter.title,
+                chapterContent: revResult.content,
+              });
               const sorted = [...versions].sort((a, b) => b.version - a.version);
               const newVer = (sorted[0]?.version || 0) + 1;
               const versionId = await createChapterVersion({
@@ -966,6 +984,7 @@ export default function FullAutoPage({
                 content: revResult.content,
                 wordCount: countWords(revResult.content),
                 approved: false,
+                notes: revisionSummaryResult.content.trim(),
               });
               await approveChapterVersion(versionId);
               await updateRevisionTask(task.id, { status: 'done' });
@@ -1031,6 +1050,12 @@ export default function FullAutoPage({
             },
             { model: getEffectiveModelForStage('revision').id }
           );
+          const revisionSummaryResult = await generate('chapter-summary', {
+            genre: project.genre,
+            chapterNumber: chapter.chapterNumber,
+            chapterTitle: chapter.title,
+            chapterContent: revResult.content,
+          });
           const sorted = [...versions].sort((a, b) => b.version - a.version);
           const newVer = (sorted[0]?.version || 0) + 1;
           const versionId = await createChapterVersion({
@@ -1041,6 +1066,7 @@ export default function FullAutoPage({
             content: revResult.content,
             wordCount: countWords(revResult.content),
             approved: false,
+            notes: revisionSummaryResult.content.trim(),
           });
           await approveChapterVersion(versionId);
           await updateRevisionTask(task.id, { status: 'done' });

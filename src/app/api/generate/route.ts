@@ -54,6 +54,135 @@ const GenerateBodySchema = z.object({
 
 type D = Record<string, unknown>;
 
+const EditorialPassSchema = z.enum(['structural', 'line', 'copy', 'proofread', 'final_report']);
+const optionalString = z.string().optional();
+const requiredString = z.string().min(1);
+const ProjectContextSchema = z.object({
+  premise: optionalString,
+  genre: requiredString,
+  research: optionalString,
+}).passthrough();
+const ChapterContinuitySummarySchema = z.object({
+  chapterNumber: z.number(),
+  title: z.string(),
+  summary: z.string(),
+});
+
+const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
+  'genre-research': ProjectContextSchema,
+  niche: ProjectContextSchema.extend({
+    genreResearch: z.string(),
+  }).passthrough(),
+  ending: ProjectContextSchema.extend({
+    nicheReference: z.string(),
+    selectedEnding: optionalString,
+  }).passthrough(),
+  characters: ProjectContextSchema.extend({
+    nicheReference: z.string(),
+    endingReference: z.string(),
+  }).passthrough(),
+  structure: ProjectContextSchema.extend({
+    nicheReference: z.string(),
+    endingReference: z.string(),
+    charactersReference: z.string(),
+  }).passthrough(),
+  title: z.object({
+    genre: requiredString,
+    premise: optionalString,
+    nicheReference: optionalString,
+    structureReference: optionalString,
+    endingReference: optionalString,
+    charactersReference: optionalString,
+  }).passthrough(),
+  'chapter-outlines': ProjectContextSchema.extend({
+    structureReference: z.string(),
+    charactersReference: z.string(),
+    endingReference: z.string(),
+    genreResearch: optionalString,
+    nicheReference: optionalString,
+  }).passthrough(),
+  'chapter-summary': z.object({
+    genre: requiredString,
+    chapterNumber: z.number(),
+    chapterTitle: requiredString,
+    chapterContent: requiredString,
+  }).passthrough(),
+  chapters: z.object({
+    genre: requiredString,
+    chapterNumber: z.number(),
+    chapterTitle: requiredString,
+    beatReference: z.string(),
+    sceneGoal: z.string(),
+    pov: optionalString,
+    charactersReference: z.string(),
+    endingReference: z.string(),
+    previousChapterSummaries: z.array(ChapterContinuitySummarySchema).optional(),
+    structureContext: z.string(),
+    genreResearch: optionalString,
+    nicheReference: optionalString,
+    wordTarget: z.number().optional(),
+  }).passthrough().superRefine((value, ctx) => {
+    if ('previousChapterSummary' in value) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['previousChapterSummary'],
+        message: 'Use previousChapterSummaries as an array of chapter continuity summaries.',
+      });
+    }
+  }),
+  editorial: z.union([
+    z.object({
+      createQueue: z.literal(true),
+      editorialReport: requiredString,
+      chapterCount: z.number(),
+      editorialPass: EditorialPassSchema.optional(),
+    }).passthrough(),
+    z.object({
+      manuscript: requiredString,
+      genre: requiredString,
+      nicheReference: optionalString,
+      charactersReference: optionalString,
+      endingReference: optionalString,
+      structureReference: optionalString,
+      editorialPass: EditorialPassSchema.optional(),
+      intendedAudience: optionalString,
+      premise: optionalString,
+      research: optionalString,
+    }).passthrough(),
+  ]),
+  revision: z.object({
+    originalContent: requiredString,
+    revisionInstructions: optionalString,
+    acceptanceCriteria: z.array(z.string()).optional(),
+    charactersReference: z.string().optional(),
+    endingReference: z.string().optional(),
+    structureReference: optionalString,
+    nicheReference: optionalString,
+    previousChapterContext: optionalString,
+    nextChapterContext: optionalString,
+    editorialPass: EditorialPassSchema.optional(),
+  }).passthrough(),
+  blurb: z.object({
+    genre: requiredString,
+    niche: optionalString,
+    title: optionalString,
+    premise: optionalString,
+    marketAnalysis: optionalString,
+    readerTargeting: optionalString,
+    plotBlueprint: optionalString,
+  }).passthrough(),
+  'amazon-description': z.object({
+    genre: requiredString,
+    niche: optionalString,
+    title: optionalString,
+    premise: optionalString,
+    marketAnalysis: optionalString,
+    readerTargeting: optionalString,
+    plotBlueprint: optionalString,
+    blurb: optionalString,
+  }).passthrough(),
+};
+
 /** Lookup map for stages whose prompt building requires no branching logic.
  *  Stages with conditional data (ending, editorial, revision) stay in the switch. */
 const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: string; prompt: string }>> = {
@@ -88,11 +217,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const { stage, data, model: requestedModel } = parsed.data as {
+    const { stage, model: requestedModel } = parsed.data as {
       stage: WorkflowStage;
       data: Record<string, unknown>;
       model?: string;
     };
+    let data = parsed.data.data as Record<string, unknown>;
     
     // Variables for model switching (used in editorial stage)
     let model = requestedModel;
@@ -104,6 +234,21 @@ export async function POST(request: NextRequest) {
     if (!stage || !data) {
       console.error('[API] Missing stage or data:', { stage, hasData: !!data });
       return NextResponse.json({ error: 'Missing stage or data' }, { status: 400 });
+    }
+
+    const stageDataSchema = STAGE_DATA_SCHEMAS[stage];
+    if (stageDataSchema) {
+      const parsedStageData = stageDataSchema.safeParse(data);
+      if (!parsedStageData.success) {
+        return NextResponse.json(
+          {
+            error: `Invalid data for ${stage} generation`,
+            details: parsedStageData.error.flatten(),
+          },
+          { status: 400 }
+        );
+      }
+      data = parsedStageData.data as Record<string, unknown>;
     }
     
     let prompt: string;

@@ -144,6 +144,13 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         throw new Error(`Empty revision returned for chapter ${chapter.chapterNumber}.`);
       }
 
+      const summaryResult = await generate('chapter-summary', {
+        genre: project.genre,
+        chapterNumber: chapter.chapterNumber,
+        chapterTitle: chapter.title,
+        chapterContent: result.content,
+      });
+
       await loadChapterVersions(chapter.id);
       const refreshed = useProjectStore.getState().chapterVersions.get(chapter.id) || [];
       const latestSorted = [...refreshed].sort((a, b) => b.version - a.version);
@@ -158,6 +165,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         content: result.content,
         wordCount: result.content.split(/\s+/).filter(Boolean).length,
         approved: true,
+        notes: summaryResult.content.trim(),
       };
       if (latestVersion?.id) {
         versionData.parentVersionId = latestVersion.id;
@@ -422,6 +430,13 @@ export default function RevisionPage({ params }: RevisionPageProps) {
         wordCount: revisedContent.split(/\s+/).length,
         approved: true,
       };
+      const summaryResult = await generate('chapter-summary', {
+        genre: project.genre,
+        chapterNumber: selectedChapter.chapterNumber,
+        chapterTitle: selectedChapter.title,
+        chapterContent: revisedContent,
+      });
+      versionData.notes = summaryResult.content.trim();
       
       // Only include parentVersionId if it exists (Firestore doesn't allow undefined)
       if (latestVersion?.id) {

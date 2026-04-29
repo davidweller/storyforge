@@ -163,6 +163,25 @@ export function getNextStage(currentStage: string): string | null {
   return STAGE_ORDER[currentIndex + 1];
 }
 
+const DOCUMENT_STAGE_ROUTES: Partial<Record<import('@/types').DocumentType, import('@/types').WorkflowStage>> = {
+  genre: 'genre-research',
+  niche: 'niche',
+  ending: 'ending',
+  characters: 'characters',
+  structure: 'structure',
+  'chapter-outlines': 'chapter-outlines',
+  'editorial': 'editorial',
+  'editorial-structural': 'editorial',
+  'editorial-line': 'editorial',
+  'editorial-copy': 'editorial',
+  'editorial-proofread': 'editorial',
+  'editorial-final': 'editorial',
+};
+
+export function getStageRouteForDocument(type: import('@/types').DocumentType): import('@/types').WorkflowStage | null {
+  return DOCUMENT_STAGE_ROUTES[type] ?? null;
+}
+
 // Stage display names
 export const STAGE_NAMES: Record<string, string> = {
   'setup': 'Getting Started',

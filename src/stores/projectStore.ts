@@ -63,6 +63,10 @@ interface ProjectState {
   
   // Chapter version actions
   createChapterVersion: (data: Omit<ChapterVersion, 'id' | 'createdAt'>) => Promise<string>;
+  updateChapterVersion: (
+    versionId: string,
+    data: Partial<Omit<ChapterVersion, 'id' | 'chapterId' | 'createdAt'>>
+  ) => Promise<void>;
   approveChapterVersion: (versionId: string) => Promise<void>;
   
   // Editorial actions
@@ -310,6 +314,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return versionId;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to create chapter version' });
+      throw error;
+    } finally {
+      set(setOp('chapterVersion', false));
+    }
+  },
+
+  updateChapterVersion: async (versionId: string, data) => {
+    set(setOp('chapterVersion', true));
+    set({ error: null });
+    try {
+      await firestore.updateChapterVersion(versionId, data);
+      set((state) => {
+        const newVersions = new Map(state.chapterVersions);
+        for (const [chapterId, versions] of newVersions) {
+          newVersions.set(chapterId, versions.map((v) => v.id === versionId ? { ...v, ...data } : v));
+        }
+        return { chapterVersions: newVersions };
+      });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to update chapter version' });
       throw error;
     } finally {
       set(setOp('chapterVersion', false));

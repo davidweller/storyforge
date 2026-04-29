@@ -11,6 +11,7 @@ import { WorkflowSidebar } from '@/components/layout';
 import { Button, Badge } from '@/components/ui';
 import { countWords, capOutlineWordTargets } from '@/lib/utils';
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { htmlToEditorialText } from '@/lib/utils/markdown';
 import type { ChapterVersion } from '@/types';
 
 interface ChapterPageProps {
@@ -98,7 +99,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     getApprovedChapterVersion,
   } = useProject(projectId);
   
-  const { loadChapterVersions, createChapterVersion, approveChapterVersion, error: storeError } = useProjectStore();
+  const { loadChapterVersions, createChapterVersion, updateChapterVersion, approveChapterVersion, error: storeError } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [content, setContent] = useState('');
@@ -192,12 +193,17 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         }
       }
       
-      // Get previous chapter summary
-      let previousChapterSummary: string | undefined;
+      // Send continuity in the shape the generation API expects.
+      let previousChapterSummaries: Array<{ chapterNumber: number; title: string; summary: string }> | undefined;
       if (prevChapter) {
         const prevVersion = getApprovedChapterVersion(prevChapter.id);
         if (prevVersion) {
-          previousChapterSummary = prevVersion.content.slice(0, 1000) + '...';
+          const previousText = htmlToEditorialText(prevVersion.content).trim();
+          previousChapterSummaries = [{
+            chapterNumber: prevChapter.chapterNumber,
+            title: prevChapter.title,
+            summary: prevVersion.notes || (previousText.length > 1000 ? `${previousText.slice(0, 1000)}...` : previousText),
+          }];
         }
       }
       
@@ -210,7 +216,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         pov,
         charactersReference: charactersDoc?.content || '',
         endingReference: endingDoc?.content || '',
-        previousChapterSummary,
+        previousChapterSummaries,
         structureContext: structureDoc?.content || '',
         genreResearch: genreDoc?.content || '',
         nicheReference: nicheDoc?.content || '',
@@ -251,6 +257,13 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     if (!currentVersionId) return;
     
     try {
+      const summaryResult = await generate('chapter-summary', {
+        genre: project.genre,
+        chapterNumber: chapter.chapterNumber,
+        chapterTitle: chapter.title,
+        chapterContent: content,
+      });
+      await updateChapterVersion(currentVersionId, { notes: summaryResult.content.trim() });
       await approveChapterVersion(currentVersionId);
       
       // Navigate to next chapter or back to chapters list
