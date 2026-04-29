@@ -1,12 +1,12 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
-import { Button, Card, CardContent, Input } from '@/components/ui';
+import { Button, Card, CardContent, useToast } from '@/components/ui';
 import { getNextStage, cn } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
 
@@ -21,6 +21,36 @@ interface EndingConcept {
   emotionalPayoff: string;
   characterResolution: string;
   thematicStatement: string;
+}
+
+type ExpansionStatus = 'idle' | 'running' | 'complete' | 'error';
+
+function firstTwoSentences(text: string): string {
+  const cleaned = (text || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  const matches = cleaned.match(/[^.!?]+[.!?]+/g);
+  if (!matches || matches.length === 0) {
+    return cleaned;
+  }
+  return matches.slice(0, 2).join(' ').trim();
+}
+
+function parseSavedEndingChoice(content: string): EndingConcept | null {
+  if (!content?.trim()) return null;
+  try {
+    const parsed = JSON.parse(content) as Partial<EndingConcept>;
+    if (!parsed.title || !parsed.summary) return null;
+    return {
+      id: parsed.id || 'ending-choice',
+      title: parsed.title,
+      summary: parsed.summary,
+      emotionalPayoff: parsed.emotionalPayoff || '',
+      characterResolution: parsed.characterResolution || '',
+      thematicStatement: parsed.thematicStatement || '',
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Parse ending concepts from generated content (primary: numbered + bold title; fallback: numbered sections)
@@ -69,11 +99,11 @@ export default function EndingPage({ params }: EndingPageProps) {
     error: projectError,
     getDocumentByType,
     getLatestDocumentByType,
-    updateProject,
   } = useProject(projectId);
   
   const { createDocument, updateDocument, approveDocument, advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
+  const { addToast } = useToast();
   
   const [phase, setPhase] = useState<'concepts' | 'expanded'>('concepts');
   const [conceptsContent, setConceptsContent] = useState('');
@@ -82,41 +112,74 @@ export default function EndingPage({ params }: EndingPageProps) {
   const [concepts, setConcepts] = useState<EndingConcept[]>([]);
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  
-  // Title modal state
-  const [showTitleModal, setShowTitleModal] = useState(false);
-  const [projectTitle, setProjectTitle] = useState('');
-  const [titleError, setTitleError] = useState('');
-  
-  // Load existing content: use parsing to decide concepts vs expanded (not length alone)
+  const [expansionStatus, setExpansionStatus] = useState<ExpansionStatus>('idle');
+  const [expansionError, setExpansionError] = useState<string | null>(null);
+
+  const initializedRef = useRef(false);
+  const autoResumeTriggered = useRef(false);
+
+  // Effect 1: One-shot hydration from DB on mount.
+  // Only runs once so it never overwrites state set by user actions (handleChooseConcept etc.).
   useEffect(() => {
-    if (documents.length > 0) {
-      const doc = getLatestDocumentByType('ending');
-      if (doc) {
-        const parsed = parseEndingConcepts(doc.content);
-        if (parsed.length >= 2) {
-          setPhase('concepts');
-          setConceptsContent(doc.content);
-          setConcepts(parsed);
-        } else if (parsed.length <= 1 && doc.content.length > 3000) {
-          setPhase('expanded');
-          setExpandedContent(doc.content);
-        } else {
-          setPhase('concepts');
-          setConceptsContent(doc.content);
-          setConcepts(parsed);
-        }
-        setCurrentDocId(doc.id);
+    if (initializedRef.current || documents.length === 0) return;
+    initializedRef.current = true;
+
+    const doc = getLatestDocumentByType('ending');
+    const choiceDoc = getLatestDocumentByType('ending-choice');
+
+    if (doc) {
+      const parsed = parseEndingConcepts(doc.content);
+      if (parsed.length >= 2) {
+        setPhase('concepts');
+        setConceptsContent(doc.content);
+        setConcepts(parsed);
+      } else if (parsed.length <= 1 && doc.content.length > 3000) {
+        setPhase('expanded');
+        setExpandedContent(doc.content);
+        setExpansionStatus('complete');
+      } else {
+        setPhase('concepts');
+        setConceptsContent(doc.content);
+        setConcepts(parsed);
+      }
+      setCurrentDocId(doc.id);
+    }
+
+    if (choiceDoc) {
+      const savedChoice = parseSavedEndingChoice(choiceDoc.content);
+      if (savedChoice) {
+        setSelectedConcept(savedChoice);
       }
     }
   }, [documents, getLatestDocumentByType]);
-  
-  // Pre-fill title if project already has one
+
   useEffect(() => {
-    if (project?.title) {
-      setProjectTitle(project.title);
+    if (expansionStatus !== 'running') return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+    };
+  }, [expansionStatus]);
+
+  // Effect 2: Auto-resume interrupted expansion on reload.
+  // If the user picked an ending (ending-choice saved) but expansion never finished
+  // (ending doc still contains concept list), restart expansion automatically.
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    if (autoResumeTriggered.current) return;
+    if (expansionStatus !== 'idle') return;
+    if (!selectedConcept) return;
+    const endingDoc = getLatestDocumentByType('ending');
+    if (endingDoc && parseEndingConcepts(endingDoc.content).length >= 2) {
+      autoResumeTriggered.current = true;
+      void handleExpandEndingInBackground(selectedConcept);
     }
-  }, [project?.title]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expansionStatus, selectedConcept]);
   
   if (projectLoading || !project) {
     return (
@@ -135,6 +198,9 @@ export default function EndingPage({ params }: EndingPageProps) {
   // Generate ending concepts
   const handleGenerateConcepts = async () => {
     clearError();
+    setExpansionError(null);
+    setExpansionStatus('idle');
+    autoResumeTriggered.current = false;
     
     try {
       const nicheDoc = getDocumentByType('niche');
@@ -148,6 +214,7 @@ export default function EndingPage({ params }: EndingPageProps) {
       setConceptsContent(result.content);
       setConcepts(parseEndingConcepts(result.content));
       setPhase('concepts');
+      setSelectedConcept(null);
       
       // Save the document
       if (currentDocId) {
@@ -169,24 +236,62 @@ export default function EndingPage({ params }: EndingPageProps) {
       // Error handled by hook
     }
   };
+
+  const saveEndingChoice = async (concept: EndingConcept): Promise<void> => {
+    const choicePayload = JSON.stringify({
+      id: concept.id,
+      title: concept.title,
+      summary: firstTwoSentences(concept.summary),
+      emotionalPayoff: concept.emotionalPayoff,
+      characterResolution: concept.characterResolution,
+      thematicStatement: concept.thematicStatement,
+    });
+    const latestChoice = getLatestDocumentByType('ending-choice');
+    if (latestChoice) {
+      await updateDocument(latestChoice.id, {
+        content: choicePayload,
+        version: (latestChoice.version || 0) + 1,
+        approved: true,
+      });
+      return;
+    }
+    await createDocument({
+      projectId,
+      type: 'ending-choice',
+      content: choicePayload,
+      version: 1,
+      approved: true,
+    });
+  };
   
-  // Expand selected ending
-  const handleExpandEnding = async () => {
-    if (!selectedConcept) return;
+  // Expand selected ending in-session while user stays on page.
+  const handleExpandEndingInBackground = async (conceptOverride?: EndingConcept) => {
+    const conceptToExpand = conceptOverride || selectedConcept;
+    if (!conceptToExpand) return;
     clearError();
+    setExpansionError(null);
+    setExpansionStatus('running');
+    setPhase('expanded');
+    addToast({
+      type: 'info',
+      message: 'Expanding your selected ending now. Please stay on this page until it finishes.',
+      duration: 7000,
+    });
     
     try {
+      await saveEndingChoice(conceptToExpand);
       const nicheDoc = getDocumentByType('niche');
       
       const result = await generate('ending', {
         premise: project.premise,
         genre: project.genre,
         nicheReference: nicheDoc?.content || '',
-        selectedEnding: `${selectedConcept.title}\n\n${selectedConcept.summary}\n\nEmotional Payoff: ${selectedConcept.emotionalPayoff}\nCharacter Resolution: ${selectedConcept.characterResolution}\nThematic Statement: ${selectedConcept.thematicStatement}`,
+        selectedEnding: `${conceptToExpand.title}\n\n${conceptToExpand.summary}\n\nEmotional Payoff: ${conceptToExpand.emotionalPayoff}\nCharacter Resolution: ${conceptToExpand.characterResolution}\nThematic Statement: ${conceptToExpand.thematicStatement}`,
       });
       
       setExpandedContent(result.content);
       setPhase('expanded');
+      setExpansionStatus('complete');
       
       // Update the document with expanded content
       if (currentDocId) {
@@ -196,44 +301,34 @@ export default function EndingPage({ params }: EndingPageProps) {
         });
       }
     } catch (err) {
-      // Error handled by hook
+      setExpansionStatus('error');
+      const message = err instanceof Error ? err.message : 'Ending expansion failed.';
+      setExpansionError(message);
+      addToast({ type: 'error', message: 'Ending expansion failed. Please try again.' });
     }
   };
+
+  const handleChooseConcept = (concept: EndingConcept) => {
+    if (expansionStatus === 'running') return;
+    setSelectedConcept(concept);
+    void handleExpandEndingInBackground(concept);
+  };
   
-  // Show title modal before approval
   const handleApproveClick = () => {
-    // If project already has a title, skip the modal
-    if (project.title) {
-      handleApprove(project.title);
-    } else {
-      setShowTitleModal(true);
-    }
+    void handleApprove();
   };
   
-  // Handle approval with title
-  const handleApprove = async (title: string) => {
+  // Approve expanded ending and continue to title stage
+  const handleApprove = async () => {
     if (!currentDocId) return;
-    
-    // Validate title
-    if (!title.trim()) {
-      setTitleError('Please enter a title for your project');
-      return;
-    }
-    
+
     try {
-      // Update project with title
-      if (!project.title) {
-        await updateProject({ title: title.trim() });
-      }
-      
       await approveDocument(currentDocId);
       
       const nextStage = getNextStage('ending');
       if (nextStage && project.currentStage === 'ending') {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
-      
-      setShowTitleModal(false);
       
       if (nextStage) {
         router.push(`/projects/${projectId}/stage/${nextStage}`);
@@ -243,10 +338,6 @@ export default function EndingPage({ params }: EndingPageProps) {
     } catch (err) {
       // Handle error
     }
-  };
-  
-  const handleTitleSubmit = () => {
-    handleApprove(projectTitle);
   };
   
   return (
@@ -261,136 +352,6 @@ export default function EndingPage({ params }: EndingPageProps) {
       blurbFilled={!!project.blurb?.trim()}
       amazonDescriptionFilled={!!project.amazonDescription?.trim()}
     >
-      {/* Title Modal */}
-      {showTitleModal && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            backdropFilter: 'blur(4px)',
-          }}
-          onClick={() => setShowTitleModal(false)}
-        >
-          <div 
-            style={{
-              backgroundColor: 'var(--card)',
-              borderRadius: '16px',
-              padding: '2rem',
-              maxWidth: '480px',
-              width: '90%',
-              border: '1px solid var(--border)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{
-                width: '3.5rem',
-                height: '3.5rem',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(139, 92, 246, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1rem',
-              }}>
-                <svg style={{ width: '1.75rem', height: '1.75rem', color: '#8B5CF6' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </div>
-              <h2 style={{ 
-                fontSize: '1.5rem', 
-                fontWeight: 700, 
-                color: 'var(--foreground)',
-                marginBottom: '0.5rem',
-              }}>
-                Name Your Story
-              </h2>
-              <p style={{ 
-                fontSize: '0.9rem', 
-                color: 'var(--muted-foreground)',
-                lineHeight: 1.5,
-              }}>
-                Now that you&apos;ve developed your ending, it&apos;s time to give your story a title. You can always change it later.
-              </p>
-            </div>
-            
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '0.875rem', 
-                fontWeight: 500, 
-                marginBottom: '0.5rem', 
-                color: 'var(--foreground)' 
-              }}>
-                Project Title
-              </label>
-              <input
-                type="text"
-                value={projectTitle}
-                onChange={(e) => {
-                  setProjectTitle(e.target.value);
-                  setTitleError('');
-                }}
-                placeholder="Enter your novel's title"
-                autoFocus
-                style={{
-                  width: '100%',
-                  padding: '0.875rem 1rem',
-                  fontSize: '1rem',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--background)',
-                  color: 'var(--foreground)',
-                  border: titleError ? '2px solid var(--destructive)' : '1px solid var(--border)',
-                  outline: 'none',
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleTitleSubmit();
-                  }
-                }}
-              />
-              {titleError && (
-                <p style={{ 
-                  marginTop: '0.5rem', 
-                  fontSize: '0.875rem', 
-                  color: 'var(--destructive)' 
-                }}>
-                  {titleError}
-                </p>
-              )}
-            </div>
-            
-            <div style={{ 
-              display: 'flex', 
-              gap: '0.75rem',
-              justifyContent: 'flex-end',
-            }}>
-              <Button 
-                variant="secondary" 
-                onClick={() => setShowTitleModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleTitleSubmit}>
-                <svg style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Approve & Continue
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Error display */}
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
@@ -399,9 +360,9 @@ export default function EndingPage({ params }: EndingPageProps) {
       )}
       
       {/* Loading state */}
-      {isGenerating && (
+      {isGenerating && phase === 'concepts' && (
         <LoadingContent 
-          message={phase === 'concepts' ? 'Generating ending concepts...' : 'Expanding your chosen ending...'} 
+          message={'Generating ending concepts...'} 
         />
       )}
       
@@ -445,6 +406,9 @@ export default function EndingPage({ params }: EndingPageProps) {
             <p className="text-[var(--muted-foreground)]">
               Choose the ending concept that resonates most with your vision. We&apos;ll then expand it into a detailed blueprint.
             </p>
+            <p className="text-sm text-[var(--muted-foreground)] mt-2">
+              Selecting a card starts expansion automatically.
+            </p>
           </div>
           
           <div className="w-full flex flex-col gap-4 mb-6">
@@ -457,7 +421,7 @@ export default function EndingPage({ params }: EndingPageProps) {
                     ? 'ring-2 ring-[var(--ring)] bg-[var(--muted)]'
                     : 'hover:border-[var(--ring)]'
                 )}
-                onClick={() => setSelectedConcept(concept)}
+                onClick={() => handleChooseConcept(concept)}
               >
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4">
@@ -475,7 +439,7 @@ export default function EndingPage({ params }: EndingPageProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-[var(--foreground)] mb-2">{concept.title}</h3>
-                      <p className="text-sm text-[var(--muted-foreground)] mb-3">{concept.summary}</p>
+                      <p className="text-sm text-[var(--muted-foreground)] mb-3">{firstTwoSentences(concept.summary)}</p>
                       {concept.emotionalPayoff && (
                         <p className="text-xs text-[var(--muted-foreground)]">
                           <strong>Emotional Payoff:</strong> {concept.emotionalPayoff}
@@ -488,41 +452,62 @@ export default function EndingPage({ params }: EndingPageProps) {
             ))}
           </div>
           
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-start">
             <Button variant="secondary" onClick={handleGenerateConcepts} disabled={isGenerating}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Regenerate Concepts
             </Button>
-            
-            <Button onClick={handleExpandEnding} disabled={!selectedConcept || isGenerating}>
-              Expand Selected Ending
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Button>
           </div>
         </>
       )}
       
       {/* Expanded phase */}
-      {!isGenerating && phase === 'expanded' && expandedContent && (
+      {phase === 'expanded' && (
         <>
+          {expansionStatus === 'running' && (
+            <div className="mb-6 p-4 rounded-lg border border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]">
+              <p className="text-sm text-[var(--foreground)] font-medium mb-1">
+                We&apos;re expanding your selected ending in the background.
+              </p>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                Please stay on this page. Navigating away may interrupt generation.
+              </p>
+              <div className="mt-4">
+                <LoadingContent message="Expanding your selected ending..." />
+              </div>
+            </div>
+          )}
+          {expansionStatus === 'error' && (
+            <div className="mb-6 p-4 rounded-lg border border-[var(--destructive)] bg-[rgba(139,38,53,0.1)]">
+              <p className="text-sm text-[var(--destructive)]">
+                {expansionError || 'Expansion failed. Please try again.'}
+              </p>
+            </div>
+          )}
+          {!!expandedContent && (
           <ContentDisplay
             content={expandedContent}
             isEditing={isEditing && !isApproved}
             onContentChange={setExpandedContent}
           />
+          )}
           <StageActions
             onApprove={handleApproveClick}
-            onRegenerate={handleExpandEnding}
+            onRegenerate={handleExpandEndingInBackground}
             onEdit={() => setIsEditing(!isEditing)}
             isApproved={isApproved}
-            isGenerating={isGenerating}
-            canApprove={!!expandedContent && !isApproved}
+            isGenerating={isGenerating || expansionStatus === 'running'}
+            canApprove={!!expandedContent && expansionStatus === 'complete' && !isApproved}
             showEdit={!isApproved}
+            approveLabel="Continue to Cast of Characters"
           />
+          {expansionStatus !== 'complete' && !isApproved && (
+            <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+              Continue unlocks when ending expansion finishes.
+            </p>
+          )}
         </>
       )}
       

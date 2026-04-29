@@ -17,7 +17,7 @@ Authors need a **clear, step-by-step system** that:
 - Produces export-ready manuscripts
 
 ## Product Goal
-Create a **local desktop application** that guides a user from *idea → niche → outline → chapters → full manuscript → marketing copy*, using:
+Create a **local-first application** that guides a user from *idea → niche → outline → chapters → full manuscript → marketing copy*, using:
 - **OpenAI API** (GPT-5.2, GPT-4.1 family) for research, planning, analysis, and editorial
 - **Anthropic API** (Claude Opus 4.5, Claude Sonnet 4.5) for long-form creative writing and revision
 - **Human approval gates** between every stage
@@ -25,6 +25,8 @@ Create a **local desktop application** that guides a user from *idea → niche �
 The product should feel like a **guided production pipeline**, not a chat tool.
 
 All project data is stored locally on the user's machine. No cloud database, no authentication, no internet dependency beyond LLM API calls.
+
+Current implementation ships as a Next.js app (with optional Electron desktop packaging), and all generation is orchestrated through a server-side `POST /api/generate` route.
 
 ## Target User
 Primary:
@@ -317,6 +319,40 @@ User profile:
 
 ---
 
+## Generation API Contract (Current)
+
+All LLM generation requests are sent through `POST /api/generate` with:
+- `stage` (workflow stage identifier)
+- `data` (stage-specific payload)
+- `model` (optional model override)
+
+### Stage identifiers currently routed through generation API
+- `genre-research`
+- `niche`
+- `ending`
+- `characters`
+- `structure`
+- `title`
+- `chapter-outlines`
+- `chapters`
+- `editorial`
+- `revision`
+- `blurb`
+- `amazon-description`
+
+### Stages in the product workflow that do not call `/api/generate`
+- `setup`
+- `compilation`
+- `export-draft`
+- `export-final`
+
+### Editorial generation behavior
+- Supports pass-specific editorial modes: `structural`, `line`, `copy`, `proofread`, `final_report`
+- When creating a revision queue from editorial output, generation runs in structured JSON mode
+- Large-manuscript editorial analysis may auto-switch to a fallback model when needed for context limits
+
+---
+
 ## Full Auto Mode
 
 A special mode available during chapter drafting (Stage 8).
@@ -420,6 +456,10 @@ None. StoryForge is a **single-user local application**. All data belongs to the
 - Models: Claude Opus 4.5 (default), Claude Sonnet 4.5, Claude 3.5 Sonnet, Claude 3.5 Haiku
 - Used for: ending development, chapter drafting, chapter revision, editorial analysis
 - Chapter-scoped context packaging with strict constraints (no canon edits)
+
+**OpenRouter (fallback / optional routing layer)**
+- Used as an additional provider path in model routing when selected by stage/model configuration
+- Routing decisions remain server-side; client only sends requested stage + optional model override
 
 **Key constraints:**
 - Strict token budgeting per stage

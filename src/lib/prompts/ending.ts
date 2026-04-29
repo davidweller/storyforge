@@ -34,7 +34,7 @@ ${nicheReference}
 For each ending concept, provide:
 
 1. **Title**: A short, evocative name for this ending type
-2. **Summary**: 2-3 sentences describing how the story concludes
+2. **Summary**: Maximum 2 sentences describing how the story concludes
 3. **Emotional Payoff**: The primary feeling readers will experience
 4. **Character Resolution**: How the protagonist's arc completes
 5. **Thematic Statement**: What truth about life/humanity this ending affirms

@@ -16,7 +16,7 @@ import type { WorkflowStage, StageStatus, Chapter, RevisionTask, ProjectDocument
 
 interface WorkflowSidebarProps {
   projectId: string;
-  projectTitle?: string;  // Optional - may not be set until after ending stage
+  projectTitle?: string;  // Optional - may not be set until title stage selection
   genre?: string;         // Used as fallback display when title is missing
   niche?: string;         // Additional context for display
   currentStage: WorkflowStage;
