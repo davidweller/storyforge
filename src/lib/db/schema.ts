@@ -15,6 +15,54 @@ export function runMigrations(db: Database.Database): void {
   if (!pr.has('fourPassEditorial')) {
     db.exec(`ALTER TABLE projects ADD COLUMN fourPassEditorial INTEGER NOT NULL DEFAULT 0`);
   }
+  const docs = columnNames(db, 'documents');
+  if (!docs.has('chapterNumber')) {
+    db.exec(`ALTER TABLE documents ADD COLUMN chapterNumber INTEGER`);
+  }
+  const cv = columnNames(db, 'chapter_versions');
+  if (!cv.has('sceneSegments')) {
+    db.exec(`ALTER TABLE chapter_versions ADD COLUMN sceneSegments TEXT`);
+  }
+
+  const ei = columnNames(db, 'editorial_issues');
+  if (!ei.has('editPass')) {
+    db.exec(
+      `ALTER TABLE editorial_issues ADD COLUMN editPass TEXT NOT NULL DEFAULT 'structural'`
+    );
+  }
+  if (!ei.has('revisionTaskId')) {
+    db.exec(`ALTER TABLE editorial_issues ADD COLUMN revisionTaskId TEXT`);
+  }
+  if (!ei.has('manuscriptQuote')) {
+    db.exec(`ALTER TABLE editorial_issues ADD COLUMN manuscriptQuote TEXT`);
+  }
+  if (!ei.has('sceneId')) {
+    db.exec(`ALTER TABLE editorial_issues ADD COLUMN sceneId TEXT`);
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_editorial_issues_project_pass_status_chapter
+    ON editorial_issues (projectId, editPass, status, chapterNumber)
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS generation_usage (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      model TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      inputTokens INTEGER,
+      outputTokens INTEGER,
+      totalTokens INTEGER NOT NULL,
+      runId TEXT,
+      source TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_generation_usage_project_created
+    ON generation_usage (projectId, createdAt)
+  `);
 }
 
 export function initSchema(db: Database.Database): void {
@@ -102,6 +150,25 @@ export function initSchema(db: Database.Database): void {
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (projectId) REFERENCES projects(id)
     );
+
+    CREATE TABLE IF NOT EXISTS generation_usage (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      model TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      inputTokens INTEGER,
+      outputTokens INTEGER,
+      totalTokens INTEGER NOT NULL,
+      runId TEXT,
+      source TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_generation_usage_project_created
+    ON generation_usage (projectId, createdAt)
   `);
   runMigrations(db);
 }

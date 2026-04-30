@@ -34,6 +34,10 @@ export async function POST(request: NextRequest) {
         await q.deleteProjectData(body.projectId as string);
         return NextResponse.json({ ok: true });
       }
+      case 'getProjectGenerationUsageTotals': {
+        const totals = await q.getProjectGenerationUsageTotals(body.projectId as string);
+        return NextResponse.json(totals);
+      }
 
       // ── Documents ───────────────────────────────────────────────────────
       case 'createDocument': {
@@ -118,6 +122,17 @@ export async function POST(request: NextRequest) {
         await q.updateEditorialIssue(
           body.issueId as string,
           body.data as Parameters<typeof q.updateEditorialIssue>[1]
+        );
+        return NextResponse.json({ ok: true });
+      }
+      case 'getEditorialIssuesByIds': {
+        const issues = await q.getEditorialIssuesByIds(body.ids as string[]);
+        return NextResponse.json(issues);
+      }
+      case 'updateEditorialIssueTaskId': {
+        await q.updateEditorialIssueTaskId(
+          body.issueId as string,
+          (body.revisionTaskId as string | null) ?? null
         );
         return NextResponse.json({ ok: true });
       }

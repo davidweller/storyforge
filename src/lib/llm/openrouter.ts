@@ -29,6 +29,7 @@ export interface OpenRouterGenerateOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  jsonMode?: boolean;
 }
 
 interface OpenRouterCallResult {
@@ -36,6 +37,22 @@ interface OpenRouterCallResult {
   tokensUsed: number;
   fallbackProvider?: 'alibaba-model-studio';
 }
+
+type OpenRouterReasoning = { effort: NonNullable<ReturnType<typeof resolveReasoningEffort>> };
+type OpenRouterChatRequest = OpenAI.ChatCompletionCreateParamsNonStreaming & {
+  reasoning?: OpenRouterReasoning;
+};
+type OpenRouterStreamRequest = OpenAI.ChatCompletionCreateParamsStreaming & {
+  reasoning?: OpenRouterReasoning;
+};
+type ChatCompletionLike = {
+  choices?: Array<{ message?: { content?: string | null } }>;
+  usage?: { total_tokens?: number };
+};
+type ChatCompletionChunkLike = {
+  choices?: Array<{ delta?: { content?: string | null } }>;
+  usage?: { total_tokens?: number } | null;
+};
 
 function normalizeDeprecatedOpenRouterModel(modelId: string): string {
   const trimmed = modelId.trim();
@@ -114,6 +131,7 @@ export async function generateWithOpenRouter(
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
+    jsonMode = false,
   } = options;
 
   if (!process.env.OPENROUTER_API_KEY) {
@@ -127,7 +145,7 @@ export async function generateWithOpenRouter(
   messages.push({ role: 'user', content: prompt });
 
   try {
-    let response: any = null;
+    let response: ChatCompletionLike | null = null;
     let lastError: unknown = null;
     const candidates = openRouterModelCandidates(apiModel);
 
@@ -137,13 +155,15 @@ export async function generateWithOpenRouter(
         const maxAttempts = 2;
         while (attempt < maxAttempts) {
           try {
-            response = await getOpenRouter().chat.completions.create({
+            const request: OpenRouterChatRequest = {
               model: candidate,
               messages,
               temperature,
               max_tokens: maxTokens,
+              ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
               ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-            } as any);
+            };
+            response = await getOpenRouter().chat.completions.create(request);
             break;
           } catch (err) {
             attempt += 1;
@@ -187,12 +207,14 @@ export async function generateWithOpenRouter(
     });
 
     // DashScope compatible-mode does not use OpenRouter's `reasoning` extension; omit it.
-    const response = await getAlibabaModelStudio().chat.completions.create({
+    const fallbackRequest: OpenRouterChatRequest = {
       model: fallbackModel,
       messages,
       temperature,
       max_tokens: maxTokens,
-    } as any);
+      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    };
+    const response = await getAlibabaModelStudio().chat.completions.create(fallbackRequest);
 
     const content = extractCompletionContent(response);
     const tokensUsed = response.usage?.total_tokens || 0;
@@ -225,7 +247,7 @@ export async function* streamWithOpenRouter(
   messages.push({ role: 'user', content: prompt });
 
   try {
-    let stream: any = null;
+    let stream: AsyncIterable<ChatCompletionChunkLike> | null = null;
     let lastError: unknown = null;
     const candidates = openRouterModelCandidates(apiModel);
 
@@ -235,14 +257,15 @@ export async function* streamWithOpenRouter(
         const maxAttempts = 2;
         while (attempt < maxAttempts) {
           try {
-            stream = await getOpenRouter().chat.completions.create({
+            const request: OpenRouterStreamRequest = {
               model: candidate,
               messages,
               temperature,
               max_tokens: maxTokens,
               stream: true,
               ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-            } as any);
+            };
+            stream = await getOpenRouter().chat.completions.create(request);
             break;
           } catch (err) {
             attempt += 1;
@@ -269,7 +292,7 @@ export async function* streamWithOpenRouter(
     for await (const chunk of stream) {
       const content = chunk.choices?.[0]?.delta?.content;
       if (content) yield content;
-      if (chunk.usage) tokensUsed = chunk.usage.total_tokens;
+      if (chunk.usage?.total_tokens) tokensUsed = chunk.usage.total_tokens;
     }
 
     return { tokensUsed };
@@ -286,12 +309,13 @@ export async function* streamWithOpenRouter(
     });
 
     // Keep the same streaming contract by degrading to a one-shot fallback.
-    const response = await getAlibabaModelStudio().chat.completions.create({
+    const fallbackRequest: OpenRouterChatRequest = {
       model: fallbackModel,
       messages,
       temperature,
       max_tokens: maxTokens,
-    } as any);
+    };
+    const response = await getAlibabaModelStudio().chat.completions.create(fallbackRequest);
 
     const content = extractCompletionContent(response);
     const tokensUsed = response.usage?.total_tokens || 0;

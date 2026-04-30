@@ -35,6 +35,7 @@ You are acting as a senior fiction editor. This pass is an advisory report only 
 export function buildEditorialPrompt(params: {
   manuscript: string;
   genre: string;
+  assembledContext?: string;
   nicheReference?: string;
   charactersReference?: string;
   endingReference?: string;
@@ -49,6 +50,7 @@ export function buildEditorialPrompt(params: {
   const {
     manuscript,
     genre,
+    assembledContext,
     nicheReference,
     charactersReference,
     endingReference,
@@ -79,6 +81,7 @@ export function buildEditorialPrompt(params: {
     hasCharacters: !!charactersReference,
     hasEnding: !!endingReference,
     hasStructure: !!structureReference,
+    hasAssembledContext: !!assembledContext,
     hasAudience: !!intendedAudience?.trim(),
     hasPremise: !!premise?.trim(),
     hasResearch: !!research?.trim(),
@@ -118,30 +121,40 @@ ${manuscript}
 Use these for consistency checks alongside the manuscript:
 `;
 
+  if (assembledContext) {
+    prompt += `
+## Canon Context
+
+Use this bounded canon context as the primary source of truth for continuity, style, character promises, hard constraints, and intended payoffs. Treat hard constraints as binding when evaluating the manuscript.
+
+${assembledContext}
+`;
+  }
+
   if (nicheReference) {
     prompt += `
-**Target audience & positioning:**
+**Target audience & positioning${assembledContext ? ' (fallback only)' : ''}:**
 ${nicheReference}
 `;
   }
 
   if (charactersReference) {
     prompt += `
-**Character profiles:**
+**Character profiles${assembledContext ? ' (fallback only)' : ''}:**
 ${charactersReference}
 `;
   }
 
   if (endingReference) {
     prompt += `
-**Intended ending:**
+**Intended ending${assembledContext ? ' (fallback only)' : ''}:**
 ${endingReference}
 `;
   }
 
   if (structureReference) {
     prompt += `
-**Story structure:**
+**Story structure${assembledContext ? ' (fallback only)' : ''}:**
 ${structureReference}
 `;
   }
@@ -345,7 +358,8 @@ Create a revision task for each chapter (${chapterCount} chapters total) in the 
           "description": "Specific issue description",
           "manuscriptQuote": "Exact quoted manuscript passage tied to this issue",
           "location": "Approximate location in chapter",
-          "fix": "Specific instruction for fixing"
+          "fix": "Specific instruction for fixing",
+          "sceneId": "Optional: scene card id when the issue is localized to one scene (for targeted revision)"
         }
       ],
       "acceptanceCriteria": [
@@ -366,8 +380,50 @@ Guidelines:
 - Priority levels: "high", "medium", "low", "none"
 - Be specific in fix instructions — vague feedback is unhelpful
 - For each issue, include manuscriptQuote with the exact problematic passage quoted from the editorial report; if no quote is available, use an empty string.
+- Optional **sceneId**: when the report ties an issue to a single scene and a stable scene identifier is known or can be inferred, set sceneId so downstream revision can target only that scene. Omit sceneId when the issue is chapter-wide or scene cannot be determined.
 - Acceptance criteria should be verifiable
 - preserveElements prevents over-revision
 
-Output only valid JSON.`;
+Output only valid JSON. Do not include markdown fences or commentary outside the JSON object.`;
+}
+
+export const REVISION_VERIFY_SYSTEM =
+  'You are a meticulous fiction revision QA reader. Evaluate revised prose against editorial instructions. Respond only with valid JSON matching the requested schema.';
+
+export function buildRevisionVerificationPrompt(
+  revisedContent: string,
+  instructions: string,
+  issueDescriptions: string[],
+): string {
+  const issuesBlock =
+    issueDescriptions.length > 0
+      ? issueDescriptions.map((d, i) => `${i + 1}. ${d}`).join('\n')
+      : '(No separate issue list; use instructions only.)';
+
+  return `## Revised text
+
+${revisedContent}
+
+## Aggregate revision instructions
+
+${instructions}
+
+## Individual issues (each should be materially addressed if it applies to this excerpt)
+
+${issuesBlock}
+
+## Output
+
+Return a single JSON object:
+{
+  "satisfied": boolean,
+  "checklist": [
+    { "criterion": string, "met": boolean, "evidence": string }
+  ],
+  "overallNotes": string (optional)
+}
+
+Set satisfied to true only if the revision adequately implements the instructions and issues for this excerpt without obvious new problems.
+
+Output only the JSON object. No markdown fences or other text.`;
 }

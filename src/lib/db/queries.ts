@@ -9,6 +9,9 @@ import type {
   RevisionTask,
   DocumentType,
   EditorialPass,
+  GenerationUsageSource,
+  WorkflowStage,
+  GenerationUsageTotals,
 } from '@/types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,10 +64,12 @@ function rowToProject(row: Record<string, unknown>): Project {
 }
 
 function rowToDocument(row: Record<string, unknown>): ProjectDocument {
+  const chapterNumber = row.chapterNumber;
   return {
     id: row.id as string,
     projectId: row.projectId as string,
     type: row.type as DocumentType,
+    ...(typeof chapterNumber === 'number' ? { chapterNumber } : {}),
     content: row.content as string,
     version: row.version as number,
     approved: Boolean(row.approved),
@@ -88,6 +93,15 @@ function rowToChapter(row: Record<string, unknown>): Chapter {
 }
 
 function rowToChapterVersion(row: Record<string, unknown>): ChapterVersion {
+  let sceneSegments: ChapterVersion['sceneSegments'];
+  const rawSeg = row.sceneSegments as string | null | undefined;
+  if (rawSeg?.trim()) {
+    try {
+      sceneSegments = JSON.parse(rawSeg) as ChapterVersion['sceneSegments'];
+    } catch {
+      sceneSegments = undefined;
+    }
+  }
   return {
     id: row.id as string,
     chapterId: row.chapterId as string,
@@ -99,11 +113,17 @@ function rowToChapterVersion(row: Record<string, unknown>): ChapterVersion {
     approved: Boolean(row.approved),
     parentVersionId: (row.parentVersionId as string) ?? undefined,
     notes: (row.notes as string) ?? undefined,
+    ...(sceneSegments?.length ? { sceneSegments } : {}),
     createdAt: toDate(row.createdAt as string),
   };
 }
 
 function rowToEditorialIssue(row: Record<string, unknown>): EditorialIssue {
+  const ep = row.editPass as string | undefined;
+  const editPass: EditorialPass =
+    ep === 'line' || ep === 'copy' || ep === 'proofread' || ep === 'structural' || ep === 'final_report'
+      ? ep
+      : 'structural';
   return {
     id: row.id as string,
     projectId: row.projectId as string,
@@ -114,6 +134,10 @@ function rowToEditorialIssue(row: Record<string, unknown>): EditorialIssue {
     recommendedFix: row.recommendedFix as string,
     status: row.status as EditorialIssue['status'],
     createdAt: toDate(row.createdAt as string),
+    editPass,
+    revisionTaskId: (row.revisionTaskId as string) ?? undefined,
+    manuscriptQuote: (row.manuscriptQuote as string) ?? undefined,
+    sceneId: (row.sceneId as string) ?? undefined,
   };
 }
 
@@ -232,9 +256,19 @@ export async function createDocument(
   const id = randomUUID();
   const ts = now();
   db.prepare(`
-    INSERT INTO documents (id, projectId, type, content, version, approved, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, data.projectId, data.type, data.content, data.version, data.approved ? 1 : 0, ts, ts);
+    INSERT INTO documents (id, projectId, type, chapterNumber, content, version, approved, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    data.projectId,
+    data.type,
+    data.chapterNumber ?? null,
+    data.content,
+    data.version,
+    data.approved ? 1 : 0,
+    ts,
+    ts
+  );
   return id;
 }
 
@@ -256,7 +290,7 @@ export async function getDocumentByType(
 ): Promise<ProjectDocument | null> {
   const db = getDb();
   const row = db.prepare(
-    'SELECT * FROM documents WHERE projectId = ? AND type = ? ORDER BY version DESC LIMIT 1'
+    'SELECT * FROM documents WHERE projectId = ? AND type = ? AND chapterNumber IS NULL ORDER BY version DESC LIMIT 1'
   ).get(projectId, type) as Record<string, unknown> | undefined;
   return row ? rowToDocument(row) : null;
 }
@@ -273,6 +307,7 @@ export async function updateDocument(
   if (data.version !== undefined) { fields.push('version = ?'); values.push(data.version); }
   if (data.approved !== undefined) { fields.push('approved = ?'); values.push(data.approved ? 1 : 0); }
   if (data.type !== undefined) { fields.push('type = ?'); values.push(data.type); }
+  if (data.chapterNumber !== undefined) { fields.push('chapterNumber = ?'); values.push(data.chapterNumber ?? null); }
 
   if (fields.length === 0) return;
   fields.push('updatedAt = ?');
@@ -341,8 +376,8 @@ export async function createChapterVersion(
   const ts = now();
   db.prepare(`
     INSERT INTO chapter_versions
-      (id, chapterId, projectId, chapterNumber, version, content, wordCount, approved, parentVersionId, notes, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, chapterId, projectId, chapterNumber, version, content, wordCount, approved, parentVersionId, notes, sceneSegments, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.chapterId,
@@ -354,6 +389,7 @@ export async function createChapterVersion(
     data.approved ? 1 : 0,
     data.parentVersionId ?? null,
     data.notes ?? null,
+    data.sceneSegments?.length ? JSON.stringify(data.sceneSegments) : null,
     ts,
   );
   return id;
@@ -395,6 +431,10 @@ export async function updateChapterVersion(
   if (data.wordCount !== undefined) { fields.push('wordCount = ?'); values.push(data.wordCount); }
   if (data.approved !== undefined) { fields.push('approved = ?'); values.push(data.approved ? 1 : 0); }
   if (data.notes !== undefined) { fields.push('notes = ?'); values.push(data.notes ?? null); }
+  if (data.sceneSegments !== undefined) {
+    fields.push('sceneSegments = ?');
+    values.push(data.sceneSegments?.length ? JSON.stringify(data.sceneSegments) : null);
+  }
 
   if (fields.length === 0) return;
   values.push(versionId);
@@ -412,8 +452,9 @@ export async function createEditorialIssue(
   const ts = now();
   db.prepare(`
     INSERT INTO editorial_issues
-      (id, projectId, chapterNumber, locationHint, category, description, recommendedFix, status, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, projectId, chapterNumber, locationHint, category, description, recommendedFix, status, createdAt,
+       editPass, revisionTaskId, manuscriptQuote, sceneId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.projectId,
@@ -424,8 +465,36 @@ export async function createEditorialIssue(
     data.recommendedFix,
     data.status,
     ts,
+    data.editPass,
+    data.revisionTaskId ?? null,
+    data.manuscriptQuote ?? null,
+    data.sceneId ?? null,
   );
   return id;
+}
+
+export async function deleteEditorialIssuesByProjectAndPass(
+  projectId: string,
+  pass: EditorialPass
+): Promise<void> {
+  const db = getDb();
+  db.prepare('DELETE FROM editorial_issues WHERE projectId = ? AND editPass = ?').run(projectId, pass);
+}
+
+export async function getEditorialIssuesByIds(ids: string[]): Promise<EditorialIssue[]> {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = db
+    .prepare(`SELECT * FROM editorial_issues WHERE id IN (${placeholders})`)
+    .all(...ids) as Record<string, unknown>[];
+  const byId = new Map(rows.map((r) => [r.id as string, rowToEditorialIssue(r)]));
+  return ids.map((id) => byId.get(id)).filter((x): x is EditorialIssue => x !== undefined);
+}
+
+export async function updateEditorialIssueTaskId(issueId: string, revisionTaskId: string | null): Promise<void> {
+  const db = getDb();
+  db.prepare('UPDATE editorial_issues SET revisionTaskId = ? WHERE id = ?').run(revisionTaskId, issueId);
 }
 
 export async function getProjectEditorialIssues(projectId: string): Promise<EditorialIssue[]> {
@@ -444,9 +513,42 @@ export async function updateEditorialIssue(
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
-  if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
-  if (data.recommendedFix !== undefined) { fields.push('recommendedFix = ?'); values.push(data.recommendedFix); }
+  if (data.status !== undefined) {
+    fields.push('status = ?');
+    values.push(data.status);
+  }
+  if (data.description !== undefined) {
+    fields.push('description = ?');
+    values.push(data.description);
+  }
+  if (data.recommendedFix !== undefined) {
+    fields.push('recommendedFix = ?');
+    values.push(data.recommendedFix);
+  }
+  if (data.revisionTaskId !== undefined) {
+    fields.push('revisionTaskId = ?');
+    values.push(data.revisionTaskId ?? null);
+  }
+  if (data.editPass !== undefined) {
+    fields.push('editPass = ?');
+    values.push(data.editPass);
+  }
+  if (data.manuscriptQuote !== undefined) {
+    fields.push('manuscriptQuote = ?');
+    values.push(data.manuscriptQuote ?? null);
+  }
+  if (data.sceneId !== undefined) {
+    fields.push('sceneId = ?');
+    values.push(data.sceneId ?? null);
+  }
+  if (data.locationHint !== undefined) {
+    fields.push('locationHint = ?');
+    values.push(data.locationHint ?? null);
+  }
+  if (data.chapterNumber !== undefined) {
+    fields.push('chapterNumber = ?');
+    values.push(data.chapterNumber ?? null);
+  }
 
   if (fields.length === 0) return;
   values.push(issueId);
@@ -486,6 +588,7 @@ export async function deleteRevisionTasksForProjectAndPass(
   pass: EditorialPass
 ): Promise<void> {
   const db = getDb();
+  await deleteEditorialIssuesByProjectAndPass(projectId, pass);
   db.prepare('DELETE FROM revision_tasks WHERE projectId = ? AND editPass = ?').run(projectId, pass);
 }
 
@@ -522,11 +625,60 @@ export async function updateRevisionTask(
   db.prepare(`UPDATE revision_tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
 
+// ── Generation usage (token logging) ───────────────────────────────────────────
+
+export async function recordGenerationUsage(input: {
+  projectId: string;
+  stage: WorkflowStage;
+  model: string;
+  provider: string;
+  totalTokens: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  runId?: string | null;
+  source: GenerationUsageSource;
+}): Promise<void> {
+  const db = getDb();
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO generation_usage (
+      id, projectId, createdAt, stage, model, provider, inputTokens, outputTokens, totalTokens, runId, source
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    input.projectId,
+    now(),
+    input.stage,
+    input.model,
+    input.provider,
+    input.inputTokens ?? null,
+    input.outputTokens ?? null,
+    input.totalTokens,
+    input.runId ?? null,
+    input.source
+  );
+}
+
+export async function getProjectGenerationUsageTotals(projectId: string): Promise<GenerationUsageTotals> {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT COALESCE(SUM(totalTokens), 0) AS totalTokens, COUNT(*) AS callCount
+       FROM generation_usage WHERE projectId = ?`
+    )
+    .get(projectId) as { totalTokens: number; callCount: number } | undefined;
+  return {
+    totalTokens: Number(row?.totalTokens ?? 0),
+    callCount: Number(row?.callCount ?? 0),
+  };
+}
+
 // ── Batch delete ──────────────────────────────────────────────────────────────
 
 export async function deleteProjectData(projectId: string): Promise<void> {
   const db = getDb();
   const deleteAll = db.transaction(() => {
+    db.prepare('DELETE FROM generation_usage WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM revision_tasks WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM editorial_issues WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM chapter_versions WHERE projectId = ?').run(projectId);

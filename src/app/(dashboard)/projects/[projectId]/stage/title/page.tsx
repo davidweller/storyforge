@@ -1,28 +1,22 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, LoadingContent, EmptyContent } from '@/components/stages';
 import { Button, Card, CardContent } from '@/components/ui';
+import { ReviewChecklist } from '@/components/review/ReviewChecklist';
+import { checklistItemsForKey } from '@/lib/review/checklists';
 import { getNextStage, isStageAccessible } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
+import { parseTitleOptions } from '@/lib/generation/schemas';
+import { assembleContext } from '@/lib/context/assembler';
 
 interface TitlePageProps {
   params: Promise<{ projectId: string }>;
-}
-
-// Parse title options from LLM response (one per line, strip numbering)
-function parseTitleOptions(content: string): string[] {
-  if (!content?.trim()) return [];
-  const lines = content
-    .split(/\n/)
-    .map((line) => line.replace(/^\s*\d+[.)]\s*/, '').replace(/^[-*]\s*/, '').trim())
-    .filter((line) => line.length > 0);
-  return lines.slice(0, 15);
 }
 
 export default function TitlePage({ params }: TitlePageProps) {
@@ -42,9 +36,15 @@ export default function TitlePage({ params }: TitlePageProps) {
   const { advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
 
+  const manualGenOpts = useMemo(
+    () => ({ projectId, usageSource: 'manual-stage' as const }),
+    [projectId]
+  );
+
   const [titleOptions, setTitleOptions] = useState<string[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [contextWarnings, setContextWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     if (project && !projectLoading && !isStageAccessible(project.currentStage, 'title')) {
@@ -59,16 +59,24 @@ export default function TitlePage({ params }: TitlePageProps) {
     const endingDoc = getLatestDocumentByType('ending');
     const charactersDoc = getLatestDocumentByType('characters');
     const nicheDoc = getLatestDocumentByType('niche');
+    const assembled = assembleContext({
+      purpose: 'title',
+      project,
+      documents,
+      chapters,
+    });
+    setContextWarnings(assembled.warnings);
 
     try {
       const result = await generate('title', {
         genre: project.genre,
         premise: project.premise,
+        assembledContext: assembled.text,
         structureReference: structureDoc?.content ?? '',
         endingReference: endingDoc?.content ?? '',
         charactersReference: charactersDoc?.content ?? '',
         nicheReference: nicheDoc?.content ?? '',
-      });
+      }, manualGenOpts);
       setTitleOptions(parseTitleOptions(result.content));
       setSelectedTitle(null);
     } catch {
@@ -117,6 +125,13 @@ export default function TitlePage({ params }: TitlePageProps) {
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">
           <p className="text-sm text-[var(--destructive)]">{projectError || generateError}</p>
+        </div>
+      )}
+
+      {contextWarnings.length > 0 && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-medium text-amber-900 mb-1">Canon context warning</p>
+          <p className="text-sm text-amber-800">{contextWarnings[0]}</p>
         </div>
       )}
 
@@ -179,6 +194,8 @@ export default function TitlePage({ params }: TitlePageProps) {
               </Card>
             ))}
           </div>
+
+          <ReviewChecklist items={checklistItemsForKey('title')} className="mb-4" />
 
           <div className="flex items-center gap-3 flex-wrap">
             <Button variant="secondary" onClick={handleGenerate} disabled={isGenerating}>

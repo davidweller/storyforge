@@ -4,7 +4,7 @@ import { use, useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
-import { useGenerate } from '@/hooks/useGenerate';
+import { useGenerate, type GenerateOptions } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { getNextStage, STAGE_ORDER, STAGE_NAMES } from '@/lib/utils';
 import { getEstimatedMinutesForStep, FULL_AUTO_ESTIMATES_MINUTES } from '@/lib/fullAutoEstimates';
@@ -15,6 +15,31 @@ import { EDITORIAL_PASSES, documentTypeForEditorialPass } from '@/lib/editorial/
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import { htmlToEditorialText } from '@/lib/utils/markdown';
+import { estimateFullAutoTokens, formatTokenRange } from '@/lib/cost/preflight';
+import {
+  clearFullAutoCheckpointPending,
+  clearFullAutoRunMarkers,
+  fullAutoCheckpointsEnabled,
+  readFullAutoCheckpointPending,
+  writeFullAutoCheckpointPending,
+  writeFullAutoLastStep,
+} from '@/lib/fullAuto/checkpointStorage';
+import {
+  parseChapterOutlines,
+  parseEndingConcepts,
+  parseRevisionQueue,
+  parseRevisionVerification,
+  parseTitleOptions,
+} from '@/lib/generation/schemas';
+import {
+  assembleContext,
+  buildStoryBibleSourceRefs,
+  isCreativeBriefStale,
+  isStoryBibleStale,
+} from '@/lib/context/assembler';
+import { persistRevisionQueueFromParsed } from '@/lib/editorial/persistRevisionQueue';
+import { spliceSceneIntoChapter } from '@/lib/editorial/sceneSplice';
+import * as firestore from '@/lib/db/client';
 
 /** Memoized spinner in an isolated layer so parent re-renders/repaints don't reset or flicker the animation. */
 const FullAutoSpinner = memo(function FullAutoSpinner() {
@@ -57,112 +82,6 @@ const FullAutoSpinner = memo(function FullAutoSpinner() {
   );
 });
 
-// --- Parsing helpers (mirrored from stage pages) ---
-interface EndingConcept {
-  id: string;
-  title: string;
-  summary: string;
-  emotionalPayoff: string;
-  characterResolution: string;
-  thematicStatement: string;
-}
-
-function parseEndingConcepts(content: string): EndingConcept[] {
-  const concepts: EndingConcept[] = [];
-  const sections = content.split(/(?=\d+\.\s)/).filter((s) => s.trim());
-  if (sections.length <= 1) return concepts;
-  for (const section of sections) {
-    const trimmed = section.trim();
-    if (!trimmed || !/^\d+\.\s/.test(trimmed)) continue;
-    const titleMatch = trimmed.match(/\*\*([^*]+)\*\*/);
-    const firstLine = trimmed.split(/\n/)[0]?.replace(/^\d+\.\s*/, '').trim() || '';
-    const title = titleMatch ? titleMatch[1].trim() : (firstLine || trimmed.slice(0, 80));
-    if (!title) continue;
-    const summaryMatch = trimmed.match(/Summary[:\s]*([^\n]+(?:\n(?!\d+\.\s|\*\*)[^\n]+)*)/i);
-    const emotionalMatch = trimmed.match(/Emotional[^:]*[:\s]*([^\n]+)/i);
-    const characterMatch = trimmed.match(/Character[^:]*[:\s]*([^\n]+)/i);
-    const thematicMatch = trimmed.match(/Thematic[^:]*[:\s]*([^\n]+)/i);
-    concepts.push({
-      id: `ending-${concepts.length + 1}`,
-      title,
-      summary: summaryMatch?.[1]?.trim() || trimmed.slice(title.length, 200 + title.length).trim() || trimmed.slice(0, 200),
-      emotionalPayoff: emotionalMatch?.[1]?.trim() || '',
-      characterResolution: characterMatch?.[1]?.trim() || '',
-      thematicStatement: thematicMatch?.[1]?.trim() || '',
-    });
-  }
-  return concepts;
-}
-
-function parseTitleOptions(content: string): string[] {
-  if (!content?.trim()) return [];
-  return content
-    .split(/\n/)
-    .map((line) => line.replace(/^\s*\d+[.)]\s*/, '').replace(/^[-*]\s*/, '').trim())
-    .filter((line) => line.length > 0)
-    .slice(0, 15);
-}
-
-interface ChapterOutline {
-  chapterNumber: number;
-  title: string;
-  beatReference: string;
-  sceneGoal: string;
-  pov?: string;
-  wordTarget?: number;
-}
-
-function parseChapterOutlines(content: string): ChapterOutline[] {
-  const outlines: ChapterOutline[] = [];
-  // Prefer strict format: **Chapter N: Title**; fallback: line starting with Chapter N: (with or without **)
-  const strictRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
-  const lenientRegex = /^#{0,3}\s*\*{0,2}Chapter\s+(\d+):\s*(.+?)(?:\*{2})?\s*$/gm;
-  const matches: Array<{ index: number; number: number; title: string; endIndex: number }> = [];
-  let match;
-  while ((match = strictRegex.exec(content)) !== null) {
-    matches.push({
-      index: match.index,
-      number: parseInt(match[1], 10),
-      title: (match[2]?.trim() || '').replace(/\*+$/, ''),
-      endIndex: match.index + match[0].length,
-    });
-  }
-  if (matches.length === 0) {
-    while ((match = lenientRegex.exec(content)) !== null) {
-      matches.push({
-        index: match.index,
-        number: parseInt(match[1], 10),
-        title: (match[2]?.trim() || '').replace(/\*+$/, ''),
-        endIndex: match.index + match[0].length,
-      });
-    }
-  }
-  // Sort by index so we can slice content between chapters
-  matches.sort((a, b) => a.index - b.index);
-  for (let i = 0; i < matches.length; i++) {
-    const current = matches[i];
-    const next = matches[i + 1];
-    const startIndex = current.endIndex;
-    const endIndex = next ? next.index : content.length;
-    const chapterContent = content.substring(startIndex, endIndex);
-    if (isNaN(current.number)) continue;
-    // Allow **Label**: or - **Label**: or Label:
-    const beatMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Story Beat\(s\)\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
-    const sceneGoalMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Scene Goal\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
-    const povMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}POV Character\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
-    const wordTargetMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Word Target\*{0,2}\s*:\s*~?(\d+)/im);
-    outlines.push({
-      chapterNumber: current.number,
-      title: current.title,
-      beatReference: beatMatch?.[1]?.trim() || '',
-      sceneGoal: sceneGoalMatch?.[1]?.trim() || '',
-      pov: povMatch?.[1]?.trim() || undefined,
-      wordTarget: wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined,
-    });
-  }
-  return outlines;
-}
-
 function chapterSnapshot(text: string, maxChars = 600): string {
   const normalized = htmlToEditorialText(text).trim();
   if (normalized.length <= maxChars) return normalized;
@@ -178,7 +97,8 @@ const stageToDocType: Record<string, DocumentType> = {
   'chapter-outlines': 'chapter-outlines',
 };
 
-type OverlayStatus = 'idle' | 'running' | 'complete' | 'error';
+type OverlayStatus = 'idle' | 'running' | 'checkpoint' | 'complete' | 'error';
+
 type AutoControlAction = 'none' | 'pause' | 'stop';
 
 class AutoControlError extends Error {
@@ -200,9 +120,6 @@ export default function FullAutoPage({
   const router = useRouter();
   const {
     project,
-    documents,
-    chapters,
-    revisionTasks,
     loading: projectLoading,
     getDocumentByType,
     getLatestDocumentByType,
@@ -232,12 +149,20 @@ export default function FullAutoPage({
   const [overlayStatus, setOverlayStatus] = useState<OverlayStatus>('idle');
   const [currentStepLabel, setCurrentStepLabel] = useState('');
   const [stepIndex, setStepIndex] = useState(0);
+  const [fullAutoRunWarnings, setFullAutoRunWarnings] = useState<string[]>([]);
   const [totalSteps, setTotalSteps] = useState(0);
   const [timeLeftThisStep, setTimeLeftThisStep] = useState(0);
   const [timeLeftTotal, setTimeLeftTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [controlActionPending, setControlActionPending] = useState<AutoControlAction>('none');
+  const [fullAutoUsageSession, setFullAutoUsageSession] = useState({ runTotal: 0, lastStep: 0 });
+  const [preflightHint, setPreflightHint] = useState<string | null>(null);
+  const [checkpointGate, setCheckpointGate] = useState<{
+    title: string;
+    bullets: string[];
+    resolve: () => void;
+  } | null>(null);
   const pipelineStarted = useRef(false);
   const controlActionRef = useRef<AutoControlAction>('none');
   const lastStepUpdate = useRef(0);
@@ -284,8 +209,6 @@ export default function FullAutoPage({
     if (projectLoading || !project) return;
     const hasBlurb = !!project.blurb?.trim();
     const hasAmazon = !!project.amazonDescription?.trim();
-    const inAutoRange =
-      STAGE_ORDER.indexOf(project.currentStage as (typeof STAGE_ORDER)[number]) >= 0;
     if (!project.fullAutoMode && overlayStatus === 'idle') {
       router.replace(`/projects/${projectId}`);
       return;
@@ -302,7 +225,8 @@ export default function FullAutoPage({
       projectLoading ||
       !project ||
       !project.fullAutoMode ||
-      overlayStatus === 'complete'
+      overlayStatus === 'complete' ||
+      overlayStatus === 'checkpoint'
     )
       return;
     if (overlayStatus === 'error' && retryTrigger === 0) return;
@@ -315,8 +239,64 @@ export default function FullAutoPage({
       setControlActionPending('none');
       setOverlayStatus('running');
       setError(null);
+      setFullAutoRunWarnings([]);
+      setFullAutoUsageSession({ runTotal: 0, lastStep: 0 });
       clearError();
       setStep('Loading project…', 0, 20, 0, 0);
+
+      const fullAutoRunId =
+        typeof globalThis.crypto !== 'undefined' && 'randomUUID' in globalThis.crypto
+          ? globalThis.crypto.randomUUID()
+          : `fa-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+      const genUsage = { projectId, runId: fullAutoRunId, usageSource: 'full-auto' as const };
+      const generateTracked = async (
+        stage: WorkflowStage,
+        data: Record<string, unknown>,
+        options?: GenerateOptions
+      ) => {
+        const r = await generate(stage, data, { ...genUsage, ...options });
+        setFullAutoUsageSession((s) => ({
+          runTotal: s.runTotal + r.tokensUsed,
+          lastStep: r.tokensUsed,
+        }));
+        return r;
+      };
+
+      const checkpointsEnabled = fullAutoCheckpointsEnabled(projectId);
+
+      const runCheckpoint = async (stepKey: string, title: string, bullets: string[]) => {
+        writeFullAutoLastStep(projectId, stepKey);
+        if (checkpointsEnabled) {
+          writeFullAutoCheckpointPending(projectId, { stepKey, title, bullets });
+        }
+        if (!checkpointsEnabled) return;
+        await new Promise<void>((resolve) => {
+          setOverlayStatus('checkpoint');
+          setCheckpointGate({ title, bullets, resolve });
+        });
+        clearFullAutoCheckpointPending(projectId);
+        setCheckpointGate(null);
+        setOverlayStatus('running');
+      };
+
+      try {
+        const st = useProjectStore.getState();
+        const od = st.documents
+          .filter((d) => d.projectId === projectId && d.type === 'chapter-outlines')
+          .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))[0];
+        let n = 1;
+        if (od?.content) {
+          try {
+            n = Math.max(1, parseChapterOutlines(String(od.content)).length);
+          } catch {
+            n = 8;
+          }
+        }
+        const est = estimateFullAutoTokens({ chapterCount: n });
+        setPreflightHint(formatTokenRange(est.low, est.high));
+      } catch {
+        setPreflightHint(null);
+      }
 
       let currentStage = project.currentStage as WorkflowStage;
       let stepIdx = 0;
@@ -376,7 +356,7 @@ export default function FullAutoPage({
         const mins = getEstimatedMinutesForStep(stage === 'genre-research' ? 'genre-research' : stage);
         setStep(STAGE_NAMES[stage] || stage, stepIdx, totalSteps, mins, timeLeftTotal);
         const data = getPayload(stage);
-        const result = await generate(stage, data);
+        const result = await generateTracked(stage, data);
         const latest = getLatestDocumentByType(docType);
         if (latest) {
           await updateDocument(latest.id, {
@@ -400,6 +380,122 @@ export default function FullAutoPage({
           currentStage = next as WorkflowStage;
         }
         stepIdx++;
+        throwIfControlRequested();
+      };
+
+      const latestDocOfType = (type: DocumentType, approvedOnly = false) =>
+        useProjectStore.getState().documents
+          .filter((d) => d.projectId === projectId && d.type === type && (!approvedOnly || d.approved))
+          .sort((a, b) => b.version - a.version || b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+
+      const ensureCanonDocuments = async (): Promise<void> => {
+        await loadProject(projectId);
+        let state = useProjectStore.getState();
+        let docs = state.documents.filter((d) => d.projectId === projectId);
+        const currentProject = state.currentProject ?? project;
+        const derivedFrom = buildStoryBibleSourceRefs(docs);
+
+        if (derivedFrom.length === 0) {
+          throw new Error('Cannot generate Story Bible because no approved planning documents are available.');
+        }
+
+        let latestStoryBible = latestDocOfType('story-bible');
+        let approvedStoryBible = latestDocOfType('story-bible', true);
+        const shouldGenerateStoryBible =
+          !approvedStoryBible ||
+          !latestStoryBible ||
+          isStoryBibleStale(approvedStoryBible ?? latestStoryBible, docs);
+
+        if (shouldGenerateStoryBible) {
+          throwIfControlRequested();
+          setStep('Story Bible canon', stepIdx, 20, 3, 0);
+          const byType = (type: DocumentType) =>
+            docs.find((doc) => doc.type === type && doc.approved)?.content;
+          const result = await generateTracked('story-bible', {
+            title: currentProject.title,
+            premise: currentProject.premise,
+            genre: currentProject.genre,
+            niche: currentProject.niche,
+            research: currentProject.research,
+            derivedFrom,
+            genreResearch: byType('genre'),
+            nicheReference: byType('niche'),
+            endingReference: byType('ending'),
+            endingChoice: byType('ending-choice'),
+            charactersReference: byType('characters'),
+            structureReference: byType('structure'),
+            chapterOutlinesReference: byType('chapter-outlines'),
+          });
+
+          let storyBibleId: string;
+          if (latestStoryBible) {
+            await updateDocument(latestStoryBible.id, {
+              content: result.content,
+              version: latestStoryBible.version + 1,
+              approved: false,
+            });
+            storyBibleId = latestStoryBible.id;
+          } else {
+            storyBibleId = await createDocument({
+              projectId,
+              type: 'story-bible',
+              content: result.content,
+              version: 1,
+              approved: false,
+            });
+          }
+          await approveDocument(storyBibleId);
+          stepIdx++;
+          await loadProject(projectId);
+        }
+
+        state = useProjectStore.getState();
+        docs = state.documents.filter((d) => d.projectId === projectId);
+        latestStoryBible = latestDocOfType('story-bible');
+        approvedStoryBible = latestDocOfType('story-bible', true);
+        if (!approvedStoryBible) {
+          throw new Error('Story Bible generation completed but no approved Story Bible could be loaded.');
+        }
+
+        const latestCreativeBrief = latestDocOfType('creative-brief');
+        const approvedCreativeBrief = latestDocOfType('creative-brief', true);
+        const shouldGenerateCreativeBrief =
+          !approvedCreativeBrief ||
+          !latestCreativeBrief ||
+          isCreativeBriefStale(approvedCreativeBrief ?? latestCreativeBrief, approvedStoryBible);
+
+        if (shouldGenerateCreativeBrief) {
+          throwIfControlRequested();
+          setStep('Creative Brief canon', stepIdx, 20, 1, 0);
+          const result = await generateTracked('creative-brief', {
+            storyBibleContent: approvedStoryBible.content,
+            storyBibleDocumentId: approvedStoryBible.id,
+            storyBibleVersion: approvedStoryBible.version,
+            storyBibleUpdatedAt: approvedStoryBible.updatedAt.toISOString(),
+          });
+
+          let creativeBriefId: string;
+          if (latestCreativeBrief) {
+            await updateDocument(latestCreativeBrief.id, {
+              content: result.content,
+              version: latestCreativeBrief.version + 1,
+              approved: false,
+            });
+            creativeBriefId = latestCreativeBrief.id;
+          } else {
+            creativeBriefId = await createDocument({
+              projectId,
+              type: 'creative-brief',
+              content: result.content,
+              version: 1,
+              approved: false,
+            });
+          }
+          await approveDocument(creativeBriefId);
+          stepIdx++;
+          await loadProject(projectId);
+        }
+
         throwIfControlRequested();
       };
 
@@ -451,7 +547,7 @@ export default function FullAutoPage({
                   await loadProject(projectId);
                 }
               }
-            } catch (rewindErr) {
+            } catch {
               currentStage = 'chapters';
               await advanceStage(projectId, 'chapters');
               await loadProject(projectId);
@@ -460,6 +556,21 @@ export default function FullAutoPage({
         };
 
         await Promise.race([loadAndRewind(), timeoutPromise]);
+
+        if (fullAutoCheckpointsEnabled(projectId)) {
+          const pending = readFullAutoCheckpointPending(projectId);
+          if (pending) {
+            setOverlayStatus('checkpoint');
+            await new Promise<void>((resolve) => {
+              setCheckpointGate({ title: pending.title, bullets: pending.bullets, resolve });
+            });
+            clearFullAutoCheckpointPending(projectId);
+            setCheckpointGate(null);
+            setOverlayStatus('running');
+          }
+        } else {
+          clearFullAutoCheckpointPending(projectId);
+        }
 
         let totalStepsEst = 0;
         const addEst = (key: string, count?: number) => {
@@ -478,6 +589,8 @@ export default function FullAutoPage({
           else addEst(stage);
         }
         addEst('chapter-per', 12); // assume ~12 chapters
+        addEst('story-bible', 1);
+        addEst('creative-brief', 1);
         addEst('compilation');
         addEst('export-draft');
         addEst('editorial');
@@ -502,7 +615,7 @@ export default function FullAutoPage({
           throwIfControlRequested();
           setStep('Choose Your Ending (concepts)', stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['ending-concepts'] ?? 2, initialTotal);
           const nicheDoc = getDocumentByType('niche');
-          const conceptsResult = await generate('ending', {
+          const conceptsResult = await generateTracked('ending', {
             premise: project.premise,
             genre: project.genre,
             nicheReference: nicheDoc?.content || '',
@@ -549,7 +662,7 @@ export default function FullAutoPage({
             });
           }
           setStep('Choose Your Ending (expanding)', stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['ending-expand'] ?? 3, initialTotal);
-          const expandResult = await generate('ending', {
+          const expandResult = await generateTracked('ending', {
             premise: project.premise,
             genre: project.genre,
             nicheReference: nicheDoc?.content || '',
@@ -566,6 +679,11 @@ export default function FullAutoPage({
           stepIdx += 2;
           await loadProject(projectId);
           throwIfControlRequested();
+          await runCheckpoint('after-ending', 'Checkpoint: ending locked in', [
+            'Review the expanded ending blueprint on the Ending stage.',
+            'The server may already have saved canon — refresh the project if you are unsure.',
+            'Continue when satisfied; Full Auto proceeds to characters and structure.',
+          ]);
         }
         // Characters, structure
         if (currentStage === 'characters') {
@@ -584,7 +702,7 @@ export default function FullAutoPage({
           const endingDoc = getDocumentByType('ending');
           const charactersDoc = getDocumentByType('characters');
           const nicheDoc = getDocumentByType('niche');
-          const titleResult = await generate('title', {
+          const titleResult = await generateTracked('title', {
             genre: project.genre,
             premise: project.premise,
             structureReference: structureDoc?.content ?? '',
@@ -601,6 +719,10 @@ export default function FullAutoPage({
           stepIdx++;
           await loadProject(projectId);
           throwIfControlRequested();
+          await runCheckpoint('after-title', 'Checkpoint: working title chosen', [
+            'Confirm the auto-selected title fits your positioning.',
+            'You can rename later, but it affects chapter context immediately.',
+          ]);
         }
         // Chapter-outlines (then run chapters in same pipeline run)
         if (currentStage === 'chapter-outlines') {
@@ -608,9 +730,14 @@ export default function FullAutoPage({
           await loadProject(projectId);
           currentStage = 'chapters';
           throwIfControlRequested();
+          await runCheckpoint('after-outlines', 'Checkpoint: chapter outlines ready', [
+            'Review chapter outlines before bulk prose generation.',
+            'Adjust beats or word targets if the blueprint feels wrong.',
+          ]);
         }
         // Chapters: create chapter records and generate each (read from store so we see just-saved chapter-outlines)
         if (currentStage === 'chapters') {
+          await ensureCanonDocuments();
           const docs = useProjectStore.getState().documents;
           const outlinesDoc = docs
             .filter((d) => d.type === 'chapter-outlines')
@@ -681,13 +808,31 @@ export default function FullAutoPage({
                 title: data.title,
                 summary: data.summary,
               }));
-            const chapterResult = await generate('chapters', {
+            const contextState = useProjectStore.getState();
+            const approvedChapterVersions = Array.from(contextState.chapterVersions.values())
+              .flat()
+              .filter((version) => version.approved);
+            const assembledContext = assembleContext({
+              purpose: 'chapter-draft',
+              project: contextState.currentProject ?? project,
+              documents: contextState.documents,
+              chapters: contextState.chapters,
+              approvedChapterVersions,
+              currentChapter: chapter,
+              targetChapterNumber: outline.chapterNumber,
+            });
+            if (assembledContext.warnings.length > 0) {
+              console.warn('[FullAuto] Canon context warnings:', assembledContext.warnings);
+            }
+            // Phase 4: Full Auto keeps one-shot chapter generation; scene pipeline for Full Auto is deferred (plan §8).
+            const chapterResult = await generateTracked('chapters', {
               genre: project.genre,
               chapterNumber: outline.chapterNumber,
               chapterTitle: outline.title,
               beatReference: outline.beatReference,
               sceneGoal: outline.sceneGoal,
               pov: outline.pov,
+              assembledContext: assembledContext.text,
               charactersReference: charactersDoc?.content || '',
               endingReference: endingDoc?.content || '',
               previousChapterSummaries,
@@ -696,7 +841,7 @@ export default function FullAutoPage({
               nicheReference: nicheDoc?.content || '',
               wordTarget: outline.wordTarget || 3000,
             });
-            const chapterSummaryResult = await generate('chapter-summary', {
+            const chapterSummaryResult = await generateTracked('chapter-summary', {
               genre: project.genre,
               chapterNumber: chapter.chapterNumber,
               chapterTitle: chapter.title,
@@ -722,6 +867,12 @@ export default function FullAutoPage({
             });
             stepIdx++;
             throwIfControlRequested();
+            if (i === 0) {
+              await runCheckpoint('after-first-chapter', 'Checkpoint: first chapter approved', [
+                'Read Chapter 1 for voice, POV, and tone.',
+                'If the sample is wrong, pause Full Auto and fix before later chapters.',
+              ]);
+            }
           }
           const next = getNextStage('chapters');
           if (next) await advanceStage(projectId, next as WorkflowStage);
@@ -763,31 +914,6 @@ export default function FullAutoPage({
               .join('\n\n');
           };
 
-          const parseRevisionQueue = (content: string) => {
-            let jsonContent = content;
-            const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-            if (jsonMatch) jsonContent = jsonMatch[1];
-            const revisionQueueData = JSON.parse(jsonContent) as {
-              revisionTasks: Array<{
-                chapterNumber: number;
-                issueCount: number;
-                issues: Array<{
-                  category: string;
-                  description: string;
-                  manuscriptQuote?: string;
-                  location: string;
-                  fix: string;
-                }>;
-                acceptanceCriteria: string[];
-                summary: string;
-              }>;
-            };
-            if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
-              throw new Error('Revision queue missing task list.');
-            }
-            return revisionQueueData;
-          };
-
           for (const pass of EDITORIAL_PASSES as EditorialPass[]) {
             throwIfControlRequested();
             const manuscript = await compileManuscriptFromStore();
@@ -809,15 +935,27 @@ export default function FullAutoPage({
             const structureDoc = pickDoc('structure');
             const audienceParts = [editorialProject.niche, editorialProject.microniche].filter(Boolean) as string[];
             const intendedAudience = audienceParts.length > 0 ? audienceParts.join(' · ') : undefined;
+            const editorialApprovedVersions = Array.from(editorialStore.chapterVersions.values())
+              .flat()
+              .filter((version) => version.approved);
+            const editorialContext = assembleContext({
+              purpose: 'editorial',
+              project: editorialProject,
+              documents: projDocs,
+              chapters: editorialStore.chapters,
+              approvedChapterVersions: editorialApprovedVersions,
+              editorialPass: pass,
+            });
 
             setStep(`Editorial: ${pass}`, stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['editorial'] ?? 5, 0);
             let editorialResult;
             try {
-              editorialResult = await generate('editorial', {
+              editorialResult = await generateTracked('editorial', {
                 manuscript,
                 genre: editorialProject.genre,
                 chapterCount: useProjectStore.getState().chapters.length,
                 editorialPass: pass,
+                assembledContext: editorialContext.text,
                 nicheReference: nicheDoc?.content,
                 charactersReference: charactersDoc?.content,
                 endingReference: endingDoc?.content,
@@ -874,7 +1012,7 @@ export default function FullAutoPage({
 
             let queueResult;
             try {
-              queueResult = await generate('editorial', {
+              queueResult = await generateTracked('editorial', {
                 createQueue: true,
                 editorialReport: editorialResult.content,
                 chapterCount: useProjectStore.getState().chapters.length,
@@ -890,31 +1028,8 @@ export default function FullAutoPage({
             } catch {
               throw new Error(`Revision queue was not valid JSON (${pass}).`);
             }
-            for (const taskData of revisionQueueData.revisionTasks) {
-              const instructions = (taskData.issues || [])
-                .map((i) =>
-                  [
-                    `${i.category}: ${i.description}`,
-                    i.manuscriptQuote ? `Original text: "${i.manuscriptQuote}"` : null,
-                    `Location: ${i.location}`,
-                    `Fix: ${i.fix}`,
-                  ]
-                    .filter(Boolean)
-                    .join('\n')
-                )
-                .join('\n\n');
-              const finalInstructions =
-                taskData.issueCount > 0 ? instructions : taskData.summary || 'Review chapter for quality.';
-              await createRevisionTask({
-                projectId,
-                chapterNumber: taskData.chapterNumber,
-                editPass: pass,
-                issueIds: [],
-                instructions: finalInstructions,
-                acceptanceCriteria: taskData.acceptanceCriteria || [],
-                status: 'queued',
-              });
-            }
+            await persistRevisionQueueFromParsed(projectId, pass, revisionQueueData.revisionTasks);
+            await useProjectStore.getState().loadEditorialIssues(projectId);
             await loadRevisionTasks(projectId);
             const tasksThisPass = useProjectStore.getState().revisionTasks.filter(
               (t) => t.editPass === pass && t.status !== 'done'
@@ -949,15 +1064,53 @@ export default function FullAutoPage({
               const nextApproved = nextChapter
                 ? (useProjectStore.getState().chapterVersions.get(nextChapter.id) || []).find((v) => v.approved)
                 : undefined;
-              const revResult = await generate(
+              const revisionState = useProjectStore.getState();
+              const revisionApprovedVersions = Array.from(revisionState.chapterVersions.values())
+                .flat()
+                .filter((version) => version.approved);
+              const revisionContext = assembleContext({
+                purpose: 'chapter-revision',
+                project: revisionState.currentProject ?? project,
+                documents: revisionState.documents,
+                chapters: revisionState.chapters,
+                approvedChapterVersions: revisionApprovedVersions,
+                currentChapter: chapter,
+                targetChapterNumber: chapter.chapterNumber,
+                revisionInstructions: task.instructions,
+                editorialPass: pass,
+              });
+              const issues =
+                task.issueIds.length > 0
+                  ? await firestore.getEditorialIssuesByIds(task.issueIds)
+                  : [];
+              let sceneScoped = false;
+              let activeSceneId: string | undefined;
+              const segs = originalVersion.sceneSegments;
+              if (segs?.length && issues.length > 0) {
+                const sceneIds = issues.map((i) => i.sceneId).filter((x): x is string => !!x?.trim());
+                if (sceneIds.length > 0 && sceneIds.every((id) => id === sceneIds[0])) {
+                  const cand = sceneIds[0]!;
+                  if (segs.some((s) => s.sceneId === cand)) {
+                    sceneScoped = true;
+                    activeSceneId = cand;
+                  }
+                }
+              }
+              const originalContentForModel =
+                sceneScoped && activeSceneId && segs
+                  ? (segs.find((s) => s.sceneId === activeSceneId)?.prose ?? originalVersion.content)
+                  : originalVersion.content;
+
+              const revResult = await generateTracked(
                 'revision',
                 {
                   genre: project.genre,
                   chapterNumber: chapter.chapterNumber,
                   chapterTitle: chapter.title,
-                  originalContent: originalVersion.content,
+                  originalContent: originalContentForModel,
                   revisionInstructions: task.instructions,
                   acceptanceCriteria: task.acceptanceCriteria?.length ? task.acceptanceCriteria : ['Consistency with canon'],
+                  assembledContext: revisionContext.text,
                   charactersReference: charactersDoc?.content || '',
                   endingReference: endingDoc?.content || '',
                   structureReference: structureDoc?.content || '',
@@ -965,14 +1118,27 @@ export default function FullAutoPage({
                   previousChapterContext: prevApproved ? chapterSnapshot(prevApproved.content) : undefined,
                   nextChapterContext: nextApproved ? chapterSnapshot(nextApproved.content) : undefined,
                   editorialPass: pass,
+                  ...(sceneScoped && activeSceneId ? { sceneRevisionSceneId: activeSceneId } : {}),
                 },
                 { model: getEffectiveModelForStage('revision').id }
               );
-              const revisionSummaryResult = await generate('chapter-summary', {
+              if (!revResult.content?.trim()) {
+                throw new Error(`Empty revision for chapter ${chapter.chapterNumber}`);
+              }
+              let revisedFull = revResult.content;
+              let newSceneSegments: typeof originalVersion.sceneSegments = undefined;
+              if (sceneScoped && activeSceneId && segs) {
+                const spliced = spliceSceneIntoChapter(segs, activeSceneId, revResult.content.trim());
+                revisedFull = spliced.content;
+                newSceneSegments = spliced.segments;
+              }
+              const verifyExcerpt = sceneScoped ? revResult.content.trim() : revisedFull;
+
+              const revisionSummaryResult = await generateTracked('chapter-summary', {
                 genre: project.genre,
                 chapterNumber: chapter.chapterNumber,
                 chapterTitle: chapter.title,
-                chapterContent: revResult.content,
+                chapterContent: revisedFull,
               });
               const sorted = [...versions].sort((a, b) => b.version - a.version);
               const newVer = (sorted[0]?.version || 0) + 1;
@@ -981,13 +1147,41 @@ export default function FullAutoPage({
                 projectId,
                 chapterNumber: chapter.chapterNumber,
                 version: newVer,
-                content: revResult.content,
-                wordCount: countWords(revResult.content),
+                content: revisedFull,
+                wordCount: countWords(revisedFull),
                 approved: false,
                 notes: revisionSummaryResult.content.trim(),
+                ...(newSceneSegments ? { sceneSegments: newSceneSegments } : {}),
               });
-              await approveChapterVersion(versionId);
-              await updateRevisionTask(task.id, { status: 'done' });
+              const verifyRes = await generateTracked(
+                'revision-verify',
+                {
+                  revisedContent: verifyExcerpt,
+                  instructions: task.instructions,
+                  issueDescriptions: issues.map((i) => i.description),
+                },
+                { model: getEffectiveModelForStage('revision-verify').id }
+              );
+              const verificationResult = parseRevisionVerification(verifyRes.content);
+              if (verificationResult.satisfied) {
+                await approveChapterVersion(versionId);
+                for (const id of task.issueIds) {
+                  await firestore.updateEditorialIssue(id, { status: 'resolved' });
+                }
+                await updateRevisionTask(task.id, { status: 'done' });
+              } else {
+                console.warn(
+                  `[Full Auto] Verification failed (chapter ${task.chapterNumber}, pass ${pass}):`,
+                  verificationResult.checklist,
+                );
+                setFullAutoRunWarnings((prev) => [
+                  ...prev,
+                  `Chapter ${task.chapterNumber} (${pass}): revision saved as draft; verification did not pass. Check console for checklist.`,
+                ]);
+                await updateRevisionTask(task.id, { status: 'queued' });
+              }
+              await loadChapterVersions(chapter.id);
+              await useProjectStore.getState().loadEditorialIssues(projectId);
               stepIdx++;
               throwIfControlRequested();
             }
@@ -1031,15 +1225,53 @@ export default function FullAutoPage({
           const nextApproved = nextChapter
             ? (useProjectStore.getState().chapterVersions.get(nextChapter.id) || []).find((v) => v.approved)
             : undefined;
-          const revResult = await generate(
+          const revisionState = useProjectStore.getState();
+          const revisionApprovedVersions = Array.from(revisionState.chapterVersions.values())
+            .flat()
+            .filter((version) => version.approved);
+          const revisionContext = assembleContext({
+            purpose: 'chapter-revision',
+            project: revisionState.currentProject ?? project,
+            documents: revisionState.documents,
+            chapters: revisionState.chapters,
+            approvedChapterVersions: revisionApprovedVersions,
+            currentChapter: chapter,
+            targetChapterNumber: chapter.chapterNumber,
+            revisionInstructions: task.instructions,
+            editorialPass: pass,
+          });
+          const issues =
+            task.issueIds.length > 0
+              ? await firestore.getEditorialIssuesByIds(task.issueIds)
+              : [];
+          let sceneScoped = false;
+          let activeSceneId: string | undefined;
+          const segs = originalVersion.sceneSegments;
+          if (segs?.length && issues.length > 0) {
+            const sceneIds = issues.map((i) => i.sceneId).filter((x): x is string => !!x?.trim());
+            if (sceneIds.length > 0 && sceneIds.every((id) => id === sceneIds[0])) {
+              const cand = sceneIds[0]!;
+              if (segs.some((s) => s.sceneId === cand)) {
+                sceneScoped = true;
+                activeSceneId = cand;
+              }
+            }
+          }
+          const originalContentForModel =
+            sceneScoped && activeSceneId && segs
+              ? (segs.find((s) => s.sceneId === activeSceneId)?.prose ?? originalVersion.content)
+              : originalVersion.content;
+
+          const revResult = await generateTracked(
             'revision',
             {
               genre: project.genre,
               chapterNumber: chapter.chapterNumber,
               chapterTitle: chapter.title,
-              originalContent: originalVersion.content,
+              originalContent: originalContentForModel,
               revisionInstructions: task.instructions,
               acceptanceCriteria: task.acceptanceCriteria?.length ? task.acceptanceCriteria : ['Consistency with canon'],
+              assembledContext: revisionContext.text,
               charactersReference: charactersDoc?.content || '',
               endingReference: endingDoc?.content || '',
               structureReference: structureDoc?.content || '',
@@ -1047,14 +1279,27 @@ export default function FullAutoPage({
               previousChapterContext: prevApproved ? chapterSnapshot(prevApproved.content) : undefined,
               nextChapterContext: nextApproved ? chapterSnapshot(nextApproved.content) : undefined,
               editorialPass: pass,
+              ...(sceneScoped && activeSceneId ? { sceneRevisionSceneId: activeSceneId } : {}),
             },
             { model: getEffectiveModelForStage('revision').id }
           );
-          const revisionSummaryResult = await generate('chapter-summary', {
+          if (!revResult.content?.trim()) {
+            throw new Error(`Empty revision for chapter ${chapter.chapterNumber}`);
+          }
+          let revisedFull = revResult.content;
+          let newSceneSegments: typeof originalVersion.sceneSegments = undefined;
+          if (sceneScoped && activeSceneId && segs) {
+            const spliced = spliceSceneIntoChapter(segs, activeSceneId, revResult.content.trim());
+            revisedFull = spliced.content;
+            newSceneSegments = spliced.segments;
+          }
+          const verifyExcerpt = sceneScoped ? revResult.content.trim() : revisedFull;
+
+          const revisionSummaryResult = await generateTracked('chapter-summary', {
             genre: project.genre,
             chapterNumber: chapter.chapterNumber,
             chapterTitle: chapter.title,
-            chapterContent: revResult.content,
+            chapterContent: revisedFull,
           });
           const sorted = [...versions].sort((a, b) => b.version - a.version);
           const newVer = (sorted[0]?.version || 0) + 1;
@@ -1063,13 +1308,41 @@ export default function FullAutoPage({
             projectId,
             chapterNumber: chapter.chapterNumber,
             version: newVer,
-            content: revResult.content,
-            wordCount: countWords(revResult.content),
+            content: revisedFull,
+            wordCount: countWords(revisedFull),
             approved: false,
             notes: revisionSummaryResult.content.trim(),
+            ...(newSceneSegments ? { sceneSegments: newSceneSegments } : {}),
           });
-          await approveChapterVersion(versionId);
-          await updateRevisionTask(task.id, { status: 'done' });
+          const verifyRes = await generateTracked(
+            'revision-verify',
+            {
+              revisedContent: verifyExcerpt,
+              instructions: task.instructions,
+              issueDescriptions: issues.map((i) => i.description),
+            },
+            { model: getEffectiveModelForStage('revision-verify').id }
+          );
+          const verificationResult = parseRevisionVerification(verifyRes.content);
+          if (verificationResult.satisfied) {
+            await approveChapterVersion(versionId);
+            for (const id of task.issueIds) {
+              await firestore.updateEditorialIssue(id, { status: 'resolved' });
+            }
+            await updateRevisionTask(task.id, { status: 'done' });
+          } else {
+            console.warn(
+              `[Full Auto] Verification failed (chapter ${task.chapterNumber}, pass ${pass}):`,
+              verificationResult.checklist,
+            );
+            setFullAutoRunWarnings((prev) => [
+              ...prev,
+              `Chapter ${task.chapterNumber} (${pass}): revision saved as draft; verification did not pass. Check console for checklist.`,
+            ]);
+            await updateRevisionTask(task.id, { status: 'queued' });
+          }
+          await loadChapterVersions(chapter.id);
+          await useProjectStore.getState().loadEditorialIssues(projectId);
           stepIdx++;
           throwIfControlRequested();
         }
@@ -1089,7 +1362,7 @@ export default function FullAutoPage({
         const genreDoc = getDocumentByType('genre');
         const nicheDoc = getDocumentByType('niche');
         const structureDoc = getDocumentByType('structure');
-        const blurbResult = await generate('blurb', {
+        const blurbResult = await generateTracked('blurb', {
           genre: projForMarketing.genre,
           niche: projForMarketing.niche,
           title: projForMarketing.title,
@@ -1103,7 +1376,7 @@ export default function FullAutoPage({
         throwIfControlRequested();
         // Amazon description
         setStep('Amazon Description', stepIdx, 20, FULL_AUTO_ESTIMATES_MINUTES['amazon-description'] ?? 1, 0);
-        const amazonResult = await generate('amazon-description', {
+        const amazonResult = await generateTracked('amazon-description', {
           genre: projForMarketing.genre,
           niche: projForMarketing.niche,
           title: projForMarketing.title,
@@ -1115,6 +1388,7 @@ export default function FullAutoPage({
         });
         await updateProject(projectId, { amazonDescription: amazonResult.content });
         await updateProject(projectId, { fullAutoMode: false });
+        clearFullAutoRunMarkers(projectId);
         setOverlayStatus('complete');
         setCurrentStepLabel('Complete');
         setTimeLeftThisStep(0);
@@ -1124,6 +1398,7 @@ export default function FullAutoPage({
         if (err instanceof AutoControlError) {
           if (err.action === 'stop') {
             await updateProject(projectId, { fullAutoMode: false });
+            clearFullAutoCheckpointPending(projectId);
             setCurrentStepLabel('Stopped');
           } else {
             setCurrentStepLabel('Paused');
@@ -1224,6 +1499,12 @@ export default function FullAutoPage({
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--foreground)' }}>
                 Full Auto Mode
               </h2>
+              {preflightHint && (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--muted-foreground)', marginBottom: '0.75rem' }}>
+                  Preflight estimate (order-of-magnitude, includes prompt overhead):{' '}
+                  <strong style={{ color: 'var(--foreground)' }}>{preflightHint}</strong>
+                </p>
+              )}
               <p style={{ fontSize: '0.9375rem', color: 'var(--muted-foreground)', marginBottom: '1rem' }}>
                 {currentStepLabel}
               </p>
@@ -1240,6 +1521,14 @@ export default function FullAutoPage({
               {timeLeftTotal > 0 && (
                 <p style={{ fontSize: '0.875rem', color: 'var(--foreground)', marginTop: '0.25rem' }}>
                   ~{timeLeftTotal} min left total
+                </p>
+              )}
+              {fullAutoUsageSession.runTotal > 0 && (
+                <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', marginTop: '0.75rem' }}>
+                  This run: ~{fullAutoUsageSession.runTotal.toLocaleString()} tokens
+                  {fullAutoUsageSession.lastStep > 0 && (
+                    <> · Last step: ~{fullAutoUsageSession.lastStep.toLocaleString()}</>
+                  )}
                 </p>
               )}
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
@@ -1263,9 +1552,76 @@ export default function FullAutoPage({
               </p>
             </>
           )}
+          {overlayStatus === 'checkpoint' && checkpointGate && (
+            <>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--foreground)' }}>
+                {checkpointGate.title}
+              </h2>
+              <ul
+                style={{
+                  textAlign: 'left',
+                  fontSize: '0.875rem',
+                  color: 'var(--muted-foreground)',
+                  marginBottom: '1.25rem',
+                  paddingLeft: '1.25rem',
+                }}
+              >
+                {checkpointGate.bullets.map((b) => (
+                  <li key={b} style={{ marginBottom: '0.35rem' }}>
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+                <Button
+                  onClick={() => {
+                    checkpointGate.resolve();
+                  }}
+                >
+                  Continue Full Auto
+                </Button>
+                <Link
+                  href={`/projects/${projectId}`}
+                  onClick={() => clearFullAutoCheckpointPending(projectId)}
+                  style={{ fontSize: '0.875rem', color: 'var(--accent)' }}
+                >
+                  Exit to project hub
+                </Link>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', marginTop: '1rem' }}>
+                If you refresh while this gate is open, Full Auto opens the same checkpoint so you can continue.
+                Closing the tab mid-step elsewhere may still leave work incomplete until you resume.
+              </p>
+            </>
+          )}
           {overlayStatus === 'complete' && (
             <>
               <p style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--foreground)' }}>Complete</p>
+              {fullAutoRunWarnings.length > 0 && (
+                <div
+                  style={{
+                    textAlign: 'left',
+                    marginTop: '1rem',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    background: 'rgba(212, 160, 58, 0.15)',
+                    border: '1px solid rgba(212, 160, 58, 0.5)',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '0.5rem' }}>
+                    Revision warnings
+                  </p>
+                  <ul style={{ fontSize: '0.8125rem', color: 'var(--foreground)', paddingLeft: '1.25rem', margin: 0 }}>
+                    {fullAutoRunWarnings.map((w, i) => (
+                      <li key={i} style={{ marginBottom: '0.35rem' }}>
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', marginTop: '0.5rem' }}>
                 Redirecting to project...
               </p>

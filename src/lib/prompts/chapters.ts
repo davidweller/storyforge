@@ -92,25 +92,30 @@ Convert the Plot Blueprint into detailed chapter outlines. For each chapter, pro
 
 ## Output Format
 
-Present the chapter outlines in markdown format. For each chapter, use the following structure:
+Output only valid JSON in this exact shape:
 
-**Chapter [Number]: [Title]**
-- **Story Beat(s)**: [Beat name(s) this chapter covers]
-- **Scene Goal**: [Detailed goal description]
-- **POV Character**: [Character name]
-- **Word Target**: ~[number] words
-- **Key Plot Points**:
-  - [Point 1]
-  - [Point 2]
-  - [Point 3]
-  - [Point 4]
-  - [Point 5]
+\`\`\`json
+{
+  "chapters": [
+    {
+      "chapterNumber": 1,
+      "title": "Chapter title",
+      "beatReference": "Save the Cat beat name(s) and short description",
+      "sceneGoal": "Detailed goal description",
+      "pov": "POV character name",
+      "wordTarget": 3000,
+      "keyPlotPoints": [
+        "Point 1",
+        "Point 2",
+        "Point 3"
+      ]
+    }
+  ],
+  "overview": "Brief narrative overview of flow, pacing, character arcs, and emotional build."
+}
+\`\`\`
 
-After all chapter outlines, provide a brief narrative overview explaining:
-- How the chapters flow from one to the next
-- How the pacing varies across the story
-- How character arcs progress through the chapters
-- How the emotional arc builds to the climax
+Do not include markdown outside the JSON.
 
 ## Guidelines
 
@@ -157,7 +162,13 @@ Write a concise continuity summary (150-200 words) that captures:
 - Keep names, places, timeline facts, and outcomes exact
 - Do not invent events or motives not present in the chapter
 
-Output only the summary text.`;
+Output only valid JSON in this exact shape:
+
+\`\`\`json
+{
+  "summary": "The continuity summary text."
+}
+\`\`\``;
 }
 
 export function buildChapterPrompt(params: {
@@ -167,6 +178,7 @@ export function buildChapterPrompt(params: {
   beatReference: string;
   sceneGoal: string;
   pov?: string;
+  assembledContext?: string;
   charactersReference: string;
   endingReference: string;
   previousChapterSummaries?: Array<{ chapterNumber: number; title: string; summary: string }>;
@@ -182,6 +194,7 @@ export function buildChapterPrompt(params: {
     beatReference,
     sceneGoal,
     pov,
+    assembledContext,
     charactersReference,
     endingReference,
     previousChapterSummaries,
@@ -195,6 +208,13 @@ export function buildChapterPrompt(params: {
 
 ## Story Context
 
+${assembledContext ? `## Canon Context
+
+Use this bounded canon context as the primary source of truth. Treat hard constraints as binding, preserve unresolved threads unless the chapter goal advances them, and prefer the chapter-specific goal when generic guidance conflicts.
+
+${assembledContext}
+
+` : ''}
 **Story Structure Position:**
 ${structureContext}
 
@@ -208,7 +228,7 @@ ${pov ? `**POV Character:** ${pov}` : ''}
 
 **Target Word Count:** ~${wordTarget} words
 
-## Reference Materials
+${assembledContext ? '## Legacy Reference Materials (fallback only)\n\nUse these only when the canon context above is missing a needed detail.\n' : '## Reference Materials'}
 
 ${genreResearch ? `**Genre Research & Market Context:**
 ${genreResearch}
@@ -292,6 +312,7 @@ export function buildChapterRevisionPrompt(params: {
   originalChapter: string;
   revisionInstructions: string;
   acceptanceCriteria: string[];
+  assembledContext?: string;
   charactersReference: string;
   endingReference: string;
   structureReference?: string;
@@ -299,11 +320,14 @@ export function buildChapterRevisionPrompt(params: {
   previousChapterContext?: string;
   nextChapterContext?: string;
   editorialPass?: EditorialPass;
+  /** When set, `originalChapter` is one scene only; model returns revised scene prose only. */
+  sceneScoped?: { sceneId: string };
 }): string {
   const {
     originalChapter,
     revisionInstructions,
     acceptanceCriteria,
+    assembledContext,
     charactersReference,
     endingReference,
     structureReference,
@@ -311,53 +335,36 @@ export function buildChapterRevisionPrompt(params: {
     previousChapterContext,
     nextChapterContext,
     editorialPass = 'structural',
+    sceneScoped,
   } = params;
 
   const passNote = REVISION_PASS_NOTE[editorialPass];
-  
-  return `Revise the following chapter according to the revision instructions provided below.
 
-${passNote}
+  const originalSection = sceneScoped
+    ? `## Original scene (sceneId: ${sceneScoped.sceneId})
 
-## Original Chapter
+${originalChapter}`
+    : `## Original Chapter
 
 The complete original chapter text is provided below. Review it carefully before making revisions.
 
-${originalChapter}
+${originalChapter}`;
 
-## Revision Instructions
+  const outputSection = sceneScoped
+    ? `## Output
 
-**CRITICAL**: You must address ALL of the following revision instructions. These are specific issues identified in the editorial review that need to be fixed:
+Return **only** the revised prose for this scene (sceneId: ${sceneScoped.sceneId}). Do not include chapter headings, scene labels, or commentary — prose only.`
+    : `## Output
 
-${revisionInstructions}
+Write the complete revised chapter now. Ensure it addresses all revision instructions while maintaining consistency with canon and preserving the chapter's strengths.`;
 
-## Acceptance Criteria
+  const revisionGuidelines = sceneScoped
+    ? `## Revision Guidelines
 
-The revised chapter MUST meet all of the following criteria. Verify each one before completing your revision:
-
-${acceptanceCriteria.length > 0 
-  ? acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
-  : '1. The chapter maintains consistency with established canon and character voices.\n2. All revision instructions have been addressed.\n3. The narrative voice and style remain consistent with the original.'}
-
-## Reference Materials (Canon - Use for Consistency)
-
-These reference documents define the established canon. Ensure your revisions align with these:
-
-${charactersReference ? `**Character Profiles:**
-${charactersReference}
-
-` : ''}${endingReference ? `**Ending Constraints:**
-${endingReference}
-
-` : ''}${structureReference ? `**Story Structure:**
-${structureReference}
-
-` : ''}${nicheReference ? `**Target Audience & Positioning:**
-${nicheReference}
-
-` : ''}${previousChapterContext || nextChapterContext ? `## Continuity Reference (Adjacent Chapters)
-
-${previousChapterContext ? `**Previous Chapter Snapshot:**\n${previousChapterContext}\n\n` : ''}${nextChapterContext ? `**Next Chapter Snapshot:**\n${nextChapterContext}\n\n` : ''}` : ''}## Revision Guidelines
+1. Address ALL instructions while preserving voice and canon.
+2. Keep plot facts consistent with the rest of the chapter you cannot see.
+3. Output **only** this scene's prose.`
+    : `## Revision Guidelines
 
 1. **Address ALL Instructions**: Every point in the revision instructions must be addressed. Do not skip any issues.
 
@@ -371,9 +378,50 @@ ${previousChapterContext ? `**Previous Chapter Snapshot:**\n${previousChapterCon
 
 6. **Targeted Improvements**: Make focused, specific changes. Avoid over-revising areas that don't need changes.
 
-7. **Complete Chapter**: Output the complete revised chapter, not just the changed sections.
+7. **Complete Chapter**: Output the complete revised chapter, not just the changed sections.`;
+  
+  return `Revise ${sceneScoped ? 'the following scene excerpt' : 'the following chapter'} according to the revision instructions provided below.
 
-## Output
+${passNote}
 
-Write the complete revised chapter now. Ensure it addresses all revision instructions while maintaining consistency with canon and preserving the chapter's strengths.`;
+${originalSection}
+
+## Revision Instructions
+
+**CRITICAL**: You must address ALL of the following revision instructions. These are specific issues identified in the editorial review that need to be fixed:
+
+${revisionInstructions}
+
+## Acceptance Criteria
+
+The revised ${sceneScoped ? 'scene' : 'chapter'} MUST meet all of the following criteria. Verify each one before completing your revision:
+
+${acceptanceCriteria.length > 0 
+  ? acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
+  : '1. The chapter maintains consistency with established canon and character voices.\n2. All revision instructions have been addressed.\n3. The narrative voice and style remain consistent with the original.'}
+
+## Reference Materials (Canon - Use for Consistency)
+
+These reference documents define the established canon. Ensure your revisions align with these:
+
+${assembledContext ? `**Bounded Canon Context (primary):**
+${assembledContext}
+
+` : ''}${charactersReference ? `**Character Profiles${assembledContext ? ' (fallback only)' : ''}:**
+${charactersReference}
+
+` : ''}${endingReference ? `**Ending Constraints${assembledContext ? ' (fallback only)' : ''}:**
+${endingReference}
+
+` : ''}${structureReference ? `**Story Structure${assembledContext ? ' (fallback only)' : ''}:**
+${structureReference}
+
+` : ''}${nicheReference ? `**Target Audience & Positioning${assembledContext ? ' (fallback only)' : ''}:**
+${nicheReference}
+
+` : ''}${previousChapterContext || nextChapterContext ? `## Continuity Reference (Adjacent Chapters)
+
+${previousChapterContext ? `**Previous Chapter Snapshot:**\n${previousChapterContext}\n\n` : ''}${nextChapterContext ? `**Next Chapter Snapshot:**\n${nextChapterContext}\n\n` : ''}` : ''}${revisionGuidelines}
+
+${outputSection}`;
 }

@@ -35,6 +35,9 @@ export function useProject(projectId: string | null) {
     loadProject,
     updateProject,
     advanceStage,
+    createDocument,
+    updateDocument,
+    approveDocument,
     clearError,
     clearCurrentProject,
   } = useProjectStore();
@@ -113,6 +116,9 @@ export function useProject(projectId: string | null) {
     error,
     updateProject: (data: Partial<{ title: string; genre: string; niche?: string; premise?: string; research?: string; blurb?: string; amazonDescription?: string; fullAutoMode?: boolean }>) =>
       currentProject && updateProject(currentProject.id, data),
+    createDocument,
+    updateDocument,
+    approveDocument,
     advanceStage: (newStage: WorkflowStage) => 
       currentProject && advanceStage(currentProject.id, newStage),
     getDocumentByType,

@@ -1,12 +1,12 @@
 'use client';
 
-import { use, useState, useEffect, useMemo } from 'react';
+import { use, useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
-import { Button } from '@/components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui';
 import { getNextStage } from '@/lib/utils';
 import {
   EDITORIAL_PASSES,
@@ -19,6 +19,10 @@ import {
 } from '@/lib/editorial/passes';
 import type { WorkflowStage, EditorialPass } from '@/types';
 import { MAX_MANUSCRIPT_TOKENS } from '@/lib/constants';
+import { parseRevisionQueue } from '@/lib/generation/schemas';
+import { assembleContext } from '@/lib/context/assembler';
+import { persistRevisionQueueFromParsed } from '@/lib/editorial/persistRevisionQueue';
+import { estimateEditorialPassTokens, formatTokenRange } from '@/lib/cost/preflight';
 
 interface EditorialPageProps {
   params: Promise<{ projectId: string }>;
@@ -35,13 +39,12 @@ export default function EditorialPage({ params }: EditorialPageProps) {
     project,
     documents,
     chapters,
-    editorialIssues,
     revisionTasks,
+    editorialIssues,
     loading: projectLoading,
     error: projectError,
     getDocumentByType,
     getApprovedChapterVersion,
-    getOpenIssuesCount,
   } = useProject(projectId);
   
   const {
@@ -60,8 +63,43 @@ export default function EditorialPage({ params }: EditorialPageProps) {
   const [editorialContent, setEditorialContent] = useState('');
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [modelSwitchMessage, setModelSwitchMessage] = useState<string | null>(null);
+  const [contextWarnings, setContextWarnings] = useState<string[]>([]);
+  const [issueStatusFilter, setIssueStatusFilter] = useState<'all' | 'open' | 'resolved'>('all');
+  const [issueChapterFilter, setIssueChapterFilter] = useState<'all' | number>('all');
 
   const docTypeForPass = useMemo(() => documentTypeForEditorialPass(editorialPass), [editorialPass]);
+
+  const editorialGenOpts = useMemo(
+    () => ({ projectId, usageSource: 'editorial' as const }),
+    [projectId]
+  );
+
+  const manuscriptWordCount = useMemo(() => {
+    let t = 0;
+    for (const ch of chapters) {
+      const v = getApprovedChapterVersion(ch.id);
+      if (v) t += v.wordCount;
+    }
+    return t;
+  }, [chapters, getApprovedChapterVersion]);
+
+  const editorialPreflight = useMemo(() => {
+    const est = estimateEditorialPassTokens(manuscriptWordCount, 1);
+    return formatTokenRange(est.low, est.high);
+  }, [manuscriptWordCount]);
+
+  const filteredPersistedIssues = useMemo(() => {
+    return editorialIssues.filter((i) => {
+      if (i.editPass !== editorialPass) return false;
+      if (issueStatusFilter !== 'all' && i.status !== issueStatusFilter) return false;
+      if (issueChapterFilter !== 'all' && i.chapterNumber !== issueChapterFilter) return false;
+      return true;
+    });
+  }, [editorialIssues, editorialPass, issueStatusFilter, issueChapterFilter]);
+
+  const refreshIssues = useCallback(() => {
+    if (projectId) loadEditorialIssues(projectId);
+  }, [projectId, loadEditorialIssues]);
 
   const getApprovedStub = (chapterId: string) =>
     getApprovedChapterVersion(chapterId) ? { content: '' } : undefined;
@@ -111,6 +149,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       loadEditorialIssues(projectId);
     }
   }, [projectId, loadEditorialIssues]);
+
+  useEffect(() => {
+    setIssueStatusFilter('all');
+    setIssueChapterFilter('all');
+  }, [editorialPass]);
   
   if (projectLoading || !project) {
     return (
@@ -124,8 +167,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
   }
   
   const isApproved = approvedEditorialDocForPass(documents, editorialPass);
-  const openIssuesCount = getOpenIssuesCount();
-  
   // Get approved chapter IDs
   const approvedChapterIds = new Set<string>();
   for (const ch of chapters) {
@@ -306,10 +347,23 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       
       const audienceParts = [project.niche, project.microniche].filter(Boolean) as string[];
       const intendedAudience = audienceParts.length > 0 ? audienceParts.join(' · ') : undefined;
+      const approvedChapterVersions = Array.from(useProjectStore.getState().chapterVersions.values())
+        .flat()
+        .filter((version) => version.approved);
+      const assembled = assembleContext({
+        purpose: 'editorial',
+        project,
+        documents,
+        chapters,
+        approvedChapterVersions,
+        editorialPass,
+      });
+      setContextWarnings(assembled.warnings);
 
       const result = await generate('editorial', {
         manuscript,
         genre: project.genre,
+        assembledContext: assembled.text,
         nicheReference: nicheDoc?.content,
         charactersReference: charactersDoc?.content,
         endingReference: endingDoc?.content,
@@ -318,12 +372,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
         intendedAudience,
         premise: project.premise,
         research: project.research,
-      });
+      }, editorialGenOpts);
       
       // Check if model was switched (the API will return this in the response)
-      const resultWithSwitch = result as any;
-      if (resultWithSwitch.modelSwitched && resultWithSwitch.switchMessage) {
-        setModelSwitchMessage(resultWithSwitch.switchMessage);
+      if ('modelSwitched' in result && result.modelSwitched && 'switchMessage' in result && typeof result.switchMessage === 'string') {
+        setModelSwitchMessage(result.switchMessage);
       } else {
         setModelSwitchMessage(null);
       }
@@ -405,74 +458,32 @@ export default function EditorialPage({ params }: EditorialPageProps) {
           editorialReport: editorialContent,
           chapterCount: chapters.length,
           editorialPass,
-        });
+        }, editorialGenOpts);
 
         console.log('[Editorial] Revision queue response received:', {
           contentLength: result.content?.length || 0,
           hasContent: !!result.content,
         });
 
-        let revisionQueueData: {
-          revisionTasks: Array<{
-            chapterNumber: number;
-            issueCount: number;
-            priority: string;
-            summary: string;
-            issues: Array<{
-              category: string;
-              description: string;
-              location: string;
-              fix: string;
-            }>;
-            acceptanceCriteria: string[];
-            preserveElements: string[];
-          }>;
-        };
-
-        try {
-          let jsonContent = result.content;
-          const jsonMatch = jsonContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-          if (jsonMatch) {
-            jsonContent = jsonMatch[1];
+        const revisionQueueData = (() => {
+          try {
+            return parseRevisionQueue(result.content);
+          } catch (parseError) {
+            console.error('[Editorial] Failed to parse revision queue JSON:', parseError);
+            console.error('[Editorial] Raw response:', result.content);
+            throw new Error('Failed to parse revision queue. The AI response was not in the expected format.');
           }
-
-          revisionQueueData = JSON.parse(jsonContent);
-        } catch (parseError) {
-          console.error('[Editorial] Failed to parse revision queue JSON:', parseError);
-          console.error('[Editorial] Raw response:', result.content);
-          throw new Error('Failed to parse revision queue. The AI response was not in the expected format.');
-        }
+        })();
 
         if (!revisionQueueData.revisionTasks || !Array.isArray(revisionQueueData.revisionTasks)) {
           throw new Error('Invalid revision queue format. Expected revisionTasks array.');
         }
 
-        console.log('[Editorial] Creating revision tasks:', {
-          taskCount: revisionQueueData.revisionTasks.length,
-        });
+        await persistRevisionQueueFromParsed(projectId, editorialPass, revisionQueueData.revisionTasks);
+        await loadEditorialIssues(projectId);
+        await loadRevisionTasks(projectId);
 
-        for (const taskData of revisionQueueData.revisionTasks) {
-          const instructions = taskData.issues
-            .map((issue) => `${issue.category}: ${issue.description}\nLocation: ${issue.location}\nFix: ${issue.fix}`)
-            .join('\n\n');
-
-          const finalInstructions =
-            taskData.issueCount > 0
-              ? instructions
-              : taskData.summary || 'Review chapter for overall quality and consistency.';
-
-          await createRevisionTask({
-            projectId,
-            chapterNumber: taskData.chapterNumber,
-            editPass: editorialPass,
-            issueIds: [],
-            instructions: finalInstructions,
-            acceptanceCriteria: taskData.acceptanceCriteria || [],
-            status: taskData.issueCount > 0 ? 'queued' : 'done',
-          });
-
-          console.log('[Editorial] Created revision task for chapter', taskData.chapterNumber);
-        }
+        console.log('[Editorial] Created revision tasks and editorial issues for pass', editorialPass);
       }
       
       console.log('[Editorial] All revision tasks created successfully');
@@ -486,7 +497,6 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       router.push(`/projects/${projectId}/stage/revision?pass=${editorialPass}`);
     } catch (err) {
       console.error('[Editorial] Error creating revision queue:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create revision queue';
       // Error will be displayed by the error handling in the component
       throw err;
     }
@@ -539,6 +549,103 @@ export default function EditorialPage({ params }: EditorialPageProps) {
           <p className="text-sm text-[var(--destructive)]">{projectError || generateError}</p>
         </div>
       )}
+
+      {contextWarnings.length > 0 && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-medium text-amber-900 mb-1">Canon context warning</p>
+          <p className="text-sm text-amber-800">{contextWarnings[0]}</p>
+        </div>
+      )}
+
+      <Card className="mb-6">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
+          <CardTitle className="text-base">
+            Structured issues — {EDITORIAL_PASS_LABELS[editorialPass]}
+          </CardTitle>
+          <Button type="button" variant="ghost" size="sm" onClick={refreshIssues} className="shrink-0">
+            Refresh list
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2 text-muted-foreground">
+              <span>Status</span>
+              <select
+                className="rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-[var(--foreground)]"
+                value={issueStatusFilter}
+                onChange={(e) =>
+                  setIssueStatusFilter(e.target.value as 'all' | 'open' | 'resolved')
+                }
+              >
+                <option value="all">All</option>
+                <option value="open">Open</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-muted-foreground">
+              <span>Chapter</span>
+              <select
+                className="rounded border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-[var(--foreground)]"
+                value={issueChapterFilter === 'all' ? 'all' : String(issueChapterFilter)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setIssueChapterFilter(v === 'all' ? 'all' : Number(v));
+                }}
+              >
+                <option value="all">All chapters</option>
+                {[...chapters]
+                  .sort((a, b) => a.chapterNumber - b.chapterNumber)
+                  .map((ch) => (
+                    <option key={ch.id} value={ch.chapterNumber}>
+                      Ch. {ch.chapterNumber}: {ch.title}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+          {filteredPersistedIssues.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No stored issues for this pass yet. They appear after you create a revision queue from an editorial
+              report (or resolve after revising chapters).
+            </p>
+          ) : (
+            <ul className="space-y-3 max-h-[320px] overflow-y-auto text-sm">
+              {filteredPersistedIssues.map((issue) => (
+                <li
+                  key={issue.id}
+                  className="rounded-lg border border-[var(--border)] p-3 bg-[var(--background)]"
+                >
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <Badge variant={issue.status === 'open' ? 'warning' : 'success'}>
+                      {issue.status}
+                    </Badge>
+                    <Badge variant="default">{issue.category}</Badge>
+                    {issue.chapterNumber != null ? (
+                      <span className="text-xs text-muted-foreground">Chapter {issue.chapterNumber}</span>
+                    ) : null}
+                    {issue.sceneId?.trim() ? (
+                      <span className="text-xs text-muted-foreground">scene: {issue.sceneId}</span>
+                    ) : null}
+                  </div>
+                  <p className="text-[var(--foreground)]">{issue.description}</p>
+                  <p className="text-muted-foreground mt-1">
+                    <span className="font-medium">Fix: </span>
+                    {issue.recommendedFix}
+                  </p>
+                  {issue.locationHint?.trim() ? (
+                    <p className="text-xs text-muted-foreground mt-1">Where: {issue.locationHint}</p>
+                  ) : null}
+                  {issue.manuscriptQuote?.trim() ? (
+                    <blockquote className="mt-2 pl-3 border-l-2 border-[var(--muted-foreground)] text-xs text-muted-foreground italic whitespace-pre-wrap">
+                      {issue.manuscriptQuote}
+                    </blockquote>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
       
       {/* Model Switch Message */}
       {modelSwitchMessage && (
@@ -562,6 +669,13 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       
       {/* Empty state */}
       {!isGenerating && !editorialContent && (
+        <>
+          {manuscriptWordCount > 0 && (
+            <p className="mb-4 text-sm text-[var(--muted-foreground)]">
+              Preflight estimate for this pass (includes manuscript context + prompt overhead, not exact):{' '}
+              <strong className="text-[var(--foreground)]">{editorialPreflight}</strong>
+            </p>
+          )}
         <EmptyContent
           title="Generate Editorial Review"
           description="Submit your manuscript for AI-powered editorial analysis. You'll receive detailed feedback scoped to this pass (structural through final report)."
@@ -570,6 +684,7 @@ export default function EditorialPage({ params }: EditorialPageProps) {
           isLoading={isGenerating}
           disabled={!canStartThisPass}
         />
+        </>
       )}
       
       {/* Editorial content */}

@@ -1,26 +1,20 @@
 'use client';
 
-import { use, useState, useEffect, useRef } from 'react';
+import { use, useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
 import { Button, Card, CardContent, useToast } from '@/components/ui';
+import { ReviewChecklist } from '@/components/review/ReviewChecklist';
+import { checklistItemsForKey } from '@/lib/review/checklists';
 import { getNextStage, cn } from '@/lib/utils';
 import type { WorkflowStage } from '@/types';
+import { parseEndingConcepts, type EndingConcept } from '@/lib/generation/schemas';
 
 interface EndingPageProps {
   params: Promise<{ projectId: string }>;
-}
-
-interface EndingConcept {
-  id: string;
-  title: string;
-  summary: string;
-  emotionalPayoff: string;
-  characterResolution: string;
-  thematicStatement: string;
 }
 
 type ExpansionStatus = 'idle' | 'running' | 'complete' | 'error';
@@ -53,40 +47,6 @@ function parseSavedEndingChoice(content: string): EndingConcept | null {
   }
 }
 
-// Parse ending concepts from generated content (primary: numbered + bold title; fallback: numbered sections)
-function parseEndingConcepts(content: string): EndingConcept[] {
-  const concepts: EndingConcept[] = [];
-  // Split by numbered sections: "1. **Title**" or fallback "1. Title"
-  const sections = content.split(/(?=\d+\.\s)/).filter((s) => s.trim());
-  if (sections.length <= 1) return concepts;
-
-  for (const section of sections) {
-    const trimmed = section.trim();
-    if (!trimmed || !/^\d+\.\s/.test(trimmed)) continue;
-
-    const titleMatch = trimmed.match(/\*\*([^*]+)\*\*/);
-    const firstLine = trimmed.split(/\n/)[0]?.replace(/^\d+\.\s*/, '').trim() || '';
-    const title = titleMatch ? titleMatch[1].trim() : (firstLine || trimmed.slice(0, 80));
-    if (!title) continue;
-
-    const summaryMatch = trimmed.match(/Summary[:\s]*([^\n]+(?:\n(?!\d+\.\s|\*\*)[^\n]+)*)/i);
-    const emotionalMatch = trimmed.match(/Emotional[^:]*[:\s]*([^\n]+)/i);
-    const characterMatch = trimmed.match(/Character[^:]*[:\s]*([^\n]+)/i);
-    const thematicMatch = trimmed.match(/Thematic[^:]*[:\s]*([^\n]+)/i);
-
-    concepts.push({
-      id: `ending-${concepts.length + 1}`,
-      title,
-      summary: summaryMatch?.[1]?.trim() || trimmed.slice(title.length, 200 + title.length).trim() || trimmed.slice(0, 200),
-      emotionalPayoff: emotionalMatch?.[1]?.trim() || '',
-      characterResolution: characterMatch?.[1]?.trim() || '',
-      thematicStatement: thematicMatch?.[1]?.trim() || '',
-    });
-  }
-
-  return concepts;
-}
-
 export default function EndingPage({ params }: EndingPageProps) {
   const { projectId } = use(params);
   const router = useRouter();
@@ -104,6 +64,11 @@ export default function EndingPage({ params }: EndingPageProps) {
   const { createDocument, updateDocument, approveDocument, advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   const { addToast } = useToast();
+
+  const manualGenOpts = useMemo(
+    () => ({ projectId, usageSource: 'manual-stage' as const }),
+    [projectId]
+  );
   
   const [phase, setPhase] = useState<'concepts' | 'expanded'>('concepts');
   const [conceptsContent, setConceptsContent] = useState('');
@@ -209,7 +174,7 @@ export default function EndingPage({ params }: EndingPageProps) {
         premise: project.premise,
         genre: project.genre,
         nicheReference: nicheDoc?.content || '',
-      });
+      }, manualGenOpts);
       
       setConceptsContent(result.content);
       setConcepts(parseEndingConcepts(result.content));
@@ -287,7 +252,7 @@ export default function EndingPage({ params }: EndingPageProps) {
         genre: project.genre,
         nicheReference: nicheDoc?.content || '',
         selectedEnding: `${conceptToExpand.title}\n\n${conceptToExpand.summary}\n\nEmotional Payoff: ${conceptToExpand.emotionalPayoff}\nCharacter Resolution: ${conceptToExpand.characterResolution}\nThematic Statement: ${conceptToExpand.thematicStatement}`,
-      });
+      }, manualGenOpts);
       
       setExpandedContent(result.content);
       setPhase('expanded');
@@ -485,6 +450,9 @@ export default function EndingPage({ params }: EndingPageProps) {
                 {expansionError || 'Expansion failed. Please try again.'}
               </p>
             </div>
+          )}
+          {!!expandedContent && expansionStatus === 'complete' && !isApproved && (
+            <ReviewChecklist items={checklistItemsForKey('ending')} className="mb-4" />
           )}
           {!!expandedContent && (
           <ContentDisplay

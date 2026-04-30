@@ -6,11 +6,12 @@ Your titles:
 - Avoid clichés unless subverting them intentionally
 - Could appear on a bestseller list in the given genre
 
-Output only the list of titles, one per line. Do not number them or add explanations. Each line should be exactly one title.`;
+Output only valid JSON with a titles array. Do not add explanations.`;
 
 export function buildTitleIdeasPrompt(params: {
   genre: string;
   premise?: string;
+  assembledContext?: string;
   nicheReference?: string;
   structureReference?: string;
   endingReference?: string;
@@ -19,6 +20,7 @@ export function buildTitleIdeasPrompt(params: {
   const {
     genre,
     premise,
+    assembledContext,
     nicheReference,
     structureReference,
     endingReference,
@@ -35,37 +37,58 @@ export function buildTitleIdeasPrompt(params: {
 **Premise:** ${premise}`;
   }
 
+  if (assembledContext) {
+    prompt += `
+
+## Canon Context
+
+Use this bounded canon context as the primary source of truth for genre promise, audience promise, theme, character conflict, and ending constraints.
+
+${assembledContext}`;
+  }
+
   if (nicheReference) {
     prompt += `
 
-**Reader / Niche context:**
+**Reader / Niche context${assembledContext ? ' (fallback only)' : ''}:**
 ${nicheReference}`;
   }
 
   if (endingReference) {
     prompt += `
 
-**Ending / story direction:**
+**Ending / story direction${assembledContext ? ' (fallback only)' : ''}:**
 ${endingReference.slice(0, 1200)}`;
   }
 
   if (structureReference) {
     prompt += `
 
-**Story structure (beats):**
+**Story structure (beats)${assembledContext ? ' (fallback only)' : ''}:**
 ${structureReference.slice(0, 800)}`;
   }
 
   if (charactersReference) {
     prompt += `
 
-**Characters (protagonist / conflict):**
+**Characters (protagonist / conflict)${assembledContext ? ' (fallback only)' : ''}:**
 ${charactersReference.slice(0, 600)}`;
   }
 
   prompt += `
 
-Respond with exactly 10 title options, one per line. No numbering, no explanations. Only the titles.`;
+Respond with exactly 10 title options as valid JSON in this exact shape:
+
+\`\`\`json
+{
+  "titles": [
+    "Title One",
+    "Title Two"
+  ]
+}
+\`\`\`
+
+Do not include markdown outside the JSON.`;
 
   return prompt;
 }

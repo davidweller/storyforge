@@ -69,13 +69,13 @@ export default function BlurbPage() {
         marketAnalysis: genreDoc?.content,
         readerTargeting: nicheDoc?.content,
         plotBlueprint: structureDoc?.content,
-      }, { model: selectedModel.id });
+      }, { model: selectedModel.id, projectId, usageSource: 'manual-stage' });
       setValue(result.content);
       save(result.content);
     } catch {
       // Error surfaced by useGenerate
     }
-  }, [project, getDocumentByType, generate, save, clearError]);
+  }, [project, getDocumentByType, generate, save, clearError, projectId]);
 
   if (!projectId) {
     return (

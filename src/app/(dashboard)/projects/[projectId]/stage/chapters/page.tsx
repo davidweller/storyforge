@@ -9,67 +9,11 @@ import { StageLayout, EmptyContent } from '@/components/stages';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
 import { cn, countWords, capOutlineWordTargets } from '@/lib/utils';
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { parseChapterOutlines } from '@/lib/generation/schemas';
+import { estimateFullAutoTokens, formatTokenRange } from '@/lib/cost/preflight';
 
 interface ChaptersPageProps {
   params: Promise<{ projectId: string }>;
-}
-
-interface ChapterOutline {
-  chapterNumber: number;
-  title: string;
-  beatReference: string;
-  sceneGoal: string;
-  pov?: string;
-  wordTarget?: number;
-}
-
-// Parse chapter outlines from markdown (tolerant of **, list markers, spacing)
-function parseChapterOutlines(content: string): ChapterOutline[] {
-  const outlines: ChapterOutline[] = [];
-  const strictRegex = /\*\*Chapter\s+(\d+):\s*(.+?)\*\*/g;
-  const lenientRegex = /^#{0,3}\s*\*{0,2}Chapter\s+(\d+):\s*(.+?)(?:\*{2})?\s*$/gm;
-  const matches: Array<{ index: number; number: number; title: string; endIndex: number }> = [];
-  let match;
-  while ((match = strictRegex.exec(content)) !== null) {
-    matches.push({
-      index: match.index,
-      number: parseInt(match[1], 10),
-      title: (match[2]?.trim() || '').replace(/\*+$/, ''),
-      endIndex: match.index + match[0].length,
-    });
-  }
-  if (matches.length === 0) {
-    while ((match = lenientRegex.exec(content)) !== null) {
-      matches.push({
-        index: match.index,
-        number: parseInt(match[1], 10),
-        title: (match[2]?.trim() || '').replace(/\*+$/, ''),
-        endIndex: match.index + match[0].length,
-      });
-    }
-  }
-  matches.sort((a, b) => a.index - b.index);
-  for (let i = 0; i < matches.length; i++) {
-    const current = matches[i];
-    const next = matches[i + 1];
-    const startIndex = current.endIndex;
-    const endIndex = next ? next.index : content.length;
-    const chapterContent = content.substring(startIndex, endIndex);
-    if (isNaN(current.number)) continue;
-    const beatMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Story Beat\(s\)\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
-    const sceneGoalMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Scene Goal\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
-    const povMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}POV Character\*{0,2}\s*:\s*(.+?)(?:\n|$)/im);
-    const wordTargetMatch = chapterContent.match(/(?:^[-*]\s*)?\*{0,2}Word Target\*{0,2}\s*:\s*~?(\d+)/im);
-    outlines.push({
-      chapterNumber: current.number,
-      title: current.title,
-      beatReference: beatMatch?.[1]?.trim() || '',
-      sceneGoal: sceneGoalMatch?.[1]?.trim() || '',
-      pov: povMatch?.[1]?.trim() || undefined,
-      wordTarget: wordTargetMatch ? parseInt(wordTargetMatch[1], 10) : undefined,
-    });
-  }
-  return outlines;
 }
 
 export default function ChaptersPage({ params }: ChaptersPageProps) {
@@ -93,6 +37,13 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
   const { createChapter, loadChapterVersions } = useProjectStore();
   const [startingChapter1, setStartingChapter1] = useState(false);
   const [startingAutoMode, setStartingAutoMode] = useState(false);
+  const faCkKey = `novel-full-auto-checkpoints-${projectId}`;
+  const [faCheckpoints, setFaCheckpoints] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setFaCheckpoints(window.localStorage.getItem(faCkKey) === '1');
+  }, [faCkKey]);
 
   // Load versions for all chapters when chapters are available
   useEffect(() => {
@@ -111,6 +62,12 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
     const parsed = parseChapterOutlines(outlinesDoc.content);
     return capOutlineWordTargets(parsed, TARGET_MANUSCRIPT_WORDS);
   }, [outlinesDoc]);
+
+  const fullAutoPreflight = useMemo(() => {
+    const n = Math.max(1, chapterOutlines.length);
+    const est = estimateFullAutoTokens({ chapterCount: n });
+    return formatTokenRange(est.low, est.high);
+  }, [chapterOutlines.length]);
   
   // Find next uncompleted chapter
   const nextChapter = useMemo(() => {
@@ -276,6 +233,28 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
               <p className="text-sm text-[var(--muted-foreground)]">
                 Let StoryForge run chapters automatically from your current point.
               </p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-2">
+                Preflight estimate (includes prompt overhead, not exact):{' '}
+                <strong className="text-[var(--foreground)]">{fullAutoPreflight}</strong>
+              </p>
+              <label className="mt-3 flex items-start gap-2 text-sm text-[var(--foreground)] cursor-pointer max-w-xl">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={faCheckpoints}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setFaCheckpoints(v);
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem(faCkKey, v ? '1' : '0');
+                    }
+                  }}
+                />
+                <span>
+                  Step-through checkpoints — pause after ending, title, outlines, and the first written chapter so you
+                  can review before the rest runs.
+                </span>
+              </label>
             </div>
             <Button
               variant="secondary"

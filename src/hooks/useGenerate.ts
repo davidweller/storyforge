@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { WorkflowStage } from '@/types';
+import type { WorkflowStage, GenerationUsageSource } from '@/types';
 
 interface GenerateResult {
   content: string;
@@ -10,12 +10,19 @@ interface GenerateResult {
   tokensUsed: number;
 }
 
-interface GenerateOptions {
+export interface GenerateOptions {
   model?: string;
+  projectId?: string;
+  runId?: string;
+  usageSource?: GenerationUsageSource;
 }
 
 interface UseGenerateReturn {
-  generate: (stage: WorkflowStage, data: Record<string, unknown>, options?: GenerateOptions) => Promise<GenerateResult>;
+  generate: (
+    stage: WorkflowStage,
+    data: Record<string, unknown>,
+    options?: GenerateOptions
+  ) => Promise<GenerateResult>;
   isGenerating: boolean;
   error: string | null;
   clearError: () => void;
@@ -37,7 +44,14 @@ export function useGenerate(): UseGenerateReturn {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage, data, model: options?.model }),
+        body: JSON.stringify({
+          stage,
+          data,
+          model: options?.model,
+          projectId: options?.projectId,
+          runId: options?.runId,
+          usageSource: options?.usageSource,
+        }),
       });
 
       if (!response.ok) {
@@ -45,9 +59,8 @@ export function useGenerate(): UseGenerateReturn {
         throw new Error(errorData.error || 'Generation failed');
       }
 
-      const result = await response.json();
-      return result as GenerateResult;
-
+      const result = await response.json() as GenerateResult;
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Generation failed';
       setError(message);

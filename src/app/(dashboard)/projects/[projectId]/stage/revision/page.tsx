@@ -10,7 +10,14 @@ import { StageLayout } from '@/components/stages';
 import { Button, Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import * as Diff from 'diff';
-import type { ChapterVersion, EditorialPass, RevisionTask } from '@/types';
+import type {
+  ChapterVersion,
+  EditorialPass,
+  EditorialIssue,
+  RevisionTask,
+  SceneProseSegment,
+} from '@/types';
+import { parseRevisionVerification, type RevisionVerification } from '@/lib/generation/schemas';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import {
   EDITORIAL_PASSES,
@@ -19,6 +26,10 @@ import {
   canProceedToExportFinal,
   parseEditorialPass,
 } from '@/lib/editorial/passes';
+import { assembleContext } from '@/lib/context/assembler';
+import { spliceSceneIntoChapter } from '@/lib/editorial/sceneSplice';
+import * as firestore from '@/lib/db/client';
+import { estimateApplyAllRevisionsTokens, formatTokenRange } from '@/lib/cost/preflight';
 
 interface RevisionPageProps {
   params: Promise<{ projectId: string }>;
@@ -46,17 +57,35 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     () => tasksForPass(revisionTasks, editorialPass),
     [revisionTasks, editorialPass]
   );
+
+  const revisionGenOpts = useMemo(
+    () => ({ projectId, usageSource: 'revision' as const }),
+    [projectId]
+  );
+
+  const applyAllPreflightLabel = useMemo(() => {
+    const q = passTasks.filter((t) => t.status === 'queued').length;
+    if (q === 0) return null;
+    const e = estimateApplyAllRevisionsTokens(q);
+    return formatTokenRange(e.low, e.high);
+  }, [passTasks]);
   
-  const { loadRevisionTasks, createChapterVersion, approveChapterVersion, updateRevisionTask, loadChapterVersions, advanceStage } = useProjectStore();
+  const { loadRevisionTasks, loadEditorialIssues, createChapterVersion, updateChapterVersion, updateRevisionTask, loadChapterVersions, advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [revisedContent, setRevisedContent] = useState('');
+  const [taskLinkedIssues, setTaskLinkedIssues] = useState<EditorialIssue[]>([]);
+  const [verification, setVerification] = useState<RevisionVerification | null>(null);
+  const [pendingDraftVersionId, setPendingDraftVersionId] = useState<string | null>(null);
+  const [revisionScopeLabel, setRevisionScopeLabel] = useState('Full chapter');
+  const [isVerifying, setIsVerifying] = useState(false);
   const [showDiff, setShowDiff] = useState(true);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showApplyAllConfirm, setShowApplyAllConfirm] = useState(false);
   const [applyAllRunning, setApplyAllRunning] = useState(false);
+  const [contextWarnings, setContextWarnings] = useState<string[]>([]);
   const [applyAllProgress, setApplyAllProgress] = useState<{
     current: number;
     total: number;
@@ -93,8 +122,24 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     }
   }, [selectedChapterId, loadChapterVersions]);
 
-  const runRevisionPipelineForTask = useCallback(
-    async (task: RevisionTask) => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const t = selectedTaskId ? passTasks.find((x) => x.id === selectedTaskId) : null;
+      if (!t?.issueIds?.length) {
+        setTaskLinkedIssues([]);
+        return;
+      }
+      const list = await firestore.getEditorialIssuesByIds(t.issueIds);
+      if (!cancelled) setTaskLinkedIssues(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTaskId, passTasks]);
+
+  const processRevisionTask = useCallback(
+    async (task: RevisionTask, options: { autoFinalize: boolean }) => {
       if (!project) throw new Error('Project not loaded');
 
       const chapter = chapters.find((c) => c.chapterNumber === task.chapterNumber);
@@ -112,10 +157,61 @@ export default function RevisionPage({ params }: RevisionPageProps) {
 
       await updateRevisionTask(task.id, { status: 'in_progress' });
 
+      const issues =
+        task.issueIds.length > 0
+          ? await firestore.getEditorialIssuesByIds(task.issueIds)
+          : [];
+
+      let sceneScoped = false;
+      let activeSceneId: string | undefined;
+      let sceneIdx = 0;
+      const segs = originalVersion.sceneSegments;
+      if (segs?.length && issues.length > 0) {
+        const sceneIds = issues.map((i) => i.sceneId).filter((x): x is string => !!x?.trim());
+        if (sceneIds.length > 0 && sceneIds.every((id) => id === sceneIds[0])) {
+          const cand = sceneIds[0]!;
+          if (segs.some((s) => s.sceneId === cand)) {
+            sceneScoped = true;
+            activeSceneId = cand;
+            sceneIdx = segs.findIndex((s) => s.sceneId === cand) + 1;
+          }
+        }
+      }
+      const totalScenes = segs?.length ?? 0;
+      const scopeLabel =
+        sceneScoped && totalScenes > 0
+          ? `Scene ${sceneIdx} of ${totalScenes}`
+          : 'Full chapter';
+      if (!options.autoFinalize) {
+        setRevisionScopeLabel(scopeLabel);
+      }
+
+      const originalContentForModel =
+        sceneScoped && activeSceneId && segs
+          ? (segs.find((s) => s.sceneId === activeSceneId)?.prose ?? originalVersion.content)
+          : originalVersion.content;
+
       const charactersDoc = getDocumentByType('characters');
       const endingDoc = getDocumentByType('ending');
       const structureDoc = getDocumentByType('structure');
       const nicheDoc = getDocumentByType('niche');
+      const approvedChapterVersions = Array.from(useProjectStore.getState().chapterVersions.values())
+        .flat()
+        .filter((version) => version.approved);
+      const assembled = assembleContext({
+        purpose: 'chapter-revision',
+        project,
+        documents,
+        chapters,
+        approvedChapterVersions,
+        currentChapter: chapter,
+        targetChapterNumber: chapter.chapterNumber,
+        revisionInstructions: task.instructions,
+        editorialPass,
+      });
+      if (!options.autoFinalize) {
+        setContextWarnings(assembled.warnings);
+      }
 
       const revisionModelId = getEffectiveModelForStage('revision').id;
       const result = await generate(
@@ -124,58 +220,108 @@ export default function RevisionPage({ params }: RevisionPageProps) {
           genre: project.genre,
           chapterNumber: chapter.chapterNumber,
           chapterTitle: chapter.title,
-          originalContent: originalVersion.content,
+          originalContent: originalContentForModel,
           revisionInstructions:
             task.instructions || 'Review the chapter for overall quality and consistency.',
           acceptanceCriteria:
             task.acceptanceCriteria.length > 0
               ? task.acceptanceCriteria
               : ['The chapter should maintain consistency with established canon and character voices.'],
+          assembledContext: assembled.text,
           charactersReference: charactersDoc?.content || '',
           endingReference: endingDoc?.content || '',
           structureReference: structureDoc?.content || '',
           nicheReference: nicheDoc?.content || '',
           editorialPass,
+          ...(sceneScoped && activeSceneId ? { sceneRevisionSceneId: activeSceneId } : {}),
         },
-        { model: revisionModelId }
+        { model: revisionModelId, ...revisionGenOpts },
       );
 
       if (!result?.content?.trim()) {
         throw new Error(`Empty revision returned for chapter ${chapter.chapterNumber}.`);
       }
 
+      let revisedFull = result.content;
+      let newSceneSegments: SceneProseSegment[] | undefined;
+      if (sceneScoped && activeSceneId && segs) {
+        const spliced = spliceSceneIntoChapter(segs, activeSceneId, result.content.trim());
+        revisedFull = spliced.content;
+        newSceneSegments = spliced.segments;
+      }
+
+      const verifyExcerpt = sceneScoped ? result.content.trim() : revisedFull;
+
       const summaryResult = await generate('chapter-summary', {
         genre: project.genre,
         chapterNumber: chapter.chapterNumber,
         chapterTitle: chapter.title,
-        chapterContent: result.content,
-      });
+        chapterContent: revisedFull,
+      }, revisionGenOpts);
 
       await loadChapterVersions(chapter.id);
       const refreshed = useProjectStore.getState().chapterVersions.get(chapter.id) || [];
       const latestSorted = [...refreshed].sort((a, b) => b.version - a.version);
       const latestVersion = latestSorted[0];
-      const newVersion = (latestVersion?.version ?? 0) + 1;
+      const newVersionNum = (latestVersion?.version ?? 0) + 1;
 
       const versionData: Omit<ChapterVersion, 'id' | 'createdAt'> = {
         chapterId: chapter.id,
         projectId,
         chapterNumber: chapter.chapterNumber,
-        version: newVersion,
-        content: result.content,
-        wordCount: result.content.split(/\s+/).filter(Boolean).length,
-        approved: true,
+        version: newVersionNum,
+        content: revisedFull,
+        wordCount: revisedFull.split(/\s+/).filter(Boolean).length,
+        approved: false,
         notes: summaryResult.content.trim(),
+        ...(newSceneSegments ? { sceneSegments: newSceneSegments } : {}),
       };
       if (latestVersion?.id) {
         versionData.parentVersionId = latestVersion.id;
       }
 
-      await createChapterVersion(versionData);
-      await updateRevisionTask(task.id, { status: 'done' });
+      const draftId = await createChapterVersion(versionData);
+
+      setIsVerifying(true);
+      let verificationResult: RevisionVerification;
+      try {
+        const verifyRes = await generate(
+          'revision-verify',
+          {
+            revisedContent: verifyExcerpt,
+            instructions: task.instructions,
+            issueDescriptions: issues.map((i) => i.description),
+          },
+          { model: getEffectiveModelForStage('revision-verify').id, ...revisionGenOpts },
+        );
+        verificationResult = parseRevisionVerification(verifyRes.content);
+      } finally {
+        setIsVerifying(false);
+      }
+
+      if (options.autoFinalize) {
+        if (verificationResult.satisfied) {
+          await firestore.updateChapterVersion(draftId, { approved: true });
+          for (const id of task.issueIds) {
+            await firestore.updateEditorialIssue(id, { status: 'resolved' });
+          }
+          await updateRevisionTask(task.id, { status: 'done' });
+          await loadEditorialIssues(projectId);
+        } else {
+          await updateRevisionTask(task.id, { status: 'queued' });
+        }
+        await loadChapterVersions(chapter.id);
+        await loadRevisionTasks(projectId);
+      } else {
+        setRevisedContent(revisedFull);
+        setVerification(verificationResult);
+        setPendingDraftVersionId(draftId);
+        setRevisionScopeLabel(scopeLabel);
+      }
     },
     [
       chapters,
+      documents,
       project,
       projectId,
       editorialPass,
@@ -184,7 +330,16 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       generate,
       createChapterVersion,
       updateRevisionTask,
-    ]
+      loadRevisionTasks,
+      loadEditorialIssues,
+    ],
+  );
+
+  const runRevisionPipelineForTask = useCallback(
+    async (task: RevisionTask) => {
+      await processRevisionTask(task, { autoFinalize: true });
+    },
+    [processRevisionTask],
   );
 
   const handleConfirmApplyAll = useCallback(async () => {
@@ -264,200 +419,83 @@ export default function RevisionPage({ params }: RevisionPageProps) {
   const handleApplyClick = (task: typeof passTasks[0]) => {
     const chapter = chapters.find((c) => c.chapterNumber === task.chapterNumber);
     if (!chapter) return;
-    
+
+    setRevisedContent('');
+    setVerification(null);
+    setPendingDraftVersionId(null);
     setSelectedTaskId(task.id);
     setSelectedChapterId(chapter.id);
     setShowConfirmDialog(true);
   };
   
-  // Handle confirmed Apply - generate revision
+  // Handle confirmed Apply - generate revision + verify (draft, manual review)
   const handleConfirmApply = async () => {
-    console.log('[Revision] handleConfirmApply called:', {
-      selectedChapterId,
-      selectedTaskId,
-      hasSelectedChapter: !!selectedChapter,
-      hasOriginalVersion: !!originalVersion,
-      hasSelectedTask: !!selectedTask,
-    });
-    
     if (!selectedChapter) {
-      console.error('[Revision] No chapter selected');
       throw new Error('No chapter selected. Please select a chapter first.');
     }
-    
     if (!originalVersion) {
-      console.error('[Revision] No approved version found for chapter:', selectedChapter.chapterNumber);
-      throw new Error(`No approved version found for Chapter ${selectedChapter.chapterNumber}. Please approve a chapter version first.`);
+      throw new Error(
+        `No approved version found for Chapter ${selectedChapter.chapterNumber}. Please approve a chapter version first.`,
+      );
     }
-    
     if (!selectedTask) {
-      console.error('[Revision] No revision task selected');
       throw new Error('No revision task selected. Please select a task first.');
     }
-    
+
     setShowConfirmDialog(false);
     clearError();
-    
+    setVerification(null);
+    setPendingDraftVersionId(null);
+
     try {
-      // Update task status to in_progress
-      await updateRevisionTask(selectedTask.id, { status: 'in_progress' });
-      
-      // Get document references
-      const charactersDoc = getDocumentByType('characters');
-      const endingDoc = getDocumentByType('ending');
-      const structureDoc = getDocumentByType('structure');
-      const nicheDoc = getDocumentByType('niche');
-      
-      console.log('[Revision] Generating revision for chapter', selectedChapter.chapterNumber, {
-        taskId: selectedTask.id,
-        hasInstructions: selectedTask.instructions.length > 0,
-        acceptanceCriteriaCount: selectedTask.acceptanceCriteria.length,
-        hasCharacters: !!charactersDoc,
-        hasEnding: !!endingDoc,
-        hasStructure: !!structureDoc,
-        hasNiche: !!nicheDoc,
-      });
-      
-      // Validate original content
-      if (!originalVersion.content || originalVersion.content.trim().length === 0) {
-        throw new Error('Original chapter content is empty. Cannot generate revision.');
-      }
-      
-      const revisionModelId = getEffectiveModelForStage('revision').id;
-      console.log('[Revision] Calling generate API:', {
-        stage: 'revision',
-        model: revisionModelId,
-        originalContentLength: originalVersion.content.length,
-        instructionsLength: selectedTask.instructions.length,
-      });
-      
-      const result = await generate('revision', {
-        genre: project.genre,
-        chapterNumber: selectedChapter.chapterNumber,
-        chapterTitle: selectedChapter.title,
-        originalContent: originalVersion.content,
-        revisionInstructions: selectedTask.instructions || 'Review the chapter for overall quality and consistency.',
-        acceptanceCriteria: selectedTask.acceptanceCriteria.length > 0
-          ? selectedTask.acceptanceCriteria
-          : ['The chapter should maintain consistency with established canon and character voices.'],
-        charactersReference: charactersDoc?.content || '',
-        endingReference: endingDoc?.content || '',
-        structureReference: structureDoc?.content || '',
-        nicheReference: nicheDoc?.content || '',
-        editorialPass,
-      }, {
-        model: revisionModelId,
-      });
-      
-      console.log('[Revision] API response received:', {
-        hasContent: !!result.content,
-        contentLength: result.content?.length || 0,
-        model: result.model,
-        provider: result.provider,
-        tokensUsed: result.tokensUsed,
-        usedExpectedModel: result.model === revisionModelId,
-      });
-      
-      if (!result || !result.content) {
-        throw new Error('API returned invalid response: missing content field');
-      }
-      
-      if (result.content.trim().length === 0) {
-        throw new Error('API returned empty content. This may indicate an error with the LLM call.');
-      }
-      
-      if (result.model !== revisionModelId) {
-        console.warn('[Revision] Warning: Expected', revisionModelId, 'but got', result.model);
-      }
-      
-      // Check if content is suspiciously similar to original (might indicate no actual revision)
-      const originalLength = originalVersion.content.length;
-      const revisedLength = result.content.length;
-      const lengthDiff = Math.abs(originalLength - revisedLength);
-      const lengthSimilarity = lengthDiff / Math.max(originalLength, revisedLength);
-      
-      console.log('[Revision] Content comparison:', {
-        originalLength,
-        revisedLength,
-        lengthDiff,
-        lengthSimilarity: (lengthSimilarity * 100).toFixed(2) + '%',
-      });
-      
-      setRevisedContent(result.content);
+      await processRevisionTask(selectedTask, { autoFinalize: false });
     } catch (err) {
       console.error('[Revision] Error generating revision:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('[Revision] Error details:', {
-        message: errorMessage,
-        error: err,
-        stack: err instanceof Error ? err.stack : undefined,
-        selectedChapterId,
-        selectedTaskId,
-        hasSelectedChapter: !!selectedChapter,
-        hasOriginalVersion: !!originalVersion,
-        hasSelectedTask: !!selectedTask,
-      });
-      
-      // Re-open the dialog if it was a validation error (so user can try again)
-      if (errorMessage.includes('No chapter selected') || 
-          errorMessage.includes('No approved version') || 
-          errorMessage.includes('No revision task')) {
+      if (
+        errorMessage.includes('No chapter selected') ||
+        errorMessage.includes('No approved version') ||
+        errorMessage.includes('No revision task')
+      ) {
         setShowConfirmDialog(true);
       }
-      
-      // Error is also handled by hook, but we ensure it's logged
-      // The error state will be set by the useGenerate hook
-      // Re-throw to ensure the hook's error handling is triggered
       throw err;
     }
   };
-  
-  // Handle approval of revision
+
+  // Handle approval of revision (existing draft version)
   const handleApproveRevision = async () => {
-    if (!selectedChapter || !revisedContent || !selectedTask) return;
-    
+    if (!selectedChapter || !pendingDraftVersionId || !selectedTask) return;
+
     try {
-      // Create new version
-      const latestVersion = getLatestChapterVersion(selectedChapter.id);
-      const newVersion = (latestVersion?.version || 0) + 1;
-      
-      const versionData: Omit<ChapterVersion, 'id' | 'createdAt'> = {
-        chapterId: selectedChapter.id,
-        projectId,
-        chapterNumber: selectedChapter.chapterNumber,
-        version: newVersion,
-        content: revisedContent,
-        wordCount: revisedContent.split(/\s+/).length,
-        approved: true,
-      };
-      const summaryResult = await generate('chapter-summary', {
-        genre: project.genre,
-        chapterNumber: selectedChapter.chapterNumber,
-        chapterTitle: selectedChapter.title,
-        chapterContent: revisedContent,
-      });
-      versionData.notes = summaryResult.content.trim();
-      
-      // Only include parentVersionId if it exists (Firestore doesn't allow undefined)
-      if (latestVersion?.id) {
-        versionData.parentVersionId = latestVersion.id;
+      await firestore.updateChapterVersion(pendingDraftVersionId, { approved: true });
+      for (const id of selectedTask.issueIds) {
+        await firestore.updateEditorialIssue(id, { status: 'resolved' });
       }
-      
-      await createChapterVersion(versionData);
-      
-      // Mark revision task as done
       await updateRevisionTask(selectedTask.id, { status: 'done' });
-      
-      console.log('[Revision] Revision approved and task marked as done:', selectedTask.id);
-      
-      // Reset state
+      await loadEditorialIssues(projectId);
+      await loadChapterVersions(selectedChapter.id);
+      await loadRevisionTasks(projectId);
+
       setRevisedContent('');
+      setVerification(null);
+      setPendingDraftVersionId(null);
       setSelectedChapterId(null);
       setSelectedTaskId(null);
     } catch (err) {
       console.error('[Revision] Error approving revision:', err);
       throw err;
     }
+  };
+
+  const handleRerunRevision = async () => {
+    if (!selectedTask || !selectedChapter) return;
+    setRevisedContent('');
+    setVerification(null);
+    setPendingDraftVersionId(null);
+    await updateRevisionTask(selectedTask.id, { status: 'queued' });
+    clearError();
+    await processRevisionTask(selectedTask, { autoFinalize: false });
   };
   
   // Generate diff view
@@ -520,6 +558,13 @@ export default function RevisionPage({ params }: RevisionPageProps) {
           <p className="text-sm text-[var(--destructive)]">{projectError || generateError}</p>
         </div>
       )}
+
+      {contextWarnings.length > 0 && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-medium text-amber-900 mb-1">Canon context warning</p>
+          <p className="text-sm text-amber-800">{contextWarnings[0]}</p>
+        </div>
+      )}
       
       {/* Apply-all confirmation */}
       {showApplyAllConfirm && !selectedChapterId && (
@@ -529,10 +574,16 @@ export default function RevisionPage({ params }: RevisionPageProps) {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-[var(--foreground)] mb-4">
-              This will generate revised text for <strong>{queuedCount}</strong> queued chapter
-              {queuedCount === 1 ? '' : 's'}, then save and approve each new version automatically. Per-chapter
-              review will be skipped.
+              This will generate and verify revised text for <strong>{queuedCount}</strong> queued chapter
+              {queuedCount === 1 ? '' : 's'}. Chapters that pass verification are approved automatically; others
+              stay as drafts with the task re-queued for review.
             </p>
+            {applyAllPreflightLabel && (
+              <p className="text-xs text-[var(--muted-foreground)] mb-4">
+                Preflight estimate (per task: revision + summary + verify, includes template overhead):{' '}
+                <strong className="text-[var(--foreground)]">{applyAllPreflightLabel}</strong>
+              </p>
+            )}
             <div className="flex flex-wrap gap-3">
               <Button onClick={handleConfirmApplyAll} loading={applyAllRunning} disabled={applyAllRunning}>
                 Apply all {queuedCount} chapter{queuedCount === 1 ? '' : 's'}
@@ -723,16 +774,21 @@ export default function RevisionPage({ params }: RevisionPageProps) {
       {/* Revision workspace */}
       {selectedChapterId && selectedChapter && (
         <>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <Button variant="ghost" onClick={() => setSelectedChapterId(null)}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Back to Queue
             </Button>
-            <h2 className="text-lg font-semibold">
-              Chapter {selectedChapter.chapterNumber}: {selectedChapter.title}
-            </h2>
+            <div className="text-right">
+              <h2 className="text-lg font-semibold">
+                Chapter {selectedChapter.chapterNumber}: {selectedChapter.title}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Revising: <strong>{revisionScopeLabel}</strong>
+              </p>
+            </div>
           </div>
           
           {/* Revision task details */}
@@ -768,6 +824,33 @@ export default function RevisionPage({ params }: RevisionPageProps) {
               </CardContent>
             </Card>
           )}
+
+          {selectedTask && taskLinkedIssues.length > 0 && (
+            <details className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--background)] p-4">
+              <summary className="cursor-pointer text-sm font-medium text-[var(--foreground)]">
+                Linked editorial issues ({taskLinkedIssues.length})
+              </summary>
+              <ul className="mt-3 space-y-3 text-sm">
+                {taskLinkedIssues.map((issue) => (
+                  <li key={issue.id} className="border-t border-[var(--border)] pt-3 first:border-t-0 first:pt-0">
+                    <Badge variant="default" className="mb-1">
+                      {issue.category}
+                    </Badge>
+                    <p className="text-[var(--foreground)]">{issue.description}</p>
+                    <p className="text-[var(--muted-foreground)] mt-1">
+                      <span className="font-medium">Fix: </span>
+                      {issue.recommendedFix}
+                    </p>
+                    {issue.manuscriptQuote?.trim() ? (
+                      <blockquote className="mt-2 pl-3 border-l-2 border-[var(--muted-foreground)] text-[var(--muted-foreground)] italic text-xs whitespace-pre-wrap">
+                        {issue.manuscriptQuote}
+                      </blockquote>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           
           {/* Confirmation dialog */}
           {showConfirmDialog && selectedTask && (
@@ -785,8 +868,8 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                 <div className="flex items-center gap-3">
                   <Button
                     onClick={handleConfirmApply}
-                    loading={isGenerating}
-                    disabled={isGenerating}
+                    loading={isGenerating || isVerifying}
+                    disabled={isGenerating || isVerifying}
                   >
                     Yes, Apply Revision
                   </Button>
@@ -797,7 +880,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                       setSelectedTaskId(null);
                       setSelectedChapterId(null);
                     }}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isVerifying}
                   >
                     Cancel
                   </Button>
@@ -812,7 +895,7 @@ export default function RevisionPage({ params }: RevisionPageProps) {
               <CardContent>
                 <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
-                  Generating Revision...
+                  {isVerifying ? 'Verifying revision…' : 'Generating revision…'}
                 </h3>
                 <p className="text-[var(--muted-foreground)] mb-6 max-w-md mx-auto">
                   Sonnet 4.6 (Thinking) is revising this chapter based on the revision instructions. This may take a minute.
@@ -879,27 +962,59 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                 </div>
               )}
               
+              {verification && (
+                <Card className="mb-6 border-[var(--border)]">
+                  <CardHeader>
+                    <CardTitle>
+                      Verification {verification.satisfied ? '(passed)' : '(needs review)'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {verification.overallNotes?.trim() ? (
+                      <p className="text-sm text-[var(--foreground)]">{verification.overallNotes}</p>
+                    ) : null}
+                    <ul className="space-y-2 text-sm">
+                      {verification.checklist.map((item, idx) => (
+                        <li
+                          key={idx}
+                          className={cn(
+                            'rounded border p-2',
+                            item.met ? 'border-green-200 bg-green-50/80' : 'border-amber-200 bg-amber-50/80',
+                          )}
+                        >
+                          <p className="font-medium text-[var(--foreground)]">{item.criterion}</p>
+                          <p className="text-[var(--muted-foreground)] mt-1">{item.evidence}</p>
+                          <p className="text-xs mt-1">{item.met ? 'Met' : 'Not met'}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Actions */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Button 
-                    variant="secondary" 
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       if (selectedTask) {
                         setShowConfirmDialog(true);
                       }
-                    }} 
-                    disabled={isGenerating || !selectedTask}
+                    }}
+                    disabled={isGenerating || isVerifying || !selectedTask}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Regenerate
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       setRevisedContent('');
+                      setVerification(null);
+                      setPendingDraftVersionId(null);
                       if (selectedTask) {
                         updateRevisionTask(selectedTask.id, { status: 'queued' });
                       }
@@ -907,14 +1022,43 @@ export default function RevisionPage({ params }: RevisionPageProps) {
                   >
                     Reject
                   </Button>
+                  {verification && !verification.satisfied ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleRerunRevision()}
+                      disabled={isGenerating || isVerifying}
+                    >
+                      Re-run revision
+                    </Button>
+                  ) : null}
                 </div>
-                
-                <Button onClick={handleApproveRevision} disabled={!selectedTask}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Approve Revision
-                </Button>
+
+                <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                  {verification?.satisfied ? (
+                    <Button
+                      onClick={handleApproveRevision}
+                      disabled={!selectedTask || !pendingDraftVersionId}
+                      className="bg-[var(--status-approved)] hover:opacity-90 text-white"
+                    >
+                      Approve revision
+                    </Button>
+                  ) : null}
+                  {verification && !verification.satisfied ? (
+                    <>
+                      <p className="text-xs text-amber-800 max-w-sm text-right">
+                        Verification did not pass. You can re-run the revision, or approve anyway if the draft is acceptable.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        className="border-amber-600 text-amber-900"
+                        onClick={handleApproveRevision}
+                        disabled={!selectedTask || !pendingDraftVersionId}
+                      >
+                        Approve anyway (override)
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
               </div>
             </>
           )}

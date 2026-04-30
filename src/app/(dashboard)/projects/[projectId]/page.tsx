@@ -1,11 +1,20 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
-import { Button, Badge, useToast } from '@/components/ui';
+import { useGenerate } from '@/hooks/useGenerate';
+import { Button, Badge, Textarea, useToast } from '@/components/ui';
 import { WorkflowSidebar } from '@/components/layout';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime, getStageRouteForDocument } from '@/lib/utils';
+import { buildStoryBibleSourceRefs, isCreativeBriefStale, isStoryBibleStale } from '@/lib/context/assembler';
+import { parseStoryBible } from '@/lib/generation/schemas';
+import * as firestore from '@/lib/db/client';
+import {
+  labelForFullAutoLastStep,
+  readFullAutoCheckpointPending,
+  readFullAutoLastStep,
+} from '@/lib/fullAuto/checkpointStorage';
 
 interface ProjectDashboardProps {
   params: Promise<{ projectId: string }>;
@@ -25,12 +34,37 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
     getOpenIssuesCount,
     getApprovedChapterVersion,
     updateProject,
+    createDocument,
+    updateDocument,
+    approveDocument,
   } = useProject(projectId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [pendingRenameTitle, setPendingRenameTitle] = useState<string | null>(null);
+  const [storyBibleDraft, setStoryBibleDraft] = useState('');
+  const [isCanonSaving, setIsCanonSaving] = useState(false);
+  const [usageTotals, setUsageTotals] = useState({ totalTokens: 0, callCount: 0 });
+  const [fullAutoInterruptHint, setFullAutoInterruptHint] = useState<{
+    lastStepLabel: string;
+    hasPendingCheckpoint: boolean;
+  } | null>(null);
   const { addToast } = useToast();
+  const { generate, isGenerating: isGeneratingCanon } = useGenerate();
+
+  const manualGenOpts = useMemo(
+    () => ({ projectId, usageSource: 'manual-stage' as const }),
+    [projectId]
+  );
+
+  const refreshUsageTotals = useCallback(async () => {
+    try {
+      const t = await firestore.getProjectGenerationUsageTotals(projectId);
+      setUsageTotals(t);
+    } catch {
+      /* ignore */
+    }
+  }, [projectId]);
 
   useEffect(() => {
     if (!pendingRenameTitle) return;
@@ -52,6 +86,38 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
       setPendingRenameTitle(null);
     }, 0);
   }, [addToast, error, pendingRenameTitle]);
+
+  const latestStoryBible = documents
+    .filter((doc) => doc.type === 'story-bible')
+    .sort((a, b) => b.version - a.version || b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+  const approvedStoryBible = documents.find((doc) => doc.type === 'story-bible' && doc.approved);
+  const latestCreativeBrief = documents
+    .filter((doc) => doc.type === 'creative-brief')
+    .sort((a, b) => b.version - a.version || b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+  const approvedCreativeBrief = documents.find((doc) => doc.type === 'creative-brief' && doc.approved);
+  const storyBibleStale = latestStoryBible ? isStoryBibleStale(latestStoryBible, documents) : true;
+  const creativeBriefStale = latestCreativeBrief ? isCreativeBriefStale(latestCreativeBrief, approvedStoryBible ?? latestStoryBible) : true;
+
+  useEffect(() => {
+    setStoryBibleDraft(latestStoryBible?.content ?? '');
+  }, [latestStoryBible?.id, latestStoryBible?.content]);
+
+  useEffect(() => {
+    void refreshUsageTotals();
+  }, [refreshUsageTotals]);
+
+  useEffect(() => {
+    const last = readFullAutoLastStep(projectId);
+    if (!last) {
+      setFullAutoInterruptHint(null);
+      return;
+    }
+    const pending = readFullAutoCheckpointPending(projectId);
+    setFullAutoInterruptHint({
+      lastStepLabel: labelForFullAutoLastStep(last),
+      hasPendingCheckpoint: !!pending,
+    });
+  }, [projectId, project?.fullAutoMode, project?.blurb, project?.amazonDescription]);
   
   if (loading || !project) {
     return (
@@ -115,6 +181,137 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
     setPendingRenameTitle(nextTitle);
     await updateProject({ title: nextTitle });
     setIsSavingTitle(false);
+  };
+
+  const generateStoryBible = async () => {
+    if (!project) return;
+    const derivedFrom = buildStoryBibleSourceRefs(documents);
+    if (derivedFrom.length === 0) {
+      addToast({ type: 'error', message: 'Approve planning documents before generating a Story Bible.' });
+      return;
+    }
+
+    setIsCanonSaving(true);
+    try {
+      const byType = (type: string) => documents.find((doc) => doc.type === type && doc.approved)?.content;
+      const result = await generate('story-bible', {
+        title: project.title,
+        premise: project.premise,
+        genre: project.genre,
+        niche: project.niche,
+        research: project.research,
+        derivedFrom,
+        genreResearch: byType('genre'),
+        nicheReference: byType('niche'),
+        endingReference: byType('ending'),
+        endingChoice: byType('ending-choice'),
+        charactersReference: byType('characters'),
+        structureReference: byType('structure'),
+        chapterOutlinesReference: byType('chapter-outlines'),
+      }, manualGenOpts);
+      if (latestStoryBible) {
+        await updateDocument(latestStoryBible.id, {
+          content: result.content,
+          version: latestStoryBible.version + 1,
+          approved: false,
+        });
+      } else {
+        await createDocument({
+          projectId: project.id,
+          type: 'story-bible',
+          content: result.content,
+          version: 1,
+          approved: false,
+        });
+      }
+      setStoryBibleDraft(result.content);
+      addToast({ type: 'success', message: 'Story Bible generated. Review and approve it before drafting.' });
+      void refreshUsageTotals();
+    } catch (err) {
+      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to generate Story Bible.' });
+    } finally {
+      setIsCanonSaving(false);
+    }
+  };
+
+  const saveStoryBibleDraft = async (approve = false) => {
+    if (!latestStoryBible) return;
+    setIsCanonSaving(true);
+    try {
+      let content = storyBibleDraft;
+      if (approve) {
+        const parsed = parseStoryBible(storyBibleDraft);
+        content = JSON.stringify({
+          storyBible: {
+            ...parsed.storyBible,
+            approvedAt: new Date().toISOString(),
+          },
+        }, null, 2);
+      }
+      await updateDocument(latestStoryBible.id, {
+        content,
+        approved: approve,
+        ...(!approve ? { version: latestStoryBible.version + 1 } : {}),
+      });
+      setStoryBibleDraft(content);
+      addToast({ type: 'success', message: approve ? 'Story Bible approved.' : 'Story Bible saved as a new draft version.' });
+    } catch (err) {
+      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save Story Bible.' });
+    } finally {
+      setIsCanonSaving(false);
+    }
+  };
+
+  const generateCreativeBrief = async () => {
+    if (!project) return;
+    if (!approvedStoryBible) {
+      addToast({ type: 'error', message: 'Approve the Story Bible before generating a Creative Brief.' });
+      return;
+    }
+
+    setIsCanonSaving(true);
+    try {
+      const result = await generate('creative-brief', {
+        storyBibleContent: approvedStoryBible.content,
+        storyBibleDocumentId: approvedStoryBible.id,
+        storyBibleVersion: approvedStoryBible.version,
+        storyBibleUpdatedAt: approvedStoryBible.updatedAt.toISOString(),
+      }, manualGenOpts);
+      if (latestCreativeBrief) {
+        await updateDocument(latestCreativeBrief.id, {
+          content: result.content,
+          version: latestCreativeBrief.version + 1,
+          approved: false,
+        });
+      } else {
+        await createDocument({
+          projectId: project.id,
+          type: 'creative-brief',
+          content: result.content,
+          version: 1,
+          approved: false,
+        });
+      }
+      addToast({ type: 'success', message: 'Creative Brief generated. Approve it to use it in compact context.' });
+      void refreshUsageTotals();
+    } catch (err) {
+      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to generate Creative Brief.' });
+    } finally {
+      setIsCanonSaving(false);
+    }
+  };
+
+  const approveCreativeBrief = async () => {
+    if (!latestCreativeBrief) return;
+    setIsCanonSaving(true);
+    try {
+      await approveDocument(latestCreativeBrief.id);
+      addToast({ type: 'success', message: 'Creative Brief approved.' });
+    } catch (err) {
+      addToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to approve Creative Brief.' });
+    } finally {
+      setIsCanonSaving(false);
+    }
   };
   
   return (
@@ -216,20 +413,145 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
               Stage {currentStageIndex + 1} of {totalStages}: {STAGE_NAMES[project.currentStage]}
             </p>
           </div>
+
+          {fullAutoInterruptHint &&
+            (!project.fullAutoMode || fullAutoInterruptHint.hasPendingCheckpoint) && (
+            <div
+              style={{
+                marginBottom: '1.5rem',
+                padding: '1rem 1.25rem',
+                borderRadius: '12px',
+                border: '1px solid #bfdbfe',
+                backgroundColor: '#eff6ff',
+              }}
+            >
+              <p style={{ fontSize: '0.9375rem', color: '#1e3a5f', margin: 0, marginBottom: '0.5rem', fontWeight: 600 }}>
+                Full Auto progress
+              </p>
+              <p style={{ fontSize: '0.875rem', color: '#1e40af', margin: 0, marginBottom: '0.75rem' }}>
+                Last recorded checkpoint: <strong>{fullAutoInterruptHint.lastStepLabel}</strong>
+                {fullAutoInterruptHint.hasPendingCheckpoint && project.fullAutoMode
+                  ? ' — a review gate was open; reopen Full Auto to restore it after load.'
+                  : ''}
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                {project.fullAutoMode && (!project.blurb?.trim() || !project.amazonDescription?.trim()) && (
+                  <Link href={`/projects/${projectId}/full-auto`}>
+                    <Button size="sm">{fullAutoInterruptHint.hasPendingCheckpoint ? 'Resume checkpoint' : 'Open Full Auto'}</Button>
+                  </Link>
+                )}
+                {!project.fullAutoMode && (
+                  <span style={{ fontSize: '0.8125rem', color: '#1e40af' }}>
+                    Turn Full Auto back on from the{' '}
+                    <Link href={`/projects/${projectId}/stage/chapters`} style={{ textDecoration: 'underline' }}>
+                      Chapters
+                    </Link>{' '}
+                    stage or{' '}
+                    <Link href={`/projects/${projectId}/stage/setup`} style={{ textDecoration: 'underline' }}>
+                      Setup
+                    </Link>{' '}
+                    to continue.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Stats grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
             {[
               { value: totalWordCount.toLocaleString(), label: 'Total Words' },
               { value: `${approvedChapters}/${chapters.length}`, label: 'Chapters Approved' },
               { value: approvedDocs.length, label: 'Reference Docs' },
               { value: openIssues, label: 'Open Issues' },
+              {
+                value: usageTotals.totalTokens.toLocaleString(),
+                label: `AI tokens${usageTotals.callCount > 0 ? ` (${usageTotals.callCount} calls)` : ''}`,
+              },
             ].map((stat, i) => (
               <div key={i} style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem' }}>
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#171717' }}>{stat.value}</div>
                 <p style={{ fontSize: '0.875rem', color: '#737373' }}>{stat.label}</p>
               </div>
             ))}
+          </div>
+
+          {/* Canon */}
+          <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '1.5rem', marginBottom: '2.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#171717', marginBottom: '0.25rem' }}>Story Bible & Canon</h2>
+                <p style={{ fontSize: '0.875rem', color: '#737373' }}>
+                  Generate and approve durable canon before chapter drafting. Approved canon is used as the primary context source.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <Button onClick={generateStoryBible} disabled={isCanonSaving || isGeneratingCanon} size="sm">
+                  {latestStoryBible ? 'Regenerate Story Bible' : 'Generate Story Bible'}
+                </Button>
+                <Button onClick={generateCreativeBrief} disabled={isCanonSaving || isGeneratingCanon || !approvedStoryBible} size="sm" variant="secondary">
+                  {latestCreativeBrief ? 'Regenerate Brief' : 'Generate Brief'}
+                </Button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <Badge variant={approvedStoryBible ? 'success' : 'default'}>
+                Story Bible: {approvedStoryBible ? `Approved v${approvedStoryBible.version}` : latestStoryBible ? `Draft v${latestStoryBible.version}` : 'Missing'}
+              </Badge>
+              <Badge variant={storyBibleStale ? 'warning' : 'success'}>
+                {storyBibleStale ? 'Story Bible stale or missing' : 'Story Bible current'}
+              </Badge>
+              <Badge variant={approvedCreativeBrief ? 'success' : 'default'}>
+                Creative Brief: {approvedCreativeBrief ? `Approved v${approvedCreativeBrief.version}` : latestCreativeBrief ? `Draft v${latestCreativeBrief.version}` : 'Missing'}
+              </Badge>
+              <Badge variant={creativeBriefStale ? 'warning' : 'success'}>
+                {creativeBriefStale ? 'Creative Brief stale or missing' : 'Creative Brief current'}
+              </Badge>
+            </div>
+
+            {latestStoryBible ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <Textarea
+                  value={storyBibleDraft}
+                  onChange={(event) => setStoryBibleDraft(event.target.value)}
+                  rows={14}
+                  style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
+                  aria-label="Story Bible JSON"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <p style={{ fontSize: '0.8rem', color: '#737373', maxWidth: '34rem' }}>
+                    Review edits carefully before approval. Direct edits make the Creative Brief stale until regenerated.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <Button variant="secondary" size="sm" onClick={() => void saveStoryBibleDraft(false)} disabled={isCanonSaving || isGeneratingCanon}>
+                      Save Draft
+                    </Button>
+                    <Button size="sm" onClick={() => void saveStoryBibleDraft(true)} disabled={isCanonSaving || isGeneratingCanon}>
+                      Approve Story Bible
+                    </Button>
+                    {latestCreativeBrief && (
+                      <Button variant="secondary" size="sm" onClick={approveCreativeBrief} disabled={isCanonSaving || isGeneratingCanon || creativeBriefStale}>
+                        Approve Brief
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '8px', color: '#737373', fontSize: '0.875rem' }}>
+                No Story Bible has been generated yet. Approve the planning documents first, then generate canon from this panel.
+              </div>
+            )}
+
+            {latestCreativeBrief && (
+              <details style={{ marginTop: '1rem' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 500, color: '#171717' }}>Creative Brief Preview</summary>
+                <pre style={{ marginTop: '0.75rem', whiteSpace: 'pre-wrap', backgroundColor: '#f5f5f5', borderRadius: '8px', padding: '1rem', fontSize: '0.8rem', color: '#171717', maxHeight: '16rem', overflow: 'auto' }}>
+                  {latestCreativeBrief.content}
+                </pre>
+              </details>
+            )}
           </div>
           
           {/* Resume Full Auto (when in full auto mode and not yet complete) */}

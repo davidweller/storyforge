@@ -9,3 +9,15 @@ export const MAX_MANUSCRIPT_WORDS = 720_000; // 900_000 * 4/5
 
 /** Standard novel length used for outline and chapter word budgeting (target ~80k words). */
 export const TARGET_MANUSCRIPT_WORDS = 80_000;
+
+/** Phase 4: when false, chapter-polish stage is hidden/disabled regardless of per-run toggles. */
+export const CHAPTER_POLISH_FEATURE_ENABLED = true;
+
+/** Phase 4: Full Auto scene pipeline ships off by default (see Phase 4 plan §8). */
+export const FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT = false;
+
+/** Phase 4 model rubric: combined input budget (scene plan + chapter + canon text). */
+export const CHAPTER_SCENE_EVAL_INPUT_TOKEN_BUDGET = 6_000;
+
+/** Phase 4 model rubric: max output tokens for evaluation JSON. */
+export const CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET = 800;

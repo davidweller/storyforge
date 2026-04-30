@@ -33,11 +33,11 @@ ${nicheReference}
 
 For each ending concept, provide:
 
-1. **Title**: A short, evocative name for this ending type
-2. **Summary**: Maximum 2 sentences describing how the story concludes
-3. **Emotional Payoff**: The primary feeling readers will experience
-4. **Character Resolution**: How the protagonist's arc completes
-5. **Thematic Statement**: What truth about life/humanity this ending affirms
+1. Title: A short, evocative name for this ending type
+2. Summary: Maximum 2 sentences describing how the story concludes
+3. Emotional Payoff: The primary feeling readers will experience
+4. Character Resolution: How the protagonist's arc completes
+5. Thematic Statement: What truth about life/humanity this ending affirms
 
 Generate a diverse range of endings:
 - At least 2 that lean into genre expectations (satisfying, expected)
@@ -45,7 +45,26 @@ Generate a diverse range of endings:
 - At least 2 that are bittersweet or complex
 - At least 2 that are triumphant/uplifting
 
-Number each concept clearly (1-10) for easy reference.
+## Output Format
+
+Output only valid JSON in this exact shape:
+
+\`\`\`json
+{
+  "endings": [
+    {
+      "id": "ending-1",
+      "title": "Short evocative title",
+      "summary": "Maximum two sentences.",
+      "emotionalPayoff": "Primary reader feeling.",
+      "characterResolution": "How the protagonist's arc completes.",
+      "thematicStatement": "The truth this ending affirms."
+    }
+  ]
+}
+\`\`\`
+
+Generate 8-10 ending objects. Do not include markdown outside the JSON.
 
 Remember: The ending determines everything that comes before it. These concepts will shape the entire story structure.`;
 

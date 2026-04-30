@@ -240,8 +240,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ error: null });
     try {
       await firestore.updateDocument(documentId, data);
+      const updatedAt = new Date();
       set((state) => ({
-        documents: state.documents.map((d) => d.id === documentId ? { ...d, ...data } : d),
+        documents: state.documents.map((d) => d.id === documentId ? { ...d, ...data, updatedAt } : d),
       }));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to update document' });

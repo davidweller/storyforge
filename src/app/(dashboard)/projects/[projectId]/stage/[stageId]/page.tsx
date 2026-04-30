@@ -1,11 +1,13 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
+import { ReviewChecklist } from '@/components/review/ReviewChecklist';
+import { checklistItemsForKey } from '@/lib/review/checklists';
 import { getNextStage, isStageAccessible } from '@/lib/utils';
 import type { WorkflowStage, DocumentType } from '@/types';
 
@@ -40,6 +42,11 @@ export default function StagePage({ params }: StagePageProps) {
   
   const { createDocument, updateDocument, approveDocument, advanceStage } = useProjectStore();
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
+
+  const manualGenOpts = useMemo(
+    () => ({ projectId, usageSource: 'manual-stage' as const }),
+    [projectId]
+  );
   
   const [content, setContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -129,7 +136,7 @@ export default function StagePage({ params }: StagePageProps) {
         if (genreDoc) data.genreResearch = genreDoc.content;
       }
       
-      const result = await generate(stage, data);
+      const result = await generate(stage, data, manualGenOpts);
       setContent(result.content);
       
       // Save the document
@@ -221,6 +228,9 @@ export default function StagePage({ params }: StagePageProps) {
             isEditing={isEditing && !isApproved}
             onContentChange={handleContentChange}
           />
+          {stage === 'chapter-outlines' && !isApproved && (
+            <ReviewChecklist items={checklistItemsForKey('chapter-outlines')} className="mb-4" />
+          )}
           <StageActions
             onApprove={handleApprove}
             onRegenerate={handleGenerate}

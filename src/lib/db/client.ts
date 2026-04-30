@@ -10,6 +10,7 @@ import type {
   EditorialIssue,
   RevisionTask,
   DocumentType,
+  GenerationUsageTotals,
 } from '@/types';
 
 // Dates arrive from the API as ISO strings; restore them to Date objects.
@@ -71,6 +72,12 @@ export async function updateProject(
 
 export async function deleteProjectData(projectId: string): Promise<void> {
   await dbCall<{ ok: true }>('deleteProjectData', { projectId });
+}
+
+export async function getProjectGenerationUsageTotals(
+  projectId: string
+): Promise<GenerationUsageTotals> {
+  return dbCall<GenerationUsageTotals>('getProjectGenerationUsageTotals', { projectId });
 }
 
 // ── Project Documents ─────────────────────────────────────────────────────────
@@ -158,6 +165,17 @@ export async function updateEditorialIssue(
   data: Partial<Omit<EditorialIssue, 'id' | 'projectId' | 'createdAt'>>
 ): Promise<void> {
   await dbCall<{ ok: true }>('updateEditorialIssue', { issueId, data });
+}
+
+export async function getEditorialIssuesByIds(ids: string[]): Promise<EditorialIssue[]> {
+  return dbCall<EditorialIssue[]>('getEditorialIssuesByIds', { ids });
+}
+
+export async function updateEditorialIssueTaskId(
+  issueId: string,
+  revisionTaskId: string | null
+): Promise<void> {
+  await dbCall<{ ok: true }>('updateEditorialIssueTaskId', { issueId, revisionTaskId });
 }
 
 // ── Revision Tasks ────────────────────────────────────────────────────────────

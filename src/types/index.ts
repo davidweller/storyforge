@@ -16,8 +16,15 @@ export type WorkflowStage =
   | 'revision'        // Stage 12
   | 'export-final'    // Stage 13
   | 'chapter-summary' // Internal helper stage for chapter context summaries
+  | 'chapter-scene-plan' // Phase 4: structured scene cards for a chapter
+  | 'chapter-scenes-prose' // Phase 4: prose for one scene (structured output)
+  | 'chapter-polish' // Phase 4: polish pass over concatenated scenes
+  | 'chapter-scene-eval' // Phase 4: model rubric evaluation JSON
+  | 'story-bible'     // Internal canon generation stage
+  | 'creative-brief'  // Internal compact canon brief generation stage
   | 'blurb'           // Marketing: back-cover blurb
-  | 'amazon-description';  // Marketing: Amazon product description
+  | 'amazon-description'  // Marketing: Amazon product description
+  | 'revision-verify'; // Post-revision checklist (structured JSON)
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 
@@ -29,6 +36,9 @@ export type DocumentType =
   | 'characters'
   | 'structure'
   | 'chapter-outlines'
+  | 'chapter-scene-plan'
+  | 'story-bible'
+  | 'creative-brief'
   | 'editorial' // legacy single editorial report (treated as structural pass)
   | 'editorial-structural'
   | 'editorial-line'
@@ -74,11 +84,113 @@ export interface ProjectDocument {
   id: string;
   projectId: string;
   type: DocumentType;
+  /** Set when `type` is chapter-scene-plan: which chapter this plan belongs to. */
+  chapterNumber?: number;
   content: string;
   version: number;
   approved: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface StoryBibleSourceRef {
+  documentType: DocumentType;
+  documentId: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface StoryBibleDocument {
+  schemaVersion: number;
+  storyBibleVersion: number;
+  generatedAt: string;
+  approvedAt: string | null;
+  derivedFrom: StoryBibleSourceRef[];
+  logline: string;
+  genrePromise: string;
+  audiencePromise: string;
+  voiceAndStyle: {
+    pov: string;
+    tense: string;
+    narrativeDistance: string;
+    styleRules: string[];
+    avoid: string[];
+  };
+  themes: string[];
+  characters: Array<{
+    name: string;
+    role: string;
+    want: string;
+    need: string;
+    flaw: string;
+    arcPromise: string;
+    voiceNotes: string[];
+    hardConstraints: string[];
+  }>;
+  relationships: Array<{
+    participants: string[];
+    startingState: string;
+    targetState: string;
+    tension: string;
+    constraints: string[];
+  }>;
+  worldRules: string[];
+  timelineFacts: string[];
+  unresolvedThreads: Array<{
+    thread: string;
+    introducedBy: string;
+    mustResolveBy: string;
+    status: string;
+  }>;
+  endingPromises: string[];
+  forbiddenChanges: string[];
+}
+
+export interface CreativeBriefDocument {
+  schemaVersion: number;
+  creativeBriefVersion: number;
+  generatedAt: string;
+  derivedFromStoryBible: {
+    documentId: string;
+    version: number;
+    updatedAt: string;
+  };
+  brief: string;
+}
+
+export type ContextPurpose =
+  | 'chapter-draft'
+  | 'scene-plan'
+  | 'chapter-eval'
+  | 'chapter-summary'
+  | 'chapter-revision'
+  | 'editorial'
+  | 'chapter-outline'
+  | 'title'
+  | 'marketing'
+  | 'full-auto';
+
+export interface ContextBudget {
+  totalTokens: number;
+  maxSectionTokens: number;
+  sections?: Partial<Record<string, number>>;
+}
+
+export interface ContextSection {
+  id: string;
+  title: string;
+  text: string;
+  tokenEstimate: number;
+  truncated: boolean;
+  omitted?: boolean;
+}
+
+export interface AssembledContext {
+  purpose: ContextPurpose;
+  text: string;
+  sections: ContextSection[];
+  warnings: string[];
+  tokenEstimate: number;
 }
 
 export interface Chapter {
@@ -93,6 +205,12 @@ export interface Chapter {
   updatedAt: Date;
 }
 
+/** Ordered scene prose segments for Phase 4 pipeline (JSON in DB). */
+export interface SceneProseSegment {
+  sceneId: string;
+  prose: string;
+}
+
 export interface ChapterVersion {
   id: string;
   chapterId: string;
@@ -104,6 +222,8 @@ export interface ChapterVersion {
   approved: boolean;
   parentVersionId?: string;
   notes?: string;
+  /** Phase 4: structured segments before concatenation into `content`. */
+  sceneSegments?: SceneProseSegment[];
   createdAt: Date;
 }
 
@@ -117,6 +237,10 @@ export interface EditorialIssue {
   recommendedFix: string;
   status: 'open' | 'resolved';
   createdAt: Date;
+  editPass: EditorialPass;
+  revisionTaskId?: string;
+  manuscriptQuote?: string;
+  sceneId?: string;
 }
 
 export interface RevisionTask {
@@ -150,6 +274,19 @@ export interface User {
 }
 
 // API Response Types
+/** Origin of a logged generation call (for usage aggregation). */
+export type GenerationUsageSource =
+  | 'manual-stage'
+  | 'full-auto'
+  | 'chapter-editor'
+  | 'editorial'
+  | 'revision';
+
+export interface GenerationUsageTotals {
+  totalTokens: number;
+  callCount: number;
+}
+
 export interface GenerationResponse {
   content: string;
   model: string;

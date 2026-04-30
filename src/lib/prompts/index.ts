@@ -5,6 +5,23 @@ export { CHARACTERS_SYSTEM, buildCharactersPrompt } from './characters';
 export { STRUCTURE_SYSTEM, buildStructurePrompt } from './structure';
 export { TITLE_IDEAS_SYSTEM, buildTitleIdeasPrompt } from './title';
 export { CHAPTERS_SYSTEM, CHAPTER_OUTLINES_SYSTEM, buildChapterPrompt, buildChapterOutlinesPrompt, buildChapterSummaryPrompt, buildChapterRevisionPrompt } from './chapters';
-export { EDITORIAL_SYSTEM, buildEditorialPrompt, buildRevisionQueuePrompt } from './editorial';
+export {
+  CHAPTER_SCENE_PLAN_SYSTEM,
+  buildChapterScenePlanPrompt,
+  CHAPTER_SCENE_PROSE_SYSTEM,
+  buildChapterSceneProsePrompt,
+  CHAPTER_POLISH_SYSTEM,
+  buildChapterPolishPrompt,
+  CHAPTER_SCENE_EVAL_SYSTEM,
+  buildChapterSceneEvalPrompt,
+} from './scenes';
+export {
+  EDITORIAL_SYSTEM,
+  REVISION_VERIFY_SYSTEM,
+  buildEditorialPrompt,
+  buildRevisionQueuePrompt,
+  buildRevisionVerificationPrompt,
+} from './editorial';
 export { BLURB_SYSTEM, buildBlurbPrompt, AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt } from './marketing';
+export { STORY_BIBLE_SYSTEM, buildStoryBiblePrompt, buildCreativeBriefPrompt } from './storyBible';
 export { contextBlock } from './utils';
