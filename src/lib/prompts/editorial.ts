@@ -316,6 +316,140 @@ For each issue:
 **Do NOT rewrite prose** unless explicitly asked.`;
 }
 
+const REVISION_QUEUE_JSON_SHAPE = `\
+{
+  "revisionTasks": [
+    {
+      "chapterNumber": 1,
+      "issueCount": 3,
+      "priority": "high",
+      "summary": "Brief summary of what needs to be fixed",
+      "issues": [
+        {
+          "category": "continuity|character|pacing|prose|logic",
+          "description": "Specific issue description",
+          "manuscriptQuote": "Exact quoted manuscript passage tied to this issue",
+          "location": "Approximate location in chapter",
+          "fix": "Specific instruction for fixing",
+          "sceneId": "Optional: scene card id when the issue is localized to one scene (for targeted revision)"
+        }
+      ],
+      "acceptanceCriteria": [
+        "Criterion 1 the revision must meet",
+        "Criterion 2 the revision must meet"
+      ],
+      "preserveElements": [
+        "Specific elements that should NOT be changed"
+      ]
+    }
+  ]
+}`;
+
+/** Structured editorial: manuscript + canon in, revision-queue JSON out (single LLM hop). */
+export function buildEditorialIssuesQueuePrompt(params: {
+  manuscript: string;
+  genre: string;
+  chapterCount: number;
+  editorialPass: EditorialPass;
+  assembledContext?: string;
+  nicheReference?: string;
+  charactersReference?: string;
+  endingReference?: string;
+  structureReference?: string;
+  intendedAudience?: string;
+  premise?: string;
+  research?: string;
+}): string {
+  const {
+    manuscript,
+    genre,
+    chapterCount,
+    editorialPass,
+    assembledContext,
+    nicheReference,
+    charactersReference,
+    endingReference,
+    structureReference,
+    intendedAudience,
+    premise,
+    research,
+  } = params;
+
+  const scopeLine = PASS_FOCUS[editorialPass];
+  const scopeNote =
+    editorialPass === 'final_report'
+      ? 'This pass is advisory in the product. Emit one revisionTask per chapter with issueCount 0, priority \"none\", and a short note that fixes are discretionary.'
+      : '';
+
+  const concernsParts: string[] = [];
+  if (premise?.trim()) concernsParts.push(`**Premise:** ${premise.trim()}`);
+  if (research?.trim()) concernsParts.push(`**Research / notes:** ${research.trim()}`);
+  const authorConcernsBlock =
+    concernsParts.length > 0 ? concernsParts.join('\n\n') : 'No additional concerns supplied.';
+
+  const audienceLine =
+    intendedAudience?.trim() ||
+    'Not specified in project metadata; infer intended audience from niche / reference documents when present.';
+
+  let body = `## Context
+
+**Genre:** ${genre}
+
+**Pass scope (stay within):**
+${scopeLine}
+
+${scopeNote}
+
+**Intended audience:** ${audienceLine}
+
+**Author concerns:**
+${authorConcernsBlock}
+
+## CRITICAL — ground every issue in the manuscript
+
+Analyze the manuscript after the canon blocks. Each issue MUST include manuscriptQuote copied verbatim from the manuscript (empty string \"\" only if impossible).
+
+## Canon / references
+
+`;
+
+  if (assembledContext?.trim()) {
+    body += `### Assembled canon context\n${assembledContext}\n\n`;
+  }
+  if (nicheReference?.trim()) {
+    body += `### Niche / audience${assembledContext ? ' (fallback)' : ''}\n${nicheReference}\n\n`;
+  }
+  if (charactersReference?.trim()) {
+    body += `### Characters${assembledContext ? ' (fallback)' : ''}\n${charactersReference}\n\n`;
+  }
+  if (endingReference?.trim()) {
+    body += `### Ending direction${assembledContext ? ' (fallback)' : ''}\n${endingReference.slice(0, 3200)}\n\n`;
+  }
+  if (structureReference?.trim()) {
+    body += `### Structure${assembledContext ? ' (fallback)' : ''}\n${structureReference.slice(0, 2000)}\n\n`;
+  }
+
+  body += `## Manuscript
+
+${manuscript}
+
+## Output — JSON only
+
+Return one JSON object only (no markdown fences, no commentary) with this shape:
+
+${REVISION_QUEUE_JSON_SHAPE}
+
+Rules:
+- Exactly one revision task per chapter for chapters 1 … ${chapterCount}. If chapter headings in the manuscript imply a different count, still emit ${chapterCount} tasks keyed by ascending chapter numbers and match manuscript content to the closest chapter heading.
+- For chapters with issueCount 0, use summary: \"Verify continuity: confirm this chapter is consistent with established character voices, timeline, and the preceding/following chapters. No structural issues were flagged but token constraints may have limited coverage.\"
+- category must be one of: continuity, character, pacing, prose, logic.
+- Priority: high | medium | low | none — use \"none\" when issueCount is 0.
+
+Output only valid JSON.`;
+
+  return body;
+}
+
 export function buildRevisionQueuePrompt(params: {
   editorialReport: string;
   chapterCount: number;

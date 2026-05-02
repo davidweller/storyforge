@@ -1,6 +1,6 @@
 import type { SceneProseSegment } from '@/types';
 import type { SceneCard } from '@/lib/generation/schemas';
-import type { ChapterEvaluation } from '@/lib/generation/schemas';
+import type { ChapterEvaluation, ChapterScenePlanDocument } from '@/lib/generation/schemas';
 import { estimateTokens } from '@/lib/utils';
 
 function countWords(text: string): number {
@@ -133,34 +133,51 @@ export function mergeEvaluationResults(parts: ChapterEvaluation[]): ChapterEvalu
 }
 
 /**
+ * Narrow the stored scene plan to only scene cards touched by prose in this chunk.
+ */
+export function sliceScenePlanForSegments(
+  plan: ChapterScenePlanDocument,
+  segmentChunk: SceneProseSegment[],
+): ChapterScenePlanDocument {
+  const ids = new Set(segmentChunk.map((s) => s.sceneId));
+  return {
+    ...plan,
+    scenes: plan.scenes.filter((c) => ids.has(c.id)),
+  };
+}
+
+/**
  * Groups scene segments into chunks for separate `chapter-scene-eval` calls.
  *
  * **Invariant:** chunks are built from whole {@link SceneProseSegment}s only—the prose of
- * one scene is never split across chunks. A long scene may occupy its **own** chunk alone
- * (even if that chunk still exceeds the nominal token budget); it will not share a chunk
- * boundary with another partial scene.
+ * one scene is never split across chunks. Overhead estimates use **sliced** scene-plan JSON
+ * for the candidate chunk so multi-scene chapters pack more cleanly.
  */
 export function planSceneEvalChunks(
   segments: SceneProseSegment[],
-  scenePlanJson: string,
+  scenePlan: ChapterScenePlanDocument,
   compactCanon: string,
   inputBudgetTokens: number,
 ): SceneProseSegment[][] {
-  const overhead = estimateTokens(scenePlanJson) + estimateTokens(compactCanon) + 800;
+  const canonTok = estimateTokens(compactCanon) + 800;
   if (!segments.length) return [];
   const chunks: SceneProseSegment[][] = [];
   let current: SceneProseSegment[] = [];
   let currentTok = 0;
 
   for (const seg of segments) {
-    const t = estimateTokens(seg.prose);
-    if (current.length > 0 && currentTok + t + overhead > inputBudgetTokens) {
-      chunks.push(current);
-      current = [];
-      currentTok = 0;
+    const segT = estimateTokens(seg.prose);
+    if (current.length > 0) {
+      const tentative = [...current, seg];
+      const planTok = estimateTokens(JSON.stringify(sliceScenePlanForSegments(scenePlan, tentative)));
+      if (currentTok + segT + planTok + canonTok > inputBudgetTokens) {
+        chunks.push(current);
+        current = [];
+        currentTok = 0;
+      }
     }
     current.push(seg);
-    currentTok += t;
+    currentTok += estimateTokens(seg.prose);
   }
   if (current.length) chunks.push(current);
   return chunks.length ? chunks : [[]];

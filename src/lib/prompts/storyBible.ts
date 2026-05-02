@@ -40,7 +40,7 @@ export function buildStoryBiblePrompt(params: {
     derivedFrom,
   } = params;
 
-  return `Create a Story Bible for this novel from the approved planning artifacts.
+  return `Create a Story Bible for this novel from the approved planning artifacts (chapter outlines must already be present—they anchor per-chapter beats and scene promises).
 
 ## Project
 - Title: ${title || 'Untitled'}

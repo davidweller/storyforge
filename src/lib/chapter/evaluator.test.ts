@@ -1,20 +1,50 @@
 import { describe, it, expect } from 'vitest';
+import type { ChapterScenePlanDocument } from '@/lib/generation/schemas';
 import {
   planSceneEvalChunks,
   mergeEvaluationResults,
   runDeterministicChapterEvaluation,
+  sliceScenePlanForSegments,
 } from './evaluator';
+
+const dummyPlan = (sceneIds: string[]): ChapterScenePlanDocument => ({
+  schemaVersion: 1,
+  chapterNumber: 1,
+  generatedAt: '1970-01-01T00:00:00.000Z',
+  derivedFromChapterOutlines: { documentId: 'doc', version: 1, updatedAt: '1970-01-01T00:00:00.000Z' },
+  scenes: sceneIds.map((id, order) => ({
+    id,
+    order,
+    purpose: 'p',
+    conflict: '',
+    turningPoint: '',
+    pov: '',
+    setting: '',
+    emotionalShift: '',
+    beatsCovered: [],
+    mustInclude: [],
+  })),
+});
 
 describe('planSceneEvalChunks', () => {
   it('returns empty array when no segments', () => {
-    expect(planSceneEvalChunks([], '{}', '', 6000)).toEqual([]);
+    expect(planSceneEvalChunks([], dummyPlan(['a']), '', 6000)).toEqual([]);
   });
 
   it('puts all segments in one chunk when under budget', () => {
     const segments = [{ sceneId: 'a', prose: 'Hello world short text.' }];
-    const chunks = planSceneEvalChunks(segments, '{"x":1}', 'canon', 6000);
+    const chunks = planSceneEvalChunks(segments, dummyPlan(['a']), 'canon', 6000);
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toEqual(segments);
+  });
+});
+
+describe('sliceScenePlanForSegments', () => {
+  it('drops scenes not in chunk', () => {
+    const plan = dummyPlan(['a', 'b']);
+    const slice = sliceScenePlanForSegments(plan, [{ sceneId: 'b', prose: 'x' }]);
+    expect(slice.scenes).toHaveLength(1);
+    expect(slice.scenes[0]?.id).toBe('b');
   });
 });
 

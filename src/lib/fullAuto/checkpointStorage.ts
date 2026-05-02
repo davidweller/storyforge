@@ -23,6 +23,8 @@ export const FULL_AUTO_LAST_STEP_LABELS: Record<string, string> = {
 };
 
 export function labelForFullAutoLastStep(stepKey: string): string {
+  const scenePlan = stepKey.match(/^after-chapter-(\d+)-scene-plan$/);
+  if (scenePlan) return `Chapter ${scenePlan[1]} scene plan`;
   return FULL_AUTO_LAST_STEP_LABELS[stepKey] ?? stepKey;
 }
 

@@ -16,6 +16,8 @@ export function buildTitleIdeasPrompt(params: {
   structureReference?: string;
   endingReference?: string;
   charactersReference?: string;
+  /** Number of title strings in the JSON array (default 10). */
+  titleCount?: number;
 }): string {
   const {
     genre,
@@ -25,9 +27,10 @@ export function buildTitleIdeasPrompt(params: {
     structureReference,
     endingReference,
     charactersReference,
+    titleCount = 10,
   } = params;
 
-  let prompt = `Generate 10 distinct title ideas for this ${genre} novel.
+  let prompt = `Generate ${titleCount} distinct title ideas for this ${genre} novel.
 
 **Genre:** ${genre}`;
 
@@ -77,7 +80,7 @@ ${charactersReference.slice(0, 600)}`;
 
   prompt += `
 
-Respond with exactly 10 title options as valid JSON in this exact shape:
+Respond with exactly ${titleCount} title options as valid JSON in this exact shape:
 
 \`\`\`json
 {

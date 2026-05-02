@@ -8,6 +8,7 @@ import {
   mergeEvaluationResults,
   planSceneEvalChunks,
   runDeterministicChapterEvaluation,
+  sliceScenePlanForSegments,
 } from '@/lib/chapter/evaluator';
 
 export type ChapterGenerateFn = (
@@ -41,7 +42,6 @@ export async function runMergedChapterSceneEvaluation(params: {
     outlineWordTarget,
   } = params;
 
-  const scenePlanJson = JSON.stringify(scenePlan);
   const evalCanon = assembleContext({
     purpose: 'chapter-eval',
     project,
@@ -60,15 +60,19 @@ export async function runMergedChapterSceneEvaluation(params: {
 
   const chunks = planSceneEvalChunks(
     segments,
-    scenePlanJson,
+    scenePlan,
     evalCanon.text,
-    CHAPTER_SCENE_EVAL_INPUT_TOKEN_BUDGET
+    CHAPTER_SCENE_EVAL_INPUT_TOKEN_BUDGET,
   );
 
   const modelParts: ChapterEvaluation[] = [];
   for (const chunk of chunks) {
     const chunkText = chunk.map((s) => s.prose).join('\n\n');
     const chunkLabel = chunk.map((s) => s.sceneId).join(', ');
+    const planSlice = sliceScenePlanForSegments(scenePlan, chunk);
+    const scenePlanJson = JSON.stringify(planSlice);
+    const evaluationMode =
+      chunk.length === 1 && planSlice.scenes.length <= 1 ? 'standard' : 'lite';
     const er = await generate('chapter-scene-eval', {
       genre: project.genre,
       chapterNumber: currentChapter.chapterNumber,
@@ -77,8 +81,8 @@ export async function runMergedChapterSceneEvaluation(params: {
       chapterText: chunkText,
       compactCanon: evalCanon.text,
       chunkLabel,
-    });
-    modelParts.push(parseChapterEvaluation(er.content));
+      evaluationMode,
+    });    modelParts.push(parseChapterEvaluation(er.content));
   }
 
   const modelMerged =

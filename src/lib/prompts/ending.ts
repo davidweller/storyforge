@@ -11,10 +11,41 @@ export function buildEndingConceptsPrompt(params: {
   premise?: string;
   genre: string;
   nicheReference: string;
+  /** Exact number of ending objects (overrides min/max range). */
+  conceptCountExact?: number;
+  /** Inclusive range when conceptCountExact omitted. Defaults 8–10. */
+  conceptCountMin?: number;
+  conceptCountMax?: number;
 }): string {
-  const { premise, genre, nicheReference } = params;
-  
-  let prompt = `Generate 8-10 potential ending concepts for this novel:
+  const {
+    premise,
+    genre,
+    nicheReference,
+    conceptCountExact,
+    conceptCountMin = 8,
+    conceptCountMax = 10,
+  } = params;
+
+  const countBlock =
+    typeof conceptCountExact === 'number' && conceptCountExact > 0
+      ? `Generate exactly ${conceptCountExact} potential ending concepts for this novel`
+      : `Generate between ${conceptCountMin} and ${conceptCountMax} potential ending concepts for this novel`;
+
+  const diversitySection =
+    typeof conceptCountExact === 'number' && conceptCountExact > 0 && conceptCountExact <= 6
+      ? `Aim for varied emotional shapes (expected, subversive, bittersweet, triumphant) across the ${conceptCountExact} options.`
+      : `Generate a diverse range of endings:
+- At least 2 that lean into genre expectations (satisfying, expected)
+- At least 2 that subvert expectations in interesting ways
+- At least 2 that are bittersweet or complex
+- At least 2 that are triumphant/uplifting`;
+
+  const outroExact =
+    typeof conceptCountExact === 'number' && conceptCountExact > 0
+      ? `Generate exactly ${conceptCountExact} ending objects. Do not include markdown outside the JSON.`
+      : `Generate ${conceptCountMin}–${conceptCountMax} ending objects. Do not include markdown outside the JSON.`;
+
+  let prompt = `${countBlock}:
 
 **Genre:** ${genre}`;
 
@@ -25,7 +56,7 @@ export function buildEndingConceptsPrompt(params: {
     prompt += `
 **Premise:** (Not yet provided - use genre and niche analysis to guide ending concepts)`;
   }
-  
+
   prompt += `
 
 **Niche & Audience Analysis:**
@@ -39,11 +70,7 @@ For each ending concept, provide:
 4. Character Resolution: How the protagonist's arc completes
 5. Thematic Statement: What truth about life/humanity this ending affirms
 
-Generate a diverse range of endings:
-- At least 2 that lean into genre expectations (satisfying, expected)
-- At least 2 that subvert expectations in interesting ways
-- At least 2 that are bittersweet or complex
-- At least 2 that are triumphant/uplifting
+${diversitySection}
 
 ## Output Format
 
@@ -64,7 +91,7 @@ Output only valid JSON in this exact shape:
 }
 \`\`\`
 
-Generate 8-10 ending objects. Do not include markdown outside the JSON.
+${outroExact}
 
 Remember: The ending determines everything that comes before it. These concepts will shape the entire story structure.`;
 

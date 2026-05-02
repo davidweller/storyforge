@@ -8,7 +8,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, EmptyContent } from '@/components/stages';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
 import { cn, countWords, capOutlineWordTargets } from '@/lib/utils';
-import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS, FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT } from '@/lib/constants';
 import { parseChapterOutlines } from '@/lib/generation/schemas';
 import { estimateFullAutoTokens, formatTokenRange } from '@/lib/cost/preflight';
 
@@ -65,7 +65,10 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
 
   const fullAutoPreflight = useMemo(() => {
     const n = Math.max(1, chapterOutlines.length);
-    const est = estimateFullAutoTokens({ chapterCount: n });
+    const est = estimateFullAutoTokens({
+      chapterCount: n,
+      useScenePipelineForChapters: FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT,
+    });
     return formatTokenRange(est.low, est.high);
   }, [chapterOutlines.length]);
   

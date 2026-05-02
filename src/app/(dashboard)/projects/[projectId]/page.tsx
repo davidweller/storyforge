@@ -7,7 +7,7 @@ import { useGenerate } from '@/hooks/useGenerate';
 import { Button, Badge, Textarea, useToast } from '@/components/ui';
 import { WorkflowSidebar } from '@/components/layout';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime, getStageRouteForDocument } from '@/lib/utils';
-import { buildStoryBibleSourceRefs, isCreativeBriefStale, isStoryBibleStale } from '@/lib/context/assembler';
+import { buildStoryBibleSourceRefs, getValidatedApprovedChapterOutlines, isCreativeBriefStale, isStoryBibleStale } from '@/lib/context/assembler';
 import { parseStoryBible } from '@/lib/generation/schemas';
 import * as firestore from '@/lib/db/client';
 import {
@@ -98,6 +98,12 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   const storyBibleStale = latestStoryBible ? isStoryBibleStale(latestStoryBible, documents) : true;
   const creativeBriefStale = latestCreativeBrief ? isCreativeBriefStale(latestCreativeBrief, approvedStoryBible ?? latestStoryBible) : true;
 
+  const validatedOutlinesGate = useMemo(
+    () => getValidatedApprovedChapterOutlines(documents),
+    [documents],
+  );
+  const canGenerateStoryBible = validatedOutlinesGate.ok;
+
   useEffect(() => {
     setStoryBibleDraft(latestStoryBible?.content ?? '');
   }, [latestStoryBible?.id, latestStoryBible?.content]);
@@ -185,6 +191,13 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
 
   const generateStoryBible = async () => {
     if (!project) return;
+
+    const outlineGate = getValidatedApprovedChapterOutlines(documents);
+    if (!outlineGate.ok) {
+      addToast({ type: 'error', message: outlineGate.reason });
+      return;
+    }
+
     const derivedFrom = buildStoryBibleSourceRefs(documents);
     if (derivedFrom.length === 0) {
       addToast({ type: 'error', message: 'Approve planning documents before generating a Story Bible.' });
@@ -207,7 +220,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
         endingChoice: byType('ending-choice'),
         charactersReference: byType('characters'),
         structureReference: byType('structure'),
-        chapterOutlinesReference: byType('chapter-outlines'),
+        chapterOutlinesReference: outlineGate.document.content,
       }, manualGenOpts);
       if (latestStoryBible) {
         await updateDocument(latestStoryBible.id, {
@@ -481,12 +494,30 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
               <div>
                 <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#171717', marginBottom: '0.25rem' }}>Story Bible & Canon</h2>
-                <p style={{ fontSize: '0.875rem', color: '#737373' }}>
-                  Generate and approve durable canon before chapter drafting. Approved canon is used as the primary context source.
+                <p style={{ fontSize: '0.875rem', color: '#737373', maxWidth: '42rem', lineHeight: 1.5 }}>
+                  The Story Bible <strong>summarizes locked structure after chapter outlines.</strong> It requires{' '}
+                  <strong>approved chapter outlines</strong> that the app can parse; generate stays disabled until
+                  that prerequisite is satisfied. Approved canon feeds chapter and scene pipelines.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <Button onClick={generateStoryBible} disabled={isCanonSaving || isGeneratingCanon} size="sm">
+                <Button
+                  onClick={generateStoryBible}
+                  disabled={isCanonSaving || isGeneratingCanon || !canGenerateStoryBible}
+                  size="sm"
+                  title={
+                    canGenerateStoryBible
+                      ? undefined
+                      : validatedOutlinesGate.reason ?? 'Requires approved chapter outlines'
+                  }
+                  aria-label={
+                    canGenerateStoryBible
+                      ? latestStoryBible
+                        ? 'Regenerate Story Bible'
+                        : 'Generate Story Bible'
+                      : `${validatedOutlinesGate.reason ?? 'Requires approved chapter outlines'}. Disabled.`
+                  }
+                >
                   {latestStoryBible ? 'Regenerate Story Bible' : 'Generate Story Bible'}
                 </Button>
                 <Button onClick={generateCreativeBrief} disabled={isCanonSaving || isGeneratingCanon || !approvedStoryBible} size="sm" variant="secondary">
@@ -509,6 +540,18 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
                 {creativeBriefStale ? 'Creative Brief stale or missing' : 'Creative Brief current'}
               </Badge>
             </div>
+
+            {!validatedOutlinesGate.ok && (
+              <p style={{ marginBottom: '1rem', fontSize: '0.8rem', color: '#a16207' }}>
+                {validatedOutlinesGate.reason}{' '}
+                <Link
+                  href={`/projects/${projectId}/stage/chapter-outlines`}
+                  style={{ textDecoration: 'underline', color: '#854d0e' }}
+                >
+                  Open Chapter Outlines
+                </Link>
+              </p>
+            )}
 
             {latestStoryBible ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -540,7 +583,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
               </div>
             ) : (
               <div style={{ padding: '1rem', backgroundColor: '#f5f5f5', borderRadius: '8px', color: '#737373', fontSize: '0.875rem' }}>
-                No Story Bible has been generated yet. Approve the planning documents first, then generate canon from this panel.
+                No Story Bible yet. Finish the Chapter Outlines stage with an approved outline the app can parse, then generate from this panel (other planning refs are included automatically when approved).
               </div>
             )}
 

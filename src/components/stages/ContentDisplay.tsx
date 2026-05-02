@@ -82,6 +82,9 @@ interface EmptyContentProps {
   onAction: () => void;
   isLoading?: boolean;
   disabled?: boolean;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  secondaryDisabled?: boolean;
 }
 
 export function EmptyContent({
@@ -91,6 +94,9 @@ export function EmptyContent({
   onAction,
   isLoading = false,
   disabled = false,
+  secondaryLabel,
+  onSecondary,
+  secondaryDisabled = false,
 }: EmptyContentProps) {
   return (
     <div className="bg-card border border-border rounded-xl p-12 text-center">
@@ -101,6 +107,7 @@ export function EmptyContent({
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">{description}</p>
+      <div className="flex flex-wrap gap-3 justify-center">
       <button
         onClick={onAction}
         disabled={isLoading || disabled}
@@ -120,6 +127,17 @@ export function EmptyContent({
           </>
         )}
       </button>
+      {secondaryLabel && onSecondary ? (
+        <button
+          type="button"
+          onClick={() => void onSecondary()}
+          disabled={isLoading || secondaryDisabled}
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-medium bg-secondary text-secondary-foreground border border-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-opacity hover:opacity-90"
+        >
+          {secondaryLabel}
+        </button>
+      ) : null}
+      </div>
     </div>
   );
 }

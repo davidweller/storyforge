@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateForStage } from '@/lib/llm';
 import { getModelById, getDefaultModelForStage, ALL_MODELS } from '@/lib/data/models';
-import { MAX_MANUSCRIPT_TOKENS, TARGET_MANUSCRIPT_WORDS, CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS, CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET } from '@/lib/constants';
 import type { WorkflowStage, EditorialPass, GenerationUsageSource } from '@/types';
 import * as dbq from '@/lib/db/queries';
 
@@ -30,7 +30,10 @@ import {
   CHAPTER_OUTLINES_SYSTEM, buildChapterOutlinesPrompt,
   buildChapterSummaryPrompt,
   CHAPTERS_SYSTEM, buildChapterPrompt, buildChapterRevisionPrompt,
-  EDITORIAL_SYSTEM, buildEditorialPrompt, buildRevisionQueuePrompt,
+  EDITORIAL_SYSTEM,
+  buildEditorialPrompt,
+  buildEditorialIssuesQueuePrompt,
+  buildRevisionQueuePrompt,
   REVISION_VERIFY_SYSTEM, buildRevisionVerificationPrompt,
   BLURB_SYSTEM, buildBlurbPrompt,
   AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt,
@@ -55,6 +58,9 @@ import {
   ChapterOutlineSchema,
   SceneCardSchema,
 } from '@/lib/generation/schemas';
+import { structuredOutputCountWarnings } from '@/lib/generation/outputCountWarnings';
+import { strictCardinalityViolation } from '@/lib/generation/cardinalityGate';
+import { gateEditorialManuscriptContext } from '@/lib/editorial/manuscriptModelGate';
 
 /** Long editorials need headroom on Vercel and similar hosts (local dev usually ignores this). */
 export const maxDuration = 800;
@@ -64,7 +70,7 @@ const WORKFLOW_STAGES = [
   'title', 'chapter-outlines', 'chapter-summary',
   'chapter-scene-plan', 'chapter-scenes-prose', 'chapter-polish', 'chapter-scene-eval',
   'story-bible', 'creative-brief', 'chapters', 'compilation', 'export-draft',
-  'editorial', 'revision', 'revision-verify', 'export-final', 'blurb', 'amazon-description',
+  'editorial', 'editorial-issues', 'revision', 'revision-verify', 'export-final', 'blurb', 'amazon-description',
 ] as const;
 
 const USAGE_SOURCE_VALUES = [
@@ -85,6 +91,7 @@ const GenerateBodySchema = z.object({
   projectId: z.string().optional(),
   runId: z.string().optional(),
   usageSource: z.enum(USAGE_SOURCE_VALUES).optional(),
+  strictCardinality: z.boolean().optional(),
 });
 
 type D = Record<string, unknown>;
@@ -172,8 +179,26 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     endingChoice: optionalString,
     charactersReference: optionalString,
     structureReference: optionalString,
-    chapterOutlinesReference: optionalString,
-  }).passthrough(),
+    chapterOutlinesReference: requiredString,
+  }).passthrough().superRefine((val, ctx) => {
+    const outlineChapters = parseChapterOutlines(val.chapterOutlinesReference as string);
+    if (outlineChapters.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['chapterOutlinesReference'],
+        message:
+          'Story Bible runs after outlines: chapterOutlinesReference must parse to at least one chapter.',
+      });
+    }
+    const refs = val.derivedFrom as { documentType: string }[];
+    if (!refs.some((r) => r.documentType === 'chapter-outlines')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['derivedFrom'],
+        message: 'derivedFrom must include the approved chapter-outlines document.',
+      });
+    }
+  }),
   'creative-brief': z.object({
     storyBibleContent: requiredString,
     storyBibleDocumentId: requiredString,
@@ -212,6 +237,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     chapterText: requiredString,
     compactCanon: optionalString,
     chunkLabel: optionalString,
+    evaluationMode: z.enum(['lite', 'standard', 'deep']).optional(),
   }).passthrough(),
   chapters: z.object({
     genre: requiredString,
@@ -258,6 +284,20 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
       research: optionalString,
     }).passthrough(),
   ]),
+  'editorial-issues': z.object({
+    manuscript: requiredString,
+    genre: requiredString,
+    chapterCount: z.number().int().positive(),
+    assembledContext: optionalString,
+    nicheReference: optionalString,
+    charactersReference: optionalString,
+    endingReference: optionalString,
+    structureReference: optionalString,
+    editorialPass: EditorialPassSchema.optional(),
+    intendedAudience: optionalString,
+    premise: optionalString,
+    research: optionalString,
+  }).passthrough(),
   revision: z.object({
     originalContent: requiredString,
     revisionInstructions: optionalString,
@@ -306,6 +346,7 @@ function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutpu
   if (stage === 'story-bible') return 'story-bible';
   if (stage === 'creative-brief') return 'creative-brief';
   if (stage === 'editorial' && data.createQueue) return 'revision-queue';
+  if (stage === 'editorial-issues') return 'revision-queue';
   if (stage === 'chapter-scene-plan') return 'chapter-scene-plan';
   if (stage === 'chapter-scenes-prose') return 'chapter-scenes-prose';
   if (stage === 'chapter-scene-eval') return 'chapter-scene-eval';
@@ -378,7 +419,20 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
   'niche': (d) => ({ system: NICHE_SYSTEM, prompt: buildNichePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, genreResearch: d.genreResearch as string }) }),
   'characters': (d) => ({ system: CHARACTERS_SYSTEM, prompt: buildCharactersPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string }) }),
   'structure': (d) => ({ system: STRUCTURE_SYSTEM, prompt: buildStructurePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string, charactersReference: d.charactersReference as string, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
-  'title': (d) => ({ system: TITLE_IDEAS_SYSTEM, prompt: buildTitleIdeasPrompt({ genre: d.genre as string, premise: d.premise as string | undefined, assembledContext: d.assembledContext as string | undefined, nicheReference: d.nicheReference as string | undefined, structureReference: d.structureReference as string | undefined, endingReference: d.endingReference as string | undefined, charactersReference: d.charactersReference as string | undefined }) }),
+  'title': (d) => ({
+    system: TITLE_IDEAS_SYSTEM,
+    prompt: buildTitleIdeasPrompt({
+      genre: d.genre as string,
+      premise: d.premise as string | undefined,
+      assembledContext: d.assembledContext as string | undefined,
+      nicheReference: d.nicheReference as string | undefined,
+      structureReference: d.structureReference as string | undefined,
+      endingReference: d.endingReference as string | undefined,
+      charactersReference: d.charactersReference as string | undefined,
+      titleCount:
+        typeof d.titleCount === 'number' && d.titleCount > 0 ? (d.titleCount as number) : undefined,
+    }),
+  }),
   'chapter-outlines': (d) => ({ system: CHAPTER_OUTLINES_SYSTEM, prompt: buildChapterOutlinesPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, structureReference: d.structureReference as string, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
   'chapter-summary': (d) => ({
     system: CHAPTERS_SYSTEM,
@@ -451,6 +505,10 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       chapterText: d.chapterText as string,
       compactCanon: (d.compactCanon as string | undefined) ?? '',
       chunkLabel: d.chunkLabel as string | undefined,
+      evaluationMode:
+        d.evaluationMode === 'lite' || d.evaluationMode === 'standard' || d.evaluationMode === 'deep'
+          ? d.evaluationMode
+          : undefined,
     }),
   }),
 };
@@ -472,8 +530,12 @@ export async function POST(request: NextRequest) {
       projectId: bodyProjectId,
       runId: bodyRunId,
       usageSource: bodyUsageSource,
+      strictCardinality: bodyStrictCardinality,
     } = parsed.data;
     let data = parsed.data.data as Record<string, unknown>;
+    if (typeof bodyStrictCardinality === 'boolean') {
+      data = { ...data, strictCardinality: bodyStrictCardinality };
+    }
     
     // Variables for model switching (used in editorial stage)
     let model = requestedModel;
@@ -526,6 +588,18 @@ export async function POST(request: NextRequest) {
             premise: data.premise as string | undefined,
             genre: data.genre as string,
             nicheReference: data.nicheReference as string,
+            conceptCountExact:
+              typeof data.endingConceptCount === 'number' && data.endingConceptCount > 0
+                ? (data.endingConceptCount as number)
+                : undefined,
+            conceptCountMin:
+              typeof data.endingConceptCountMin === 'number' && data.endingConceptCountMin > 0
+                ? (data.endingConceptCountMin as number)
+                : undefined,
+            conceptCountMax:
+              typeof data.endingConceptCountMax === 'number' && data.endingConceptCountMax > 0
+                ? (data.endingConceptCountMax as number)
+                : undefined,
           });
         }
         break;
@@ -544,97 +618,34 @@ export async function POST(request: NextRequest) {
             editorialPass: parseEditorialPass(data.editorialPass),
           });
         } else {
-          // Validate manuscript is provided
           const manuscript = data.manuscript as string;
-          if (!manuscript || typeof manuscript !== 'string' || manuscript.trim().length === 0) {
-            console.error('[API] Editorial request missing manuscript:', {
-              hasManuscript: !!data.manuscript,
-              manuscriptType: typeof data.manuscript,
-              manuscriptLength: manuscript?.length || 0,
-            });
-            return NextResponse.json({ 
-              error: 'Manuscript content is required for editorial review. Please ensure you have approved chapters with content.' 
-            }, { status: 400 });
+          const gate = gateEditorialManuscriptContext({
+            requestedModelId: selectedModel,
+            defaultStageModelId: getDefaultModelForStage('editorial').id,
+            manuscript,
+            nicheReference: data.nicheReference,
+            charactersReference: data.charactersReference,
+            endingReference: data.endingReference,
+            structureReference: data.structureReference,
+          });
+          if (!gate.ok) {
+            return NextResponse.json({ error: gate.error }, { status: gate.status });
           }
-          
-          // Estimate token count (rough approximation: 1 token ≈ 4 characters)
-          const estimatedManuscriptTokens = Math.ceil(manuscript.length / 4);
-          const referenceDocsLength = [
-            data.nicheReference,
-            data.charactersReference,
-            data.endingReference,
-            data.structureReference,
-          ].filter(Boolean).reduce((sum: number, doc) => sum + (doc as string).length, 0);
-          const estimatedReferenceTokens = Math.ceil(referenceDocsLength / 4);
-          const estimatedPromptOverhead = 2000; // System prompt + instructions
-          const estimatedTotalTokens = estimatedManuscriptTokens + estimatedReferenceTokens + estimatedPromptOverhead;
-          
-          // Get selected model context limit; use fallback (Claude Sonnet 4.6) if manuscript exceeds it
-          const selectedModelConfig = getModelById(selectedModel);
-          const selectedMaxContext = selectedModelConfig?.maxContextTokens || 128000;
-          const fallbackModelId = 'claude-sonnet-4-6-thinking';
-          const fallbackModelConfig = getModelById(fallbackModelId);
-          const fallbackMaxContext = fallbackModelConfig?.maxContextTokens || 200000;
-          
-          if (estimatedTotalTokens > selectedMaxContext && fallbackMaxContext > selectedMaxContext && estimatedTotalTokens <= fallbackMaxContext) {
-            const selectedName = selectedModelConfig?.name || selectedModel;
-            const fallbackName = fallbackModelConfig?.name || fallbackModelId;
-            selectedModel = fallbackModelId;
-            modelSwitched = true;
-            const manuscriptWordCount = Math.ceil(manuscript.length / 5);
-            switchMessage = `Your manuscript (approximately ${manuscriptWordCount.toLocaleString()} words, ${estimatedTotalTokens.toLocaleString()} tokens) exceeds ${selectedName}'s context limit (${selectedMaxContext.toLocaleString()} tokens). We've automatically switched to ${fallbackName}, which supports up to ${fallbackMaxContext.toLocaleString()} tokens, to complete the editorial review.`;
-            
-            console.log('[API] Switching to fallback model due to manuscript size:', {
-              estimatedTotalTokens,
-              selectedMaxContext,
-              fallbackMaxContext,
-              modelSwitched: true,
-            });
-          }
-          
-          // Use app cap (190k) so editorial always fits; never exceed model context
-          const currentModelConfig = getModelById(selectedModel);
-          const modelContextTokens = currentModelConfig?.maxContextTokens || 128000;
-          const effectiveMaxTokens = Math.min(modelContextTokens, MAX_MANUSCRIPT_TOKENS);
-          const warningThreshold = effectiveMaxTokens * 0.8;
-          
-          // Final check - if still too large, return error
-          if (estimatedTotalTokens > effectiveMaxTokens) {
-            const manuscriptWordCount = Math.ceil(manuscript.length / 5);
-            const maxWordsSupported = Math.floor((effectiveMaxTokens - estimatedReferenceTokens - estimatedPromptOverhead) * (4 / 5));
-            return NextResponse.json({ 
-              error: `Manuscript is too long for editorial review.\n\n` +
-                     `• Your manuscript: ~${manuscriptWordCount.toLocaleString()} words (${estimatedTotalTokens.toLocaleString()} tokens)\n` +
-                     `• Maximum supported: ~${maxWordsSupported.toLocaleString()} words (${effectiveMaxTokens.toLocaleString()} tokens)\n\n` +
-                     `Please keep your manuscript within the limit when planning chapters (e.g. Structure and Chapter Outlines stages), or consider reviewing in batches or focusing on specific sections.`
-            }, { status: 400 });
-          }
-          
-          if (estimatedTotalTokens > warningThreshold) {
-            console.warn('[API] Manuscript approaching context limit:', {
-              estimatedTotalTokens,
-              warningThreshold,
-              effectiveMaxTokens,
-              percentage: ((estimatedTotalTokens / effectiveMaxTokens) * 100).toFixed(1) + '%',
-              model: selectedModel,
-            });
-          }
-          
+          selectedModel = gate.modelId;
+          modelSwitched = gate.modelSwitched;
+          switchMessage = gate.switchMessage;
+
           console.log('[API] Building editorial prompt:', {
             model: selectedModel,
             modelSwitched,
             manuscriptLength: manuscript.length,
-            estimatedManuscriptTokens,
-            estimatedReferenceTokens,
-            estimatedTotalTokens,
-            effectiveMaxTokens,
             genre: data.genre,
             hasNiche: !!data.nicheReference,
             hasCharacters: !!data.charactersReference,
             hasEnding: !!data.endingReference,
             hasStructure: !!data.structureReference,
           });
-          
+
           prompt = buildEditorialPrompt({
             manuscript,
             genre: data.genre as string,
@@ -649,7 +660,7 @@ export async function POST(request: NextRequest) {
             premise: typeof data.premise === 'string' ? data.premise : undefined,
             research: typeof data.research === 'string' ? data.research : undefined,
           });
-          
+
           console.log('[API] Editorial prompt built:', {
             promptLength: prompt.length,
             estimatedPromptTokens: Math.ceil(prompt.length / 4),
@@ -657,9 +668,47 @@ export async function POST(request: NextRequest) {
             model: selectedModel,
           });
         }
-        
-        // Override model for this generation (update the function-scope variable)
         model = selectedModel;
+        break;
+        
+      case 'editorial-issues':
+        systemPrompt = EDITORIAL_SYSTEM;
+        {
+          let selectedModel = model || getDefaultModelForStage('editorial-issues').id;
+          const manuscript = data.manuscript as string;
+          const gate = gateEditorialManuscriptContext({
+            requestedModelId: selectedModel,
+            defaultStageModelId: getDefaultModelForStage('editorial-issues').id,
+            manuscript,
+            nicheReference: data.nicheReference,
+            charactersReference: data.charactersReference,
+            endingReference: data.endingReference,
+            structureReference: data.structureReference,
+          });
+          if (!gate.ok) {
+            return NextResponse.json({ error: gate.error }, { status: gate.status });
+          }
+          selectedModel = gate.modelId;
+          modelSwitched = gate.modelSwitched;
+          switchMessage = gate.switchMessage;
+          model = selectedModel;
+
+          prompt = buildEditorialIssuesQueuePrompt({
+            manuscript,
+            genre: data.genre as string,
+            chapterCount: data.chapterCount as number,
+            editorialPass: parseEditorialPass(data.editorialPass),
+            assembledContext: data.assembledContext as string | undefined,
+            nicheReference: data.nicheReference as string | undefined,
+            charactersReference: data.charactersReference as string | undefined,
+            endingReference: data.endingReference as string | undefined,
+            structureReference: data.structureReference as string | undefined,
+            intendedAudience:
+              typeof data.intendedAudience === 'string' ? data.intendedAudience : undefined,
+            premise: typeof data.premise === 'string' ? data.premise : undefined,
+            research: typeof data.research === 'string' ? data.research : undefined,
+          });
+        }
         break;
         
       case 'revision':
@@ -757,11 +806,50 @@ export async function POST(request: NextRequest) {
         result.tokensUsed += repairResult.tokensUsed;
       }
     }
-    
+
+    const cardinalityError =
+      structuredOutputKind != null ? strictCardinalityViolation(stage, data, result.content) : null;
+    if (cardinalityError) {
+      return NextResponse.json({ error: cardinalityError }, { status: 422 });
+    }
+
+    const structuredWarnings =
+      structuredOutputKind != null
+        ? structuredOutputCountWarnings({
+            kind: structuredOutputKind,
+            stage,
+            data,
+            content: result.content,
+          })
+        : [];
+    if (structuredWarnings.length > 0) {
+      console.warn('[API] Structured output count warnings:', { stage, messages: structuredWarnings });
+    }
+
+    let responseWarnings = [...structuredWarnings];
+
+    const pid = typeof bodyProjectId === 'string' ? bodyProjectId.trim() : '';
+    if (pid) {
+      const persisted = await dbq.recordGenerationUsage({
+        projectId: pid,
+        stage,
+        model: result.model,
+        provider: result.provider,
+        totalTokens: result.tokensUsed,
+        runId: typeof bodyRunId === 'string' && bodyRunId.trim() ? bodyRunId.trim() : null,
+        source: bodyUsageSource ?? 'manual-stage',
+      });
+      if (!persisted) {
+        responseWarnings.push(
+          'Token usage was not saved to the local database (see /api/health/db and server logs). Costs in the UI may read low.'
+        );
+      }
+    }
+
     // Get result model info for logging
     const resultModelInfo = getModelById(result.model);
     const resultModelDisplayName = resultModelInfo?.name || result.model;
-    
+
     console.log('[API] Generation complete:', {
       stage,
       contentLength: result.content?.length || 0,
@@ -770,9 +858,10 @@ export async function POST(request: NextRequest) {
       provider: result.provider,
       providerRoute: result.providerRoute || result.provider,
       tokensUsed: result.tokensUsed,
-      modelSwitched: stage === 'editorial' ? modelSwitched : false,
+      modelSwitched:
+        stage === 'editorial' || stage === 'editorial-issues' ? modelSwitched : false,
     });
-    
+
     // Return response with model switch message if applicable
     const response: import('@/types').GenerateApiResponse = {
       content: result.content,
@@ -780,27 +869,11 @@ export async function POST(request: NextRequest) {
       provider: result.provider,
       ...(result.providerRoute ? { providerRoute: result.providerRoute } : {}),
       tokensUsed: result.tokensUsed,
-      ...(stage === 'editorial' && modelSwitched && switchMessage
+      ...(responseWarnings.length > 0 ? { warnings: responseWarnings } : {}),
+      ...((stage === 'editorial' || stage === 'editorial-issues') && modelSwitched && switchMessage
         ? { modelSwitched: true, switchMessage }
         : {}),
     };
-
-    const pid = typeof bodyProjectId === 'string' ? bodyProjectId.trim() : '';
-    if (pid) {
-      try {
-        await dbq.recordGenerationUsage({
-          projectId: pid,
-          stage,
-          model: result.model,
-          provider: result.provider,
-          totalTokens: result.tokensUsed,
-          runId: typeof bodyRunId === 'string' && bodyRunId.trim() ? bodyRunId.trim() : null,
-          source: bodyUsageSource ?? 'manual-stage',
-        });
-      } catch (logErr) {
-        console.error('[API] recordGenerationUsage failed:', logErr);
-      }
-    }
 
     return NextResponse.json(response);
     

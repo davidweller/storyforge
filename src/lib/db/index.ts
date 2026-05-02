@@ -28,3 +28,14 @@ export function getDb(): Database.Database {
   global.__storyforgeDb = db;
   return db;
 }
+
+/** Fast reachability check for monitoring and /api/health/db. */
+export function probeSqliteHealth(): { ok: true } | { ok: false; error: string } {
+  try {
+    const db = getDb();
+    db.prepare('SELECT 1 AS ok').get();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

@@ -145,8 +145,17 @@ export function buildChapterSceneEvalPrompt(params: {
   chapterText: string;
   compactCanon: string;
   chunkLabel?: string;
+  evaluationMode?: 'lite' | 'standard' | 'deep';
 }): string {
-  return `Evaluate ${params.genre} — Chapter ${params.chapterNumber}: "${params.chapterTitle}".
+  const mode = params.evaluationMode ?? 'standard';
+  const rubric =
+    mode === 'lite'
+      ? 'Compact rubric: beat + canon + POV for this chunk only. Skip hook polish and word-range probes unless blocking.'
+      : mode === 'deep'
+        ? 'Full rubric: beats, canon, POV, threads, hook into next scene, tell vs show, timeline pressure, and word-range plausibility vs scene-card estimates.'
+        : 'Return checks covering beat/scene fulfillment, continuity vs canon, POV/voice consistency (chapter-level checks may use any sceneId from the plan — prefer the scene where the issue appears), thread advancement, hook strength, and word-range plausibility.';
+
+  return `Evaluate ${params.genre} — Chapter ${params.chapterNumber}: "${params.chapterTitle}" (${mode} evaluation).
 ${params.chunkLabel ? `Chunk: ${params.chunkLabel}\n` : ''}
 
 ## Scene plan (JSON)
@@ -158,5 +167,5 @@ ${params.compactCanon || '(none)'}
 ## Chapter draft fragment to evaluate
 ${params.chapterText}
 
-Return checks covering beat/scene fulfillment, continuity vs canon, POV/voice consistency (chapter-level checks may use any sceneId from the plan — prefer the scene where the issue appears), thread advancement, hook strength, and word-range plausibility.`;
+${rubric}`;
 }

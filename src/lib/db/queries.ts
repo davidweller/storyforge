@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from './index';
+import { appendGenerationUsageFallback, sumFallbackUsageForProject } from './generationUsageFallback';
+import { recordUsageRecordFailure, recordUsageFallbackAppend } from '@/lib/db/usageLogMetrics';
 import type {
   Project,
   ProjectDocument,
@@ -637,40 +639,71 @@ export async function recordGenerationUsage(input: {
   outputTokens?: number | null;
   runId?: string | null;
   source: GenerationUsageSource;
-}): Promise<void> {
-  const db = getDb();
-  const id = randomUUID();
-  db.prepare(
-    `INSERT INTO generation_usage (
+}): Promise<boolean> {
+  try {
+    const db = getDb();
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO generation_usage (
       id, projectId, createdAt, stage, model, provider, inputTokens, outputTokens, totalTokens, runId, source
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    id,
-    input.projectId,
-    now(),
-    input.stage,
-    input.model,
-    input.provider,
-    input.inputTokens ?? null,
-    input.outputTokens ?? null,
-    input.totalTokens,
-    input.runId ?? null,
-    input.source
-  );
+    ).run(
+      id,
+      input.projectId,
+      now(),
+      input.stage,
+      input.model,
+      input.provider,
+      input.inputTokens ?? null,
+      input.outputTokens ?? null,
+      input.totalTokens,
+      input.runId ?? null,
+      input.source
+    );
+    return true;
+  } catch (err) {
+    recordUsageRecordFailure(err);
+    console.error('[DB] recordGenerationUsage failed:', err);
+    try {
+      appendGenerationUsageFallback({
+        projectId: input.projectId,
+        stage: input.stage,
+        model: input.model,
+        provider: input.provider,
+        inputTokens: input.inputTokens ?? null,
+        outputTokens: input.outputTokens ?? null,
+        totalTokens: input.totalTokens,
+        runId: input.runId ?? null,
+        source: input.source,
+      });
+      recordUsageFallbackAppend();
+      console.warn('[DB] generation_usage row appended to fallback NDJSON ledger (.data/generation_usage.fallback.ndjson).');
+      return true;
+    } catch (fallbackErr) {
+      console.error('[DB] generation_usage fallback append also failed:', fallbackErr);
+    }
+    return false;
+  }
 }
 
 export async function getProjectGenerationUsageTotals(projectId: string): Promise<GenerationUsageTotals> {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT COALESCE(SUM(totalTokens), 0) AS totalTokens, COUNT(*) AS callCount
+  const fb = sumFallbackUsageForProject(projectId);
+  try {
+    const db = getDb();
+    const row = db
+      .prepare(
+        `SELECT COALESCE(SUM(totalTokens), 0) AS totalTokens, COUNT(*) AS callCount
        FROM generation_usage WHERE projectId = ?`
-    )
-    .get(projectId) as { totalTokens: number; callCount: number } | undefined;
-  return {
-    totalTokens: Number(row?.totalTokens ?? 0),
-    callCount: Number(row?.callCount ?? 0),
-  };
+      )
+      .get(projectId) as { totalTokens: number; callCount: number } | undefined;
+    return {
+      totalTokens: Number(row?.totalTokens ?? 0) + fb.totalTokens,
+      callCount: Number(row?.callCount ?? 0) + fb.callCount,
+    };
+  } catch (err) {
+    console.error('[DB] getProjectGenerationUsageTotals SQLite read failed; using fallback file only:', err);
+    return fb;
+  }
 }
 
 // ── Batch delete ──────────────────────────────────────────────────────────────

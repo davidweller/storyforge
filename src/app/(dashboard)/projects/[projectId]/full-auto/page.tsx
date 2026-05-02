@@ -9,10 +9,20 @@ import { useProjectStore } from '@/stores/projectStore';
 import { getNextStage, STAGE_ORDER, STAGE_NAMES } from '@/lib/utils';
 import { getEstimatedMinutesForStep, FULL_AUTO_ESTIMATES_MINUTES } from '@/lib/fullAutoEstimates';
 import { Button } from '@/components/ui';
-import type { WorkflowStage, DocumentType, EditorialPass } from '@/types';
+import type {
+  WorkflowStage,
+  DocumentType,
+  EditorialPass,
+  SceneProseSegment,
+  ChapterVersion,
+} from '@/types';
 import { countWords, capOutlineWordTargets } from '@/lib/utils';
 import { EDITORIAL_PASSES, documentTypeForEditorialPass } from '@/lib/editorial/passes';
-import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import {
+  TARGET_MANUSCRIPT_WORDS,
+  CHAPTER_POLISH_FEATURE_ENABLED,
+  FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT,
+} from '@/lib/constants';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import { htmlToEditorialText } from '@/lib/utils/markdown';
 import { estimateFullAutoTokens, formatTokenRange } from '@/lib/cost/preflight';
@@ -30,10 +40,13 @@ import {
   parseRevisionQueue,
   parseRevisionVerification,
   parseTitleOptions,
+  parseChapterScenePlan,
 } from '@/lib/generation/schemas';
+import { runMergedChapterSceneEvaluation } from '@/lib/chapter/runMergedChapterSceneEvaluation';
 import {
   assembleContext,
   buildStoryBibleSourceRefs,
+  getValidatedApprovedChapterOutlines,
   isCreativeBriefStale,
   isStoryBibleStale,
 } from '@/lib/context/assembler';
@@ -254,11 +267,18 @@ export default function FullAutoPage({
         data: Record<string, unknown>,
         options?: GenerateOptions
       ) => {
-        const r = await generate(stage, data, { ...genUsage, ...options });
+        const r = await generate(stage, data, {
+          suppressOutputCountWarnings: true,
+          ...genUsage,
+          ...options,
+        });
         setFullAutoUsageSession((s) => ({
           runTotal: s.runTotal + r.tokensUsed,
           lastStep: r.tokensUsed,
         }));
+        if (r.warnings?.length) {
+          setFullAutoRunWarnings((prev) => [...prev, ...(r.warnings ?? []).map((w) => `[${stage}] ${w}`)]);
+        }
         return r;
       };
 
@@ -292,7 +312,10 @@ export default function FullAutoPage({
             n = 8;
           }
         }
-        const est = estimateFullAutoTokens({ chapterCount: n });
+        const est = estimateFullAutoTokens({
+          chapterCount: n,
+          useScenePipelineForChapters: FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT,
+        });
         setPreflightHint(formatTokenRange(est.low, est.high));
       } catch {
         setPreflightHint(null);
@@ -392,6 +415,11 @@ export default function FullAutoPage({
         await loadProject(projectId);
         let state = useProjectStore.getState();
         let docs = state.documents.filter((d) => d.projectId === projectId);
+        const outlinesGateAtCanon = getValidatedApprovedChapterOutlines(docs);
+        if (!outlinesGateAtCanon.ok) {
+          throw new Error(outlinesGateAtCanon.reason);
+        }
+
         const currentProject = state.currentProject ?? project;
         const derivedFrom = buildStoryBibleSourceRefs(docs);
 
@@ -424,7 +452,7 @@ export default function FullAutoPage({
             endingChoice: byType('ending-choice'),
             charactersReference: byType('characters'),
             structureReference: byType('structure'),
-            chapterOutlinesReference: byType('chapter-outlines'),
+            chapterOutlinesReference: outlinesGateAtCanon.document.content,
           });
 
           let storyBibleId: string;
@@ -796,6 +824,18 @@ export default function FullAutoPage({
             }
             if (!chapter) continue;
             await loadChapterVersions(chapter.id);
+            const chapterVersionsHere = useProjectStore.getState().chapterVersions.get(chapter.id) ?? [];
+            const alreadyApproved = chapterVersionsHere.find((v) => v.approved);
+            if (alreadyApproved) {
+              if (alreadyApproved.notes?.trim()) {
+                chapterSummaries.set(chapter.chapterNumber, {
+                  title: chapter.title,
+                  summary: alreadyApproved.notes.trim(),
+                });
+              }
+              stepIdx++;
+              continue;
+            }
             const structureDoc = getDocumentByType('structure');
             const charactersDoc = getDocumentByType('characters');
             const endingDoc = getDocumentByType('ending');
@@ -824,42 +864,216 @@ export default function FullAutoPage({
             if (assembledContext.warnings.length > 0) {
               console.warn('[FullAuto] Canon context warnings:', assembledContext.warnings);
             }
-            // Phase 4: Full Auto keeps one-shot chapter generation; scene pipeline for Full Auto is deferred (plan §8).
-            const chapterResult = await generateTracked('chapters', {
-              genre: project.genre,
-              chapterNumber: outline.chapterNumber,
-              chapterTitle: outline.title,
-              beatReference: outline.beatReference,
-              sceneGoal: outline.sceneGoal,
-              pov: outline.pov,
-              assembledContext: assembledContext.text,
-              charactersReference: charactersDoc?.content || '',
-              endingReference: endingDoc?.content || '',
-              previousChapterSummaries,
-              structureContext: structureDoc?.content || '',
-              genreResearch: genreDoc?.content || '',
-              nicheReference: nicheDoc?.content || '',
-              wordTarget: outline.wordTarget || 3000,
-            });
+
+            let draftPlain: string;
+            let segments: SceneProseSegment[] | undefined;
+
+            if (FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT) {
+              const sceneAssembled = assembleContext({
+                purpose: 'scene-plan',
+                project: contextState.currentProject ?? project,
+                documents: contextState.documents,
+                chapters: contextState.chapters,
+                approvedChapterVersions,
+                currentChapter: chapter,
+                targetChapterNumber: outline.chapterNumber,
+              });
+              if (sceneAssembled.warnings.length > 0) {
+                console.warn('[FullAuto] Scene plan context warnings:', sceneAssembled.warnings);
+              }
+              const outlinesSourceJson = JSON.stringify({
+                documentId: outlinesDoc.id,
+                version: outlinesDoc.version,
+                updatedAt: outlinesDoc.updatedAt.toISOString(),
+              });
+              const outlineSliceJson = JSON.stringify(outline);
+              const scenePlanResult = await generateTracked('chapter-scene-plan', {
+                genre: project.genre,
+                chapterNumber: outline.chapterNumber,
+                outlinesSourceJson,
+                outlineSliceJson,
+                assembledContext: sceneAssembled.text,
+              });
+              let parsedScenePlan;
+              try {
+                parsedScenePlan = parseChapterScenePlan(scenePlanResult.content).scenePlan;
+              } catch (e) {
+                throw new Error(
+                  `Full Auto could not parse scene plan for chapter ${outline.chapterNumber}. ${e instanceof Error ? e.message : String(e)}`,
+                );
+              }
+              const planDocs = contextState.documents.filter(
+                (d) =>
+                  d.projectId === projectId &&
+                  d.type === 'chapter-scene-plan' &&
+                  d.chapterNumber === outline.chapterNumber,
+              );
+              const planNextVersion = planDocs.reduce((m, d) => Math.max(m, d.version), 0) + 1;
+              await createDocument({
+                projectId,
+                type: 'chapter-scene-plan',
+                chapterNumber: outline.chapterNumber,
+                content: scenePlanResult.content,
+                version: planNextVersion,
+                approved: false,
+              });
+              await loadProject(projectId);
+              const sceneBullets = [...parsedScenePlan.scenes]
+                .sort((a, b) => a.order - b.order)
+                .slice(0, 6)
+                .map((s, idx) => `Scene ${idx + 1}: ${s.purpose}`);
+              await runCheckpoint(
+                `after-chapter-${outline.chapterNumber}-scene-plan`,
+                `Checkpoint: Chapter ${outline.chapterNumber} scene plan`,
+                [
+                  ...sceneBullets,
+                  'Review beats and scene splits before prose is generated.',
+                  'You can edit the scene plan from Write Chapters, then resume Full Auto.',
+                ],
+              );
+              throwIfControlRequested();
+
+              let chapterTitle = chapter.title;
+              const wordTargetChapter = outline.wordTarget ?? 3000;
+              if (outline.title) chapterTitle = outline.title;
+
+              const orderedScenes = [...parsedScenePlan.scenes].sort((a, b) => a.order - b.order);
+              const segmentList: SceneProseSegment[] = [];
+              for (let si = 0; si < orderedScenes.length; si++) {
+                throwIfControlRequested();
+                const sceneCard = orderedScenes[si];
+                const storeNow = useProjectStore.getState();
+                const approvedNow = Array.from(storeNow.chapterVersions.values())
+                  .flat()
+                  .filter((version) => version.approved);
+                const proseAssembled = assembleContext({
+                  purpose: 'chapter-draft',
+                  project: storeNow.currentProject ?? project,
+                  documents: storeNow.documents,
+                  chapters: storeNow.chapters,
+                  approvedChapterVersions: approvedNow,
+                  currentChapter: chapter,
+                  targetChapterNumber: outline.chapterNumber,
+                });
+                const neighborBefore =
+                  si > 0 ? segmentList[si - 1]?.prose.slice(0, 400) : undefined;
+                const neighborAfter =
+                  si < orderedScenes.length - 1
+                    ? `${orderedScenes[si + 1].purpose} (${orderedScenes[si + 1].setting})`
+                    : undefined;
+                const wt =
+                  sceneCard.estimatedWords ??
+                  Math.max(400, Math.floor(wordTargetChapter / Math.max(orderedScenes.length, 1)));
+                const proseResult = await generateTracked('chapter-scenes-prose', {
+                  genre: project.genre,
+                  chapterNumber: outline.chapterNumber,
+                  chapterTitle,
+                  sceneCard,
+                  assembledContext: proseAssembled.text,
+                  neighborSummaryBefore: neighborBefore,
+                  neighborSummaryAfter: neighborAfter,
+                  wordTarget: wt,
+                });
+                const prosePayload = JSON.parse(proseResult.content) as { sceneId: string; prose: string };
+                segmentList.push({ sceneId: prosePayload.sceneId, prose: prosePayload.prose });
+              }
+
+              let concatenated = segmentList.map((s) => s.prose).join('\n\n');
+
+              if (CHAPTER_POLISH_FEATURE_ENABLED) {
+                const storePolish = useProjectStore.getState();
+                const approvedPolish = Array.from(storePolish.chapterVersions.values())
+                  .flat()
+                  .filter((version) => version.approved);
+                const polishAssembled = assembleContext({
+                  purpose: 'chapter-draft',
+                  project: storePolish.currentProject ?? project,
+                  documents: storePolish.documents,
+                  chapters: storePolish.chapters,
+                  approvedChapterVersions: approvedPolish,
+                  currentChapter: chapter,
+                  targetChapterNumber: outline.chapterNumber,
+                });
+                const polishResult = await generateTracked('chapter-polish', {
+                  genre: project.genre,
+                  chapterNumber: outline.chapterNumber,
+                  chapterTitle,
+                  concatenatedDraft: concatenated,
+                  assembledContext: polishAssembled.text,
+                });
+                concatenated = polishResult.content.trim();
+              }
+
+              const storeEval = useProjectStore.getState();
+              const approvedEval = Array.from(storeEval.chapterVersions.values())
+                .flat()
+                .filter((version) => version.approved);
+              const mergedEvalGenerate = (stage: WorkflowStage, data: Record<string, unknown>) =>
+                generateTracked(stage, data);
+              const evaluation = await runMergedChapterSceneEvaluation({
+                generate: mergedEvalGenerate,
+                project: storeEval.currentProject ?? project,
+                documents: storeEval.documents,
+                chapters: storeEval.chapters,
+                approvedChapterVersions: approvedEval,
+                currentChapter: chapter,
+                scenePlan: parsedScenePlan,
+                segments: segmentList,
+                chapterTitle,
+                outlineWordTarget: outline.wordTarget,
+              });
+              if (evaluation.checks.some((c) => c.severity === 'fail' && !c.pass)) {
+                console.warn(
+                  `[FullAuto] Chapter ${outline.chapterNumber} evaluation reported failing checks; proceeding with approval.`,
+                  evaluation.checks.filter((c) => c.severity === 'fail' && !c.pass),
+                );
+              }
+
+              draftPlain = concatenated;
+              segments = segmentList;
+            } else {
+              const chapterResult = await generateTracked('chapters', {
+                genre: project.genre,
+                chapterNumber: outline.chapterNumber,
+                chapterTitle: outline.title,
+                beatReference: outline.beatReference,
+                sceneGoal: outline.sceneGoal,
+                pov: outline.pov,
+                assembledContext: assembledContext.text,
+                charactersReference: charactersDoc?.content || '',
+                endingReference: endingDoc?.content || '',
+                previousChapterSummaries,
+                structureContext: structureDoc?.content || '',
+                genreResearch: genreDoc?.content || '',
+                nicheReference: nicheDoc?.content || '',
+                wordTarget: outline.wordTarget || 3000,
+              });
+              draftPlain = chapterResult.content;
+              segments = undefined;
+            }
+
             const chapterSummaryResult = await generateTracked('chapter-summary', {
               genre: project.genre,
               chapterNumber: chapter.chapterNumber,
               chapterTitle: chapter.title,
-              chapterContent: chapterResult.content,
+              chapterContent: draftPlain,
             });
             const chapterSummary = chapterSummaryResult.content.trim();
             const latestVer = getLatestChapterVersion(chapter.id);
             const newVer = (latestVer?.version || 0) + 1;
-            const versionId = await createChapterVersion({
+            const versionPayload: Omit<ChapterVersion, 'id' | 'createdAt'> = {
               chapterId: chapter.id,
               projectId,
               chapterNumber: chapter.chapterNumber,
               version: newVer,
-              content: chapterResult.content,
-              wordCount: countWords(chapterResult.content),
+              content: draftPlain,
+              wordCount: countWords(draftPlain),
               approved: false,
               notes: chapterSummary,
-            });
+              ...(latestVer?.id ? { parentVersionId: latestVer.id } : {}),
+            };
+            if (segments && segments.length > 0) versionPayload.sceneSegments = segments;
+            const versionId = await createChapterVersion(versionPayload);
             await approveChapterVersion(versionId);
             chapterSummaries.set(chapter.chapterNumber, {
               title: chapter.title,
@@ -867,7 +1081,7 @@ export default function FullAutoPage({
             });
             stepIdx++;
             throwIfControlRequested();
-            if (i === 0) {
+            if (outline.chapterNumber === 1) {
               await runCheckpoint('after-first-chapter', 'Checkpoint: first chapter approved', [
                 'Read Chapter 1 for voice, POV, and tone.',
                 'If the sample is wrong, pause Full Auto and fix before later chapters.',

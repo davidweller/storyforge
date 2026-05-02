@@ -1,9 +1,13 @@
 /**
  * Rough preflight token estimates for expensive runs. Includes per-stage template
  * overhead (system + instructions + JSON wrappers), not body text alone.
+ *
+ * Dashboard “AI tokens” uses `getProjectGenerationUsageTotals`, which merges SQLite with
+ * `.data/generation_usage.fallback.ndjson` when native `generation_usage` inserts fail.
  */
 
 import { getEffectiveModelForStage } from '@/lib/data/models';
+import { CHAPTER_POLISH_FEATURE_ENABLED } from '@/lib/constants';
 import type { WorkflowStage } from '@/types';
 
 /** Typical non-body prompt overhead per generate call (calibrate from `generation_usage` over time). */
@@ -48,6 +52,8 @@ export interface FullAutoPreflightInput {
   manuscriptWordCount?: number;
   /** Whether editorial + revision legs are expected (draft complete). */
   includePostDraft?: boolean;
+  /** Per-chapter scene pipeline instead of one-shot `chapters` stage (matches Full Auto default). */
+  useScenePipelineForChapters?: boolean;
 }
 
 export function estimateFullAutoTokens(input: FullAutoPreflightInput): {
@@ -76,7 +82,19 @@ export function estimateFullAutoTokens(input: FullAutoPreflightInput): {
   add('story-bible');
   add('creative-brief');
 
-  add('chapters', n);
+  if (input.useScenePipelineForChapters && n > 0) {
+    const avgScenes = 4;
+    const avgEvalChunks = 2;
+    assumptions.push(
+      'Per chapter: scene plan, ~4 scene prose calls, polish, ~2 eval chunks (Full Auto scene pipeline).',
+    );
+    add('chapter-scene-plan', n);
+    add('chapter-scenes-prose', n * avgScenes);
+    if (CHAPTER_POLISH_FEATURE_ENABLED) add('chapter-polish', n);
+    add('chapter-scene-eval', n * avgEvalChunks);
+  } else {
+    add('chapters', n);
+  }
   add('chapter-summary', n);
 
   if (input.includePostDraft && n > 0) {

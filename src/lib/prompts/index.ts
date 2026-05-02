@@ -19,6 +19,7 @@ export {
   EDITORIAL_SYSTEM,
   REVISION_VERIFY_SYSTEM,
   buildEditorialPrompt,
+  buildEditorialIssuesQueuePrompt,
   buildRevisionQueuePrompt,
   buildRevisionVerificationPrompt,
 } from './editorial';

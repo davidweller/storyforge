@@ -13,6 +13,7 @@ import type {
 } from '@/types';
 import { parseCreativeBrief, parseChapterOutlines, parseStoryBible } from '@/lib/generation/schemas';
 import { estimateTokens } from '@/lib/utils';
+import { contextBlock } from '@/lib/prompts/utils';
 
 const SOURCE_DOCUMENT_TYPES: DocumentType[] = [
   'genre',
@@ -68,6 +69,43 @@ export function buildStoryBibleSourceRefs(documents: ProjectDocument[]): StoryBi
       version: document.version,
       updatedAt: document.updatedAt.toISOString(),
     }));
+}
+
+/** Story Bible is generated only after outlines exist—approved and parseable into ≥1 chapter. */
+export type ValidatedChapterOutlinesGate =
+  | { ok: true; document: ProjectDocument; chapterCount: number }
+  | { ok: false; reason: string };
+
+export function getValidatedApprovedChapterOutlines(
+  documents: ProjectDocument[],
+): ValidatedChapterOutlinesGate {
+  const doc = documents
+    .filter((d) => d.type === 'chapter-outlines' && d.approved)
+    .sort((a, b) => b.version - a.version || b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+
+  if (!doc) {
+    return {
+      ok: false,
+      reason: 'Approve the Chapter Outlines document before generating a Story Bible.',
+    };
+  }
+  if (!doc.content?.trim()) {
+    return {
+      ok: false,
+      reason: 'Chapter Outlines are empty. Generate and approve outlines first.',
+    };
+  }
+
+  const chapters = parseChapterOutlines(doc.content);
+  if (chapters.length < 1) {
+    return {
+      ok: false,
+      reason:
+        'Chapter Outlines must include at least one chapter the app can parse. Fix the outline format on the Chapter Outlines stage and approve again.',
+    };
+  }
+
+  return { ok: true, document: doc, chapterCount: chapters.length };
 }
 
 function parseStoryBibleDocument(document: ProjectDocument | undefined): StoryBibleDocument | null {
@@ -306,9 +344,33 @@ export function assembleContext(input: AssembleContextInput): AssembledContext {
   addSection(sections, warnings, budget, 'future_constraints', 'Future Constraints', bibleSections.futureConstraints);
 
   if (!storyBible) {
-    addSection(sections, warnings, budget, 'legacy_characters', 'Legacy Characters', latestApprovedDocument(input.documents, 'characters')?.content ?? '');
-    addSection(sections, warnings, budget, 'legacy_structure', 'Legacy Structure', latestApprovedDocument(input.documents, 'structure')?.content ?? '');
-    addSection(sections, warnings, budget, 'legacy_ending', 'Legacy Ending', latestApprovedDocument(input.documents, 'ending')?.content ?? '');
+    const charCap = budget.sections?.legacy_characters ?? budget.maxSectionTokens;
+    const structCap = budget.sections?.legacy_structure ?? budget.maxSectionTokens;
+    const endCap = budget.sections?.legacy_ending ?? budget.maxSectionTokens;
+    addSection(
+      sections,
+      warnings,
+      budget,
+      'legacy_characters',
+      'Legacy Characters',
+      contextBlock('characters_reference', latestApprovedDocument(input.documents, 'characters')?.content, charCap),
+    );
+    addSection(
+      sections,
+      warnings,
+      budget,
+      'legacy_structure',
+      'Legacy Structure',
+      contextBlock('structure_reference', latestApprovedDocument(input.documents, 'structure')?.content, structCap),
+    );
+    addSection(
+      sections,
+      warnings,
+      budget,
+      'legacy_ending',
+      'Legacy Ending',
+      contextBlock('ending_reference', latestApprovedDocument(input.documents, 'ending')?.content, endCap),
+    );
   }
 
   const renderedSections = sections

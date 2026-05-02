@@ -51,6 +51,7 @@ const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
   'compilation': 2048,
   'export-draft': 2048,
   'editorial': 16384,
+  'editorial-issues': 16384,
   'revision': 16384,
   'revision-verify': 4096,
   'export-final': 2048,

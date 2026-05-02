@@ -13,6 +13,7 @@ export type WorkflowStage =
   | 'compilation'     // Stage 9
   | 'export-draft'    // Stage 10
   | 'editorial'       // Stage 11
+  | 'editorial-issues' // Structured editorial: emits revision-queue JSON from manuscript directly
   | 'revision'        // Stage 12
   | 'export-final'    // Stage 13
   | 'chapter-summary' // Internal helper stage for chapter context summaries
@@ -291,6 +292,8 @@ export interface GenerationResponse {
   content: string;
   model: string;
   tokensUsed: number;
+  /** Non-blocking validations (e.g. output cardinality vs prompt). */
+  warnings?: string[];
 }
 
 /** Extended response returned by POST /api/generate — includes provider and

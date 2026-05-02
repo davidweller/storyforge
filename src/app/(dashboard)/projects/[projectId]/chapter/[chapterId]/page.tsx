@@ -58,6 +58,12 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const baselineContentRef = useRef('');
+  /** Body used for time-based draft checkpoints (new chapter_versions row). */
+  const lastCheckpointBodyRef = useRef('');
+  const contentLiveRef = useRef('');
+  const draftSaveStateRef = useRef(draftSaveState);
+  const currentVersionIdRef = useRef<string | null>(null);
+  const snapshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Find the current chapter
   const chapter = chapters.find((c) => c.id === chapterId);
@@ -132,6 +138,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
           setCurrentVersionId(versionToUse.id);
           setSceneSegments(versionToUse.sceneSegments ?? []);
           setEvaluation(null);
+          lastCheckpointBodyRef.current = nextContent.trim();
         }, 0);
         return () => clearTimeout(timeoutId);
       }
@@ -149,6 +156,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         setCurrentVersionId(null);
         setSceneSegments([]);
         setEvaluation(null);
+        lastCheckpointBodyRef.current = '';
       }, 0);
       return () => clearTimeout(timeoutId);
     }
@@ -170,6 +178,80 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [draftSaveState]);
+
+  contentLiveRef.current = content;
+  draftSaveStateRef.current = draftSaveState;
+  currentVersionIdRef.current = currentVersionId;
+
+  const scenePipelineBusyRef = useRef(false);
+  scenePipelineBusyRef.current = !!scenePipelineStep;
+  const sceneSegmentsRef = useRef(sceneSegments);
+  sceneSegmentsRef.current = sceneSegments;
+
+  /** Periodic draft checkpoints: new chapter_versions row so history survives bad merges (in addition to debounced in-place updates). */
+  useEffect(() => {
+    if (snapshotIntervalRef.current) {
+      clearInterval(snapshotIntervalRef.current);
+      snapshotIntervalRef.current = null;
+    }
+    if (!chapterId || !chapter) return;
+
+    snapshotIntervalRef.current = setInterval(() => {
+      if (getApprovedChapterVersion(chapterId)) return;
+      if (draftSaveStateRef.current !== 'saved') return;
+      if (scenePipelineBusyRef.current || isGenerating) return;
+
+      const body = contentLiveRef.current.trim();
+      if (!body || body === lastCheckpointBodyRef.current) return;
+
+      const vid = currentVersionIdRef.current;
+      if (!vid) return;
+
+      const latest = getLatestChapterVersion(chapterId);
+      if (!latest || latest.id !== vid) return;
+
+      void (async () => {
+        try {
+          const seg = sceneSegmentsRef.current;
+          const nextVer = latest.version + 1;
+          const plain = contentLiveRef.current;
+          const newId = await createChapterVersion({
+            chapterId,
+            projectId,
+            chapterNumber: chapter.chapterNumber,
+            version: nextVer,
+            content: plain,
+            wordCount: countWords(plain),
+            approved: false,
+            parentVersionId: latest.id,
+            notes: latest.notes ?? undefined,
+            sceneSegments: seg.length > 0 ? seg : undefined,
+          });
+          lastCheckpointBodyRef.current = body;
+          baselineContentRef.current = plain;
+          setCurrentVersionId(newId);
+          setLastSavedAt(new Date());
+        } catch {
+          /* leave interval running */
+        }
+      })();
+    }, 120_000);
+
+    return () => {
+      if (snapshotIntervalRef.current) {
+        clearInterval(snapshotIntervalRef.current);
+        snapshotIntervalRef.current = null;
+      }
+    };
+  }, [
+    chapter,
+    chapterId,
+    projectId,
+    createChapterVersion,
+    getApprovedChapterVersion,
+    getLatestChapterVersion,
+    isGenerating,
+  ]);
   
   if (projectLoading || !project || !chapter) {
     return (
@@ -699,9 +781,11 @@ export default function ChapterPage({ params }: ChapterPageProps) {
                   }}
                 >
                   {draftSaveState === 'saving' && 'Saving draft…'}
-                  {draftSaveState === 'dirty' && 'Unsaved changes (autosave in ~1.5s)'}
+                  {draftSaveState === 'dirty' && 'Unsaved changes (autosave in ~1.5s — updates the open draft)'}
                   {draftSaveState === 'saved' &&
-                    (lastSavedAt ? `Draft saved at ${lastSavedAt.toLocaleTimeString()}` : 'Draft in sync')}
+                    (lastSavedAt
+                      ? `Draft saved at ${lastSavedAt.toLocaleTimeString()} · checkpoints every ~2 min while editing`
+                      : 'Draft in sync · checkpoints every ~2 min while editing')}
                 </p>
               )}
             </div>

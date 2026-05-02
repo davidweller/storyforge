@@ -13,11 +13,11 @@ export const TARGET_MANUSCRIPT_WORDS = 80_000;
 /** Phase 4: when false, chapter-polish stage is hidden/disabled regardless of per-run toggles. */
 export const CHAPTER_POLISH_FEATURE_ENABLED = true;
 
-/** Phase 4: Full Auto scene pipeline ships off by default (see Phase 4 plan §8). */
-export const FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT = false;
+/** When true, Full Auto uses the same scene plan → scene prose → polish → eval path as manual Write Chapters. */
+export const FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT = true;
 
 /** Phase 4 model rubric: combined input budget (scene plan + chapter + canon text). */
 export const CHAPTER_SCENE_EVAL_INPUT_TOKEN_BUDGET = 6_000;
 
-/** Phase 4 model rubric: max output tokens for evaluation JSON. */
-export const CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET = 800;
+/** Phase 4 model rubric: max output tokens for evaluation JSON (must fit full rubric + repair pass). */
+export const CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET = 8192;

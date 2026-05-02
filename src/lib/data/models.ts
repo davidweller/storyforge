@@ -173,6 +173,7 @@ export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
   'compilation': 'openrouter',
   'export-draft': 'openrouter',
   'editorial': 'openrouter',
+  'editorial-issues': 'openrouter',
   'revision': 'openrouter',
   'revision-verify': 'openrouter',
   'export-final': 'openrouter',
