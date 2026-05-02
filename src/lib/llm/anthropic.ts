@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getModelById } from '@/lib/data/models';
+import { logAnthropicPromptCacheUsage } from '@/lib/llm/anthropicCache';
 
 let anthropicClient: Anthropic | null = null;
 
@@ -29,6 +30,8 @@ export interface AnthropicGenerateOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  /** When set, used as Messages API `system` (e.g. prompt-caching text blocks). Otherwise `systemPrompt` is used. */
+  anthropicSystem?: Anthropic.Messages.MessageCreateParams['system'];
   /** Anthropic does not support a native JSON mode equivalent to OpenAI's
    *  `response_format: { type: 'json_object' }`. When this is true, the caller
    *  must enforce structure via prompt text (e.g. "Output only valid JSON.").
@@ -70,11 +73,15 @@ export async function generateWithClaude(
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
+    anthropicSystem,
     jsonMode,
   } = options;
 
   const { apiModel, thinkingBudget, displayName } = resolveAnthropicModel(registryModelId);
   const useThinking = thinkingBudget != null && thinkingBudget >= 1024;
+
+  const system: Anthropic.Messages.MessageCreateParams['system'] =
+    anthropicSystem ?? systemPrompt ?? '';
 
   if (jsonMode) {
     console.warn(
@@ -93,6 +100,7 @@ export async function generateWithClaude(
     registryId: registryModelId,
     promptLength: prompt.length,
     systemPromptLength: systemPrompt?.length || 0,
+    systemMode: anthropicSystem ? 'structured' : 'string',
     maxTokens,
     temperature: useThinking ? 'N/A (extended thinking)' : temperature,
     extendedThinking: useThinking,
@@ -109,7 +117,7 @@ export async function generateWithClaude(
             thinking: { type: 'enabled', budget_tokens: thinkingBudget },
           }
         : { temperature }),
-      system: systemPrompt,
+      system,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -125,6 +133,7 @@ export async function generateWithClaude(
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
     });
+    logAnthropicPromptCacheUsage('generateWithClaude', response.usage);
 
     if (!response.content || response.content.length === 0) {
       throw new Error('Anthropic API returned empty content');
@@ -173,10 +182,14 @@ export async function* streamWithClaude(
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
+    anthropicSystem,
   } = options;
 
   const { apiModel, thinkingBudget } = resolveAnthropicModel(registryModelId);
   const useThinking = thinkingBudget != null && thinkingBudget >= 1024;
+
+  const system: Anthropic.Messages.MessageCreateParams['system'] =
+    anthropicSystem ?? systemPrompt ?? '';
 
   const stream = getAnthropic().messages.stream({
     model: apiModel,
@@ -186,7 +199,7 @@ export async function* streamWithClaude(
           thinking: { type: 'enabled', budget_tokens: thinkingBudget },
         }
       : { temperature }),
-    system: systemPrompt,
+    system,
     messages: [{ role: 'user', content: prompt }],
   });
 
@@ -203,6 +216,7 @@ export async function* streamWithClaude(
 
   const finalMessage = await stream.finalMessage();
   tokensUsed = finalMessage.usage.input_tokens + finalMessage.usage.output_tokens;
+  logAnthropicPromptCacheUsage('streamWithClaude', finalMessage.usage);
 
   return { tokensUsed };
 }

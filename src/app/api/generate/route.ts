@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateForStage } from '@/lib/llm';
+import { resolveAnthropicCachedPrompt } from '@/lib/llm/anthropicPromptFromStage';
 import {
   getModelById,
   getDefaultModelForStage,
@@ -783,6 +784,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
     }
     
+    const modelIdForRequest = model ?? getDefaultModelForStage(stage).id;
+
+    const cachedPrompt = resolveAnthropicCachedPrompt(
+      stage,
+      modelIdForRequest,
+      data,
+      systemPrompt,
+      prompt,
+    );
+    if (cachedPrompt.anthropicSystem) {
+      prompt = cachedPrompt.prompt;
+      console.log('[API] Anthropic prompt caching: using cached system blocks', { stage });
+    }
+
     // Get model info for logging
     const modelInfo = model ? getModelById(model) : null;
     const modelDisplayName = modelInfo?.name || model || 'default';
@@ -801,6 +816,7 @@ export async function POST(request: NextRequest) {
 
     const result = await generateForStage(stage, prompt, {
       systemPrompt,
+      anthropicSystem: cachedPrompt.anthropicSystem,
       temperature: data.temperature as number | undefined,
       model, // Pass model override if provided (may have been switched for editorial)
       jsonMode: useJsonMode,
@@ -822,6 +838,7 @@ export async function POST(request: NextRequest) {
           temperature: 0,
           model,
           jsonMode: true,
+          anthropicSystem: undefined,
           ...(sceneEvalMaxTokens ? { maxTokens: sceneEvalMaxTokens } : {}),
         });
         result.content = normalizeStructuredOutput(structuredOutputKind, repairResult.content);

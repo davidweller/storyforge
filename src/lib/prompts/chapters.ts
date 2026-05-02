@@ -11,6 +11,14 @@ Write prose that transports readers and makes them feel deeply.`;
 
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
 import type { EditorialPass } from '@/types';
+import {
+  type PromptParts,
+  normalizeCanonRaw,
+  formatChapterDraftCanonBlock,
+  mergeChapterDraftCanonIntoUserPrompt,
+  formatRevisionPrimaryCanonBlock,
+  mergeRevisionPrimaryCanonIntoUserPrompt,
+} from '@/lib/prompts/canonBlock';
 
 export const CHAPTER_OUTLINES_SYSTEM = `You are a story architect who specializes in converting plot blueprints into detailed chapter outlines. You understand how to break down Save the Cat beats into specific, actionable chapter plans that guide the writing process.
 
@@ -133,15 +141,17 @@ Generate the complete chapter outlines now.`;
   return prompt;
 }
 
-export function buildChapterSummaryPrompt(params: {
+export function buildChapterSummaryPromptParts(params: {
   genre: string;
   chapterNumber: number;
   chapterTitle: string;
   chapterContent: string;
-}): string {
+}): PromptParts {
   const { genre, chapterNumber, chapterTitle, chapterContent } = params;
 
-  return `Summarize Chapter ${chapterNumber}: "${chapterTitle}" from this ${genre} novel.
+  return {
+    canon: '',
+    userPrompt: `Summarize Chapter ${chapterNumber}: "${chapterTitle}" from this ${genre} novel.
 
 ## Chapter Content
 ${chapterContent}
@@ -168,10 +178,20 @@ Output only valid JSON in this exact shape:
 {
   "summary": "The continuity summary text."
 }
-\`\`\``;
+\`\`\``,
+  };
 }
 
-export function buildChapterPrompt(params: {
+export function buildChapterSummaryPrompt(params: {
+  genre: string;
+  chapterNumber: number;
+  chapterTitle: string;
+  chapterContent: string;
+}): string {
+  return buildChapterSummaryPromptParts(params).userPrompt;
+}
+
+export function buildChapterPromptParts(params: {
   genre: string;
   chapterNumber: number;
   chapterTitle: string;
@@ -186,7 +206,7 @@ export function buildChapterPrompt(params: {
   genreResearch?: string;
   nicheReference?: string;
   wordTarget?: number;
-}): string {
+}): PromptParts {
   const {
     genre,
     chapterNumber,
@@ -203,18 +223,13 @@ export function buildChapterPrompt(params: {
     nicheReference,
     wordTarget = 3000,
   } = params;
-  
-  let prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for this ${genre} novel.
+
+  const canon = normalizeCanonRaw(assembledContext);
+
+  let userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for this ${genre} novel.
 
 ## Story Context
 
-${assembledContext ? `## Canon Context
-
-Use this bounded canon context as the primary source of truth. Treat hard constraints as binding, preserve unresolved threads unless the chapter goal advances them, and prefer the chapter-specific goal when generic guidance conflicts.
-
-${assembledContext}
-
-` : ''}
 **Story Structure Position:**
 ${structureContext}
 
@@ -228,7 +243,7 @@ ${pov ? `**POV Character:** ${pov}` : ''}
 
 **Target Word Count:** ~${wordTarget} words
 
-${assembledContext ? '## Legacy Reference Materials (fallback only)\n\nUse these only when the canon context above is missing a needed detail.\n' : '## Reference Materials'}
+${canon ? '## Legacy Reference Materials (fallback only)\n\nUse these only when the canon context above is missing a needed detail.\n' : '## Reference Materials'}
 
 ${genreResearch ? `**Genre Research & Market Context:**
 ${genreResearch}
@@ -248,13 +263,13 @@ ${endingReference}
       .sort((a, b) => b.chapterNumber - a.chapterNumber)
       .map((entry) => `- Chapter ${entry.chapterNumber}: "${entry.title}"\n${entry.summary}`)
       .join('\n\n');
-    prompt += `
+    userPrompt += `
 ## Story So Far (Continuity Summaries)
 ${continuityContext}
 `;
   }
 
-  prompt += `
+  userPrompt += `
 ## Writing Instructions
 
 1. **Opening Hook**: Start with an engaging opening that draws readers in immediately.
@@ -292,7 +307,30 @@ ${continuityContext}
 
 Write the complete chapter now. Focus on immersive, engaging prose that serves both story and character.`;
 
-  return prompt;
+  return { userPrompt, canon };
+}
+
+export function buildChapterPrompt(params: {
+  genre: string;
+  chapterNumber: number;
+  chapterTitle: string;
+  beatReference: string;
+  sceneGoal: string;
+  pov?: string;
+  assembledContext?: string;
+  charactersReference: string;
+  endingReference: string;
+  previousChapterSummaries?: Array<{ chapterNumber: number; title: string; summary: string }>;
+  structureContext: string;
+  genreResearch?: string;
+  nicheReference?: string;
+  wordTarget?: number;
+}): string {
+  const parts = buildChapterPromptParts(params);
+  return mergeChapterDraftCanonIntoUserPrompt(
+    parts.userPrompt,
+    parts.canon ? formatChapterDraftCanonBlock(parts.canon) : '',
+  );
 }
 
 const REVISION_PASS_NOTE: Record<EditorialPass, string> = {
@@ -308,7 +346,7 @@ const REVISION_PASS_NOTE: Record<EditorialPass, string> = {
     '**Editing mode: final report.** This task is informational only — if you are asked to revise, apply only what the instructions explicitly require; otherwise preserve the chapter.',
 };
 
-export function buildChapterRevisionPrompt(params: {
+export function buildChapterRevisionPromptParts(params: {
   originalChapter: string;
   revisionInstructions: string;
   acceptanceCriteria: string[];
@@ -322,7 +360,7 @@ export function buildChapterRevisionPrompt(params: {
   editorialPass?: EditorialPass;
   /** When set, `originalChapter` is one scene only; model returns revised scene prose only. */
   sceneScoped?: { sceneId: string };
-}): string {
+}): PromptParts {
   const {
     originalChapter,
     revisionInstructions,
@@ -337,6 +375,8 @@ export function buildChapterRevisionPrompt(params: {
     editorialPass = 'structural',
     sceneScoped,
   } = params;
+
+  const canon = normalizeCanonRaw(assembledContext);
 
   const passNote = REVISION_PASS_NOTE[editorialPass];
 
@@ -380,7 +420,7 @@ Write the complete revised chapter now. Ensure it addresses all revision instruc
 
 7. **Complete Chapter**: Output the complete revised chapter, not just the changed sections.`;
   
-  return `Revise ${sceneScoped ? 'the following scene excerpt' : 'the following chapter'} according to the revision instructions provided below.
+  const userPrompt = `Revise ${sceneScoped ? 'the following scene excerpt' : 'the following chapter'} according to the revision instructions provided below.
 
 ${passNote}
 
@@ -404,19 +444,16 @@ ${acceptanceCriteria.length > 0
 
 These reference documents define the established canon. Ensure your revisions align with these:
 
-${assembledContext ? `**Bounded Canon Context (primary):**
-${assembledContext}
-
-` : ''}${charactersReference ? `**Character Profiles${assembledContext ? ' (fallback only)' : ''}:**
+${charactersReference ? `**Character Profiles${canon ? ' (fallback only)' : ''}:**
 ${charactersReference}
 
-` : ''}${endingReference ? `**Ending Constraints${assembledContext ? ' (fallback only)' : ''}:**
+` : ''}${endingReference ? `**Ending Constraints${canon ? ' (fallback only)' : ''}:**
 ${endingReference}
 
-` : ''}${structureReference ? `**Story Structure${assembledContext ? ' (fallback only)' : ''}:**
+` : ''}${structureReference ? `**Story Structure${canon ? ' (fallback only)' : ''}:**
 ${structureReference}
 
-` : ''}${nicheReference ? `**Target Audience & Positioning${assembledContext ? ' (fallback only)' : ''}:**
+` : ''}${nicheReference ? `**Target Audience & Positioning${canon ? ' (fallback only)' : ''}:**
 ${nicheReference}
 
 ` : ''}${previousChapterContext || nextChapterContext ? `## Continuity Reference (Adjacent Chapters)
@@ -424,4 +461,27 @@ ${nicheReference}
 ${previousChapterContext ? `**Previous Chapter Snapshot:**\n${previousChapterContext}\n\n` : ''}${nextChapterContext ? `**Next Chapter Snapshot:**\n${nextChapterContext}\n\n` : ''}` : ''}${revisionGuidelines}
 
 ${outputSection}`;
+
+  return { userPrompt, canon };
+}
+
+export function buildChapterRevisionPrompt(params: {
+  originalChapter: string;
+  revisionInstructions: string;
+  acceptanceCriteria: string[];
+  assembledContext?: string;
+  charactersReference: string;
+  endingReference: string;
+  structureReference?: string;
+  nicheReference?: string;
+  previousChapterContext?: string;
+  nextChapterContext?: string;
+  editorialPass?: EditorialPass;
+  sceneScoped?: { sceneId: string };
+}): string {
+  const parts = buildChapterRevisionPromptParts(params);
+  return mergeRevisionPrimaryCanonIntoUserPrompt(
+    parts.userPrompt,
+    parts.canon ? formatRevisionPrimaryCanonBlock(parts.canon) : '',
+  );
 }

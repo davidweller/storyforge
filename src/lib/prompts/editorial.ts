@@ -1,4 +1,5 @@
 import type { EditorialPass } from '@/types';
+import { formatEditorialReferenceAppendix, type PromptParts } from '@/lib/prompts/canonBlock';
 
 /** Default Chicago; override with COPY_EDIT_STYLE_GUIDE in env. */
 export function getCopyEditStyleGuide(): string {
@@ -32,7 +33,23 @@ You are a professional proofreader performing a final quality check on a manuscr
 You are acting as a senior fiction editor. This pass is an advisory report only — deliver analysis and recommendations, not rewritten prose unless explicitly asked.`,
 };
 
-export function buildEditorialPrompt(params: {
+function editorialRequirementsForPass(editorialPass: EditorialPass): string {
+  if (editorialPass === 'structural') {
+    return structuralRequirementsBlock();
+  }
+  if (editorialPass === 'line') {
+    return lineRequirementsBlock();
+  }
+  if (editorialPass === 'copy') {
+    return copyRequirementsBlock();
+  }
+  if (editorialPass === 'proofread') {
+    return proofreadRequirementsBlock();
+  }
+  return finalReportRequirementsBlock();
+}
+
+export function buildEditorialPromptParts(params: {
   manuscript: string;
   genre: string;
   assembledContext?: string;
@@ -41,12 +58,10 @@ export function buildEditorialPrompt(params: {
   endingReference?: string;
   structureReference?: string;
   editorialPass?: EditorialPass;
-  /** Built from niche / microniche / positioning; shown before the manuscript. */
   intendedAudience?: string;
-  /** Premise, research, or other author-supplied concerns. */
   premise?: string;
   research?: string;
-}): string {
+}): PromptParts {
   const {
     manuscript,
     genre,
@@ -73,25 +88,20 @@ export function buildEditorialPrompt(params: {
       ? concernsParts.join('\n\n')
       : 'No additional concerns supplied.';
 
-  console.log('[Editorial Prompt] Building prompt:', {
-    manuscriptLength: manuscript.length,
-    genre,
-    editorialPass,
-    hasNiche: !!nicheReference,
-    hasCharacters: !!charactersReference,
-    hasEnding: !!endingReference,
-    hasStructure: !!structureReference,
-    hasAssembledContext: !!assembledContext,
-    hasAudience: !!intendedAudience?.trim(),
-    hasPremise: !!premise?.trim(),
-    hasResearch: !!research?.trim(),
-  });
-
   const audienceLine =
     intendedAudience?.trim() ||
     'Not specified in project metadata; infer intended audience from the niche / reference documents below when present.';
 
-  let prompt = `## Context for this review
+  const canon = formatEditorialReferenceAppendix({
+    variant: 'report',
+    assembledContext,
+    nicheReference,
+    charactersReference,
+    endingReference,
+    structureReference,
+  }).trim();
+
+  const userPrompt = `## Context for this review
 
 **Genre:** ${genre}
 
@@ -116,62 +126,32 @@ The manuscript text appears below (after this section). You MUST:
 
 ${manuscript}
 
-## Reference documents (canon)
+${editorialRequirementsForPass(editorialPass)}`;
 
-Use these for consistency checks alongside the manuscript:
-`;
+  return { userPrompt, canon: canon.length > 0 ? canon : '' };
+}
 
-  if (assembledContext) {
-    prompt += `
-## Canon Context
-
-Use this bounded canon context as the primary source of truth for continuity, style, character promises, hard constraints, and intended payoffs. Treat hard constraints as binding when evaluating the manuscript.
-
-${assembledContext}
-`;
-  }
-
-  if (nicheReference) {
-    prompt += `
-**Target audience & positioning${assembledContext ? ' (fallback only)' : ''}:**
-${nicheReference}
-`;
-  }
-
-  if (charactersReference) {
-    prompt += `
-**Character profiles${assembledContext ? ' (fallback only)' : ''}:**
-${charactersReference}
-`;
-  }
-
-  if (endingReference) {
-    prompt += `
-**Intended ending${assembledContext ? ' (fallback only)' : ''}:**
-${endingReference}
-`;
-  }
-
-  if (structureReference) {
-    prompt += `
-**Story structure${assembledContext ? ' (fallback only)' : ''}:**
-${structureReference}
-`;
-  }
-
-  if (editorialPass === 'structural') {
-    prompt += structuralRequirementsBlock();
-  } else if (editorialPass === 'line') {
-    prompt += lineRequirementsBlock();
-  } else if (editorialPass === 'copy') {
-    prompt += copyRequirementsBlock();
-  } else if (editorialPass === 'proofread') {
-    prompt += proofreadRequirementsBlock();
-  } else {
-    prompt += finalReportRequirementsBlock();
-  }
-
-  return prompt;
+export function buildEditorialPrompt(params: {
+  manuscript: string;
+  genre: string;
+  assembledContext?: string;
+  nicheReference?: string;
+  charactersReference?: string;
+  endingReference?: string;
+  structureReference?: string;
+  editorialPass?: EditorialPass;
+  intendedAudience?: string;
+  premise?: string;
+  research?: string;
+}): string {
+  const parts = buildEditorialPromptParts(params);
+  if (!parts.canon) return parts.userPrompt;
+  const { manuscript } = params;
+  const splitNeedle = `## Manuscript Content\n\n${manuscript}\n\n`;
+  const idx = parts.userPrompt.indexOf(splitNeedle);
+  if (idx === -1) return parts.userPrompt;
+  const j = idx + splitNeedle.length;
+  return `${parts.userPrompt.slice(0, j)}${parts.canon}\n\n${parts.userPrompt.slice(j)}`;
 }
 
 function structuralRequirementsBlock(): string {
@@ -346,7 +326,7 @@ const REVISION_QUEUE_JSON_SHAPE = `\
 }`;
 
 /** Structured editorial: manuscript + canon in, revision-queue JSON out (single LLM hop). */
-export function buildEditorialIssuesQueuePrompt(params: {
+export function buildEditorialIssuesQueuePromptParts(params: {
   manuscript: string;
   genre: string;
   chapterCount: number;
@@ -359,7 +339,7 @@ export function buildEditorialIssuesQueuePrompt(params: {
   intendedAudience?: string;
   premise?: string;
   research?: string;
-}): string {
+}): PromptParts {
   const {
     manuscript,
     genre,
@@ -391,7 +371,16 @@ export function buildEditorialIssuesQueuePrompt(params: {
     intendedAudience?.trim() ||
     'Not specified in project metadata; infer intended audience from niche / reference documents when present.';
 
-  let body = `## Context
+  const canon = formatEditorialReferenceAppendix({
+    variant: 'issues',
+    assembledContext,
+    nicheReference,
+    charactersReference,
+    endingReference,
+    structureReference,
+  }).trimEnd();
+
+  const head = `## Context
 
 **Genre:** ${genre}
 
@@ -409,27 +398,9 @@ ${authorConcernsBlock}
 
 Analyze the manuscript after the canon blocks. Each issue MUST include manuscriptQuote copied verbatim from the manuscript (empty string \"\" only if impossible).
 
-## Canon / references
-
 `;
 
-  if (assembledContext?.trim()) {
-    body += `### Assembled canon context\n${assembledContext}\n\n`;
-  }
-  if (nicheReference?.trim()) {
-    body += `### Niche / audience${assembledContext ? ' (fallback)' : ''}\n${nicheReference}\n\n`;
-  }
-  if (charactersReference?.trim()) {
-    body += `### Characters${assembledContext ? ' (fallback)' : ''}\n${charactersReference}\n\n`;
-  }
-  if (endingReference?.trim()) {
-    body += `### Ending direction${assembledContext ? ' (fallback)' : ''}\n${endingReference.slice(0, 3200)}\n\n`;
-  }
-  if (structureReference?.trim()) {
-    body += `### Structure${assembledContext ? ' (fallback)' : ''}\n${structureReference.slice(0, 2000)}\n\n`;
-  }
-
-  body += `## Manuscript
+  const tail = `## Manuscript
 
 ${manuscript}
 
@@ -447,7 +418,30 @@ Rules:
 
 Output only valid JSON.`;
 
-  return body;
+  return { userPrompt: head + tail, canon };
+}
+
+export function buildEditorialIssuesQueuePrompt(params: {
+  manuscript: string;
+  genre: string;
+  chapterCount: number;
+  editorialPass: EditorialPass;
+  assembledContext?: string;
+  nicheReference?: string;
+  charactersReference?: string;
+  endingReference?: string;
+  structureReference?: string;
+  intendedAudience?: string;
+  premise?: string;
+  research?: string;
+}): string {
+  const parts = buildEditorialIssuesQueuePromptParts(params);
+  const { manuscript } = params;
+  const splitNeedle = `## Manuscript\n\n${manuscript}\n\n`;
+  const idx = parts.userPrompt.indexOf(splitNeedle);
+  if (idx === -1) return parts.userPrompt;
+  const headOnly = parts.userPrompt.slice(0, idx);
+  return `${headOnly}${parts.canon}\n\n${parts.userPrompt.slice(idx)}`;
 }
 
 export function buildRevisionQueuePrompt(params: {

@@ -1,3 +1,4 @@
+import type Anthropic from '@anthropic-ai/sdk';
 import { generateWithOpenAI, streamWithOpenAI } from './openai';
 import { generateWithClaude, streamWithClaude } from './anthropic';
 import { generateWithOpenRouter, streamWithOpenRouter } from './openrouter';
@@ -18,6 +19,8 @@ export interface GenerateOptions {
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  /** Native Anthropic Messages API `system` when using prompt caching blocks. */
+  anthropicSystem?: Anthropic.Messages.MessageCreateParams['system'];
   jsonMode?: boolean; // Only for OpenAI
   model?: string; // Model override
 }
