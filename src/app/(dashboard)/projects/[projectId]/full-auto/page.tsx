@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useRef, useCallback, memo } from 'react';
+import { use, useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
@@ -26,6 +26,7 @@ import {
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import { htmlToEditorialText } from '@/lib/utils/markdown';
 import { estimateFullAutoTokens, formatTokenRange } from '@/lib/cost/preflight';
+import { AnthropicDraftLegCostHint } from '@/components/cost/AnthropicDraftLegCostHint';
 import {
   clearFullAutoCheckpointPending,
   clearFullAutoRunMarkers,
@@ -180,6 +181,17 @@ export default function FullAutoPage({
   const controlActionRef = useRef<AutoControlAction>('none');
   const lastStepUpdate = useRef(0);
   const stepThrottleMs = 600;
+
+  const fullAutoCostChapterCount = useMemo(() => {
+    const od = getLatestDocumentByType('chapter-outlines');
+    if (!od?.content) return 1;
+    try {
+      const parsed = parseChapterOutlines(String(od.content));
+      return Math.max(1, capOutlineWordTargets(parsed, TARGET_MANUSCRIPT_WORDS).length);
+    } catch {
+      return 8;
+    }
+  }, [getLatestDocumentByType]);
 
   const setStep = useCallback(
     (label: string, stepIdx: number, total: number, minsThis: number, minsTotal: number) => {
@@ -1714,10 +1726,18 @@ export default function FullAutoPage({
                 Full Auto Mode
               </h2>
               {preflightHint && (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--muted-foreground)', marginBottom: '0.75rem' }}>
-                  Preflight estimate (order-of-magnitude, includes prompt overhead):{' '}
-                  <strong style={{ color: 'var(--foreground)' }}>{preflightHint}</strong>
-                </p>
+                <>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--muted-foreground)', marginBottom: '0.75rem' }}>
+                    Preflight estimate (order-of-magnitude, includes prompt overhead):{' '}
+                    <strong style={{ color: 'var(--foreground)' }}>{preflightHint}</strong>
+                  </p>
+                  <AnthropicDraftLegCostHint
+                    chapterCount={fullAutoCostChapterCount}
+                    useScenePipeline={FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT}
+                    polishEnabled={CHAPTER_POLISH_FEATURE_ENABLED}
+                    className="!mt-0 mb-3 text-left max-w-[420px] mx-auto [&_strong]:text-[var(--foreground)]"
+                  />
+                </>
               )}
               <p style={{ fontSize: '0.9375rem', color: 'var(--muted-foreground)', marginBottom: '1rem' }}>
                 {currentStepLabel}

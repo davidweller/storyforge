@@ -159,6 +159,24 @@ The `assembledContext` / story bible block is reused across every chapter genera
 
 `chapter-summary` and `title` calls are the highest-frequency low-stakes tasks in the pipeline. Running 25 chapter summaries on Haiku 4.5 instead of Sonnet 4.6 costs roughly $0.05 total vs $0.15 - negligible in absolute terms but a clean win with no quality trade-off.
 
+### Auto mode preflight ↔ USD (Write chapters UI)
+
+The **Write chapters → Auto mode** line that shows something like **~11.9–17.5M tokens** comes from `estimateFullAutoTokens` in `src/lib/cost/preflight.ts`. For each planned API call it sums **stage template overhead** (system prompts, instructions, JSON scaffolding) and the stage model’s **max output budget** (`maxTokens`). That total is useful as an order-of-magnitude capacity hint; it is **not** the same as billed usage, because real prompts grow with your manuscript and replies rarely sit at the output ceiling.
+
+On the chapters stage, that preflight assumes **scene pipeline + polish** when `FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT` is true (the app default). It does **not** add editorial or revision—those are estimated separately when Full Auto includes post-draft legs.
+
+**Rough Anthropic API cost for the same drafting-focused slice** (25 chapters, recommended Sonnet / Opus / Haiku mix from this doc, assembled-context caching as in the scenario assumptions below):
+
+| Preflight shape | Order-of-magnitude cost |
+|---|---|
+| Scene pipeline **with** polish (matches default preflight) | **~$15** (planning + scene pipeline with polish + summaries + marketing—sums the planning, scene-pipeline, summary, and marketing rows in the breakdown below) |
+| Scene pipeline **without** polish | **~$11** |
+| Single-pass `chapters` instead of scene pipeline | **~$4–5** |
+
+If your project uses **many more chapters** than the ~25-chapter baseline here, scale roughly linearly for the per-chapter stages (scene prose, polish, evals, summaries).
+
+**Provider note:** The app’s global default is OpenRouter (`qwen-3.6-thinking-openrouter`), whose pricing is unrelated to the Anthropic table above. Treat these dollar figures as applying when you route generation through Claude per this document.
+
 ---
 
 ## Full-book cost estimate

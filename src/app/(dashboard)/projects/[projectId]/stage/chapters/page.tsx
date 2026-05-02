@@ -8,9 +8,10 @@ import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, EmptyContent } from '@/components/stages';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
 import { cn, countWords, capOutlineWordTargets } from '@/lib/utils';
-import { TARGET_MANUSCRIPT_WORDS, FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT } from '@/lib/constants';
+import { TARGET_MANUSCRIPT_WORDS, FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT, CHAPTER_POLISH_FEATURE_ENABLED } from '@/lib/constants';
 import { parseChapterOutlines } from '@/lib/generation/schemas';
 import { estimateFullAutoTokens, formatTokenRange } from '@/lib/cost/preflight';
+import { AnthropicDraftLegCostHint } from '@/components/cost/AnthropicDraftLegCostHint';
 
 interface ChaptersPageProps {
   params: Promise<{ projectId: string }>;
@@ -240,6 +241,11 @@ export default function ChaptersPage({ params }: ChaptersPageProps) {
                 Preflight estimate (includes prompt overhead, not exact):{' '}
                 <strong className="text-[var(--foreground)]">{fullAutoPreflight}</strong>
               </p>
+              <AnthropicDraftLegCostHint
+                chapterCount={Math.max(1, chapterOutlines.length)}
+                useScenePipeline={FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT}
+                polishEnabled={CHAPTER_POLISH_FEATURE_ENABLED}
+              />
               <label className="mt-3 flex items-start gap-2 text-sm text-[var(--foreground)] cursor-pointer max-w-xl">
                 <input
                   type="checkbox"
