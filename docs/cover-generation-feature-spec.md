@@ -1,10 +1,11 @@
 **Product:** StoryForge  
-**Feature:** Cover Generation  
+**Feature:** Cover Generation (Kindle front + paperback full wrap)  
 **Status:** Draft  
-**Depends on:** Approved canon (story-bible / creative-brief), title, genre, niche, word count  
-**Pipeline position:** After Editing, before Marketing  
-**Stage keys introduced:** `cover-brief`, `cover-archetype`, `cover-generate`, `cover-refine`, `cover-export`  
-**Image model:** gpt-image-2 (OpenAI Images API)
+**Depends on:** Approved canon (story-bible / creative-brief), title, genre, niche, word count.  
+**Pipeline position:** After Marketing  
+**Stage keys introduced:** `cover-brief`, `cover-archetype`, `cover-generate`, `cover-refine`, `cover-export` (digital front only), `paperback-spec`, `back-cover-brief`, `back-cover-generate`, `back-cover-refine`, `paperback-export`  
+**Image model:** gpt-image-2 (OpenAI Images API)  
+**Compositing:** `sharp` for raster placement, scaling, spine fill, and barcode reserve rectangle (see §3 Stage J, §12)
 
 ---
 
@@ -12,17 +13,32 @@
 
 Cover Generation is a structured, canon-driven pipeline for producing commercially viable book cover images within StoryForge. It follows the same approved-document philosophy as the rest of the product: AI generates options, the user reviews and approves, and approved outputs become canonical project assets.
 
-The feature sits between Editing and Marketing in the sidebar. Like Marketing, it does not block Export Final - it is a parallel deliverable that can be completed any time after the title and story bible are approved.
+The feature sits **after Marketing** in the sidebar so listing copy can precede cover art workflow. Like Marketing, Cover does not block Export Final; front-cover stages unlock once canon and title are in place.
 
-The pipeline has five stages:
+**Two deliverables:**
 
-1. **Cover Brief** - derive a visual direction document from locked canon
-2. **Archetype Selection** - user picks one or more cover archetypes from a visual card selector
-3. **Generation** - fire gpt-image-2 for 4 variants per selected archetype
-4. **Refinement** - natural language change requests, versioned iteration
-5. **Export** - KDP-spec PNG download
+- **Kindle / ebook:** **Front cover only** — the existing five-stage front pipeline and **digital export** formats (KDP ebook cover asset, thumbnail, social). No spine, no back panel.
+- **Paperback:** **Full-wrap** single PNG — back panel (**image-only** background continuing the front style), spine (colour/gradient only, no text), front panel, and **reserved barcode zone** (white rectangle drawn at export, not by the image model), at the **exact pixel dimensions** from the user’s paperback spec (computed from KDP inputs or pasted from KDP Cover Creator).
 
-A completed cover feeds into the Marketing section, where it enriches the Amazon Description prompt with the cover's visual tone.
+The pipeline has **five shared front-cover stages**, then a **paperback branch** after the front is approved:
+
+**Front cover (shared)**
+
+1. **Cover Brief** - derive a visual direction document from locked canon  
+2. **Archetype Selection**  
+3. **Generation** - gpt-image-2 variants per archetype  
+4. **Refinement**  
+5. **Export (digital)** - Kindle/ebook front + thumbnail + social only (§3 Stage E)
+
+**Paperback branch** (unlocks when front cover is approved — **no Marketing dependency**)
+
+6. **Paperback spec** (`paperback-spec`) — KDP trim size, paper type, page count → canvas and panels (§3 Stage F)  
+7. **Back cover brief** (`back-cover-brief`) — visual continuation of the front for the **back panel image only**  
+8. **Back cover generation** (`back-cover-generate`) — background-only image (no text)  
+9. **Back cover refinement** (`back-cover-refine`)  
+10. **Paperback full-wrap export** (`paperback-export`) — `sharp` composite: front art + spine fill + back art + barcode reserve  
+
+A completed front cover can **feed back into** Marketing: it enriches the Amazon Description (and optionally Blurb) prompts with the cover’s visual tone. With Cover after Marketing, that enrichment is usually applied when re-running those stages after the cover is approved.
 
 ---
 
@@ -30,23 +46,29 @@ A completed cover feeds into the Marketing section, where it enriches the Amazon
 
 ### 2.1 Sidebar group
 
-A new sidebar group **Cover** is added between **Editing** and **Marketing**. It contains a single top-level entry: **Cover Generation**, which expands to show per-stage status once the feature is entered.
+A new sidebar group **Cover** is added **after Marketing**. It has two sub-entries: **Front cover** (Kindle / ebook + shared art pipeline) and **Paperback** (full wrap).
 
 ```
 Planning
 Writing
 Editing
   └── Multi-pass: Review under Editorial Analysis; Revisions under Apply Revisions
-Cover                          ← new group
-  └── Cover Generation
-        ├── Cover Brief
-        ├── Archetype Selection
-        ├── Generation
-        ├── Refinement
-        └── Export
 Marketing
   ├── Blurb
   └── Amazon Description
+Cover                          ← after Marketing
+  ├── Front cover
+  │     ├── Cover Brief
+  │     ├── Archetype Selection
+  │     ├── Generation
+  │     ├── Refinement
+  │     └── Export (Kindle / ebook front + thumbnails)
+  └── Paperback                ← locked until front approved
+        ├── Paperback spec (KDP dimensions)
+        ├── Back cover brief (visual style continuation)
+        ├── Back cover generation (image only)
+        ├── Back cover refinement
+        └── Full-wrap export (front + spine + back image + barcode zone)
 ```
 
 ### 2.2 Stage ordering
@@ -55,9 +77,13 @@ Cover Generation stages are **not** inserted into `STAGE_ORDER`. Like Marketing,
 
 If neither document exists, the Cover Generation sidebar entry is shown but locked, with a tooltip: "Complete your Story Bible first to unlock Cover Generation."
 
+**Ordering rationale:** Marketing precedes Cover so authors can complete listing-oriented copy before investing in art. **Paperback** does not depend on Marketing.
+
+**Paperback unlock:** **Front cover** approved (`approvedCoverImageId`). No Marketing dependency for paperback. Tooltip if locked: approve the front cover first.
+
 ### 2.3 Progress state
 
-Each sub-stage tracks one of: `not-started`, `in-progress`, `complete`. The top-level Cover Generation entry shows the highest reached sub-stage. An approved cover image sets the feature status to `complete`.
+Each sub-stage tracks one of: `not-started`, `in-progress`, `complete`. **Front cover** and **Paperback** each have their own progress summary. An approved front image completes the front-cover export track for digital; an approved **back-cover background** plus successful **full-wrap export** completes paperback (exact rules in §3 Stages F–J).
 
 ---
 
@@ -165,7 +191,7 @@ Multiple images across archetypes can be selected as candidates simultaneously, 
 
 **Generation cost estimate:** A pre-generation summary shows the estimated number of API calls and approximate cost (e.g. "4 archetypes x 4 images = 16 images") before the user confirms.
 
-**Storage:** All generated images are stored as base64 in the project database as document type `cover-image`, linked to the `cover-generate` run. Each stores: `archetypeId`, `promptUsed`, `highClickEnabled`, `runId`, `variantIndex`, `status` (`candidate` / `discarded` / `approved`).
+**Storage:** All generated images are stored as base64 in the project database as document type `cover-image`, linked to the `cover-generate` run. Each stores: `surface: 'front'`, `archetypeId`, `promptUsed`, `highClickEnabled`, `runId`, `variantIndex`, `status` (`candidate` / `discarded` / `approved`).
 
 ---
 
@@ -212,27 +238,228 @@ Refinement: [user change request]. Keep all other elements consistent with the a
 
 **Approve:** When satisfied, the user approves a version. Approval sets `status: approved` on that image document and records `approvedCoverImageId` on the project. Only one cover image can be approved at a time.
 
+**Prompt accumulation and drift.** Each refinement appends the change request to the accumulated prompt and fires a fresh generation — the model does not receive the previous image as input. After several rounds, the accumulated prompt can contain contradictory instructions (e.g. "darker sky... warmer mood... remove fog... add mist") and outputs will drift from the original direction.
+
+To address this:
+
+- After 3 or more refinements on a single candidate, show a banner: "Your prompt has accumulated several change requests. If results feel inconsistent, try 'Restart from here' to reset instructions while keeping this version as the new base."
+- A **"Restart from here"** button on any version clears all accumulated refinement instructions and sets that version's prompt as the new base prompt (i.e. the resolved original archetype prompt only, with no refinement history appended). The user can then make targeted change requests from a clean slate.
+- The full prompt history remains visible in the version sidebar for reference.
+
 ---
 
-### Stage E - Export (`cover-export`)
+### Stage E - Export — digital / Kindle (`cover-export`)
 
-**Purpose:** Download the approved cover at production-ready specifications.
+**Purpose:** Download the approved **front** cover for **ebook / Kindle** and marketing thumbnails. **Does not** produce paperback spine, back panel, or full wrap.
 
-**Export options:**
-
-
-| Format               | Spec                                | Use                |
-| -------------------- | ----------------------------------- | ------------------ |
-| KDP Front Cover PNG  | 2560x1600px, RGB, 300dpi equivalent | KDP upload         |
-| Kindle Thumbnail PNG | 1000x625px                          | Store preview, ads |
-| Square Social PNG    | 1400x1400px, title centred crop     | Social media       |
+**Export options (front art only):**
 
 
-The exported image is the approved version upscaled or cropped to the target spec. gpt-image-2 outputs at 1024x1536; upscaling to KDP spec is handled server-side using sharp or equivalent (already available in the Node environment).
+| Format               | Spec                                | Use                         |
+| -------------------- | ----------------------------------- | --------------------------- |
+| KDP ebook cover PNG  | 1600×2560px, RGB, 300dpi            | Kindle / KDP ebook upload   |
+| Kindle Thumbnail PNG | 1000×1563px                         | Store preview, ads          |
+| Square Social PNG    | 1400×1400px, title centred crop     | Social media                |
+
+
+gpt-image-2 outputs at 1024×1536 (portrait, 2:3 ratio). The KDP ebook front cover target is 1600×2560px (portrait, 2:3 ratio, 300dpi equivalent) — the same aspect ratio, so upscaling is a clean 1.5625× on each axis with no cropping required. Upscaling uses `sharp`. The Kindle Thumbnail (1000×1563px) and Square Social (1400×1400px, centre-crop) follow the same source.
 
 **Filename convention:** `[project-slug]-cover-[archetype-id]-v[version].png`
 
-**Full-wrap template (v2):** Requires spine width calculated from final word count and chosen paper type (60lb cream, 60lb white, etc.). Spine width = (word count / average words per page) * paper thickness per page. Deferred to v2 as it requires a paper-type selector and layout compositing step not needed for digital-first KDP publishing.
+**Paperback:** Handled only in **Paperback → Full-wrap export** (`paperback-export`), which uses the dimensions from **Paperback spec** (§3 Stage F).
+
+---
+
+### Stage F - Paperback spec (`paperback-spec`)
+
+**Purpose:** Lock the **exact pixel width and height** of the single full-wrap PNG, plus panel rectangles for back, spine, and front.
+
+### Trim size selector
+
+Present trim sizes as a labelled dropdown. Options match KDP's current print-on-demand offerings exactly:
+
+| Label | Inches |
+|-------|--------|
+| 5 × 8 | 5.000 × 8.000 |
+| 5.25 × 8 | 5.250 × 8.000 |
+| 5.5 × 8.5 | 5.500 × 8.500 |
+| 6 × 9 | 6.000 × 9.000 |
+| 6.14 × 9.21 | 6.140 × 9.210 |
+| 6.69 × 9.61 | 6.690 × 9.610 |
+| 7 × 10 | 7.000 × 10.000 |
+| 8 × 10 | 8.000 × 10.000 |
+| 8.25 × 10.25 | 8.250 × 10.250 |
+| 8.27 × 11.69 (A4) | 8.270 × 11.690 |
+| Custom | user enters width × height in inches |
+
+Default selection: **6 × 9** (most common KDP fiction trim).
+
+### Paper type selector
+
+Options match KDP's dropdown labels exactly:
+
+- White 60lb (standard — default)
+- Cream 60lb
+- White 50lb (premium)
+- Cream 50lb (premium)
+
+### Page count
+
+Integer. Pre-filled from project word count using the formula:
+
+`estimatedPages = Math.ceil(wordCount / wordsPerPage(trimWidth, trimHeight))`
+
+where `wordsPerPage` is a lookup from the table below. Pre-fill updates automatically when the user changes trim size. Always editable.
+
+| Trim size | Words per page (approx) |
+|-----------|------------------------|
+| 5 × 8 in | 250 |
+| 5.25 × 8 in | 260 |
+| 5.5 × 8.5 in | 275 |
+| 6 × 9 in | 300 |
+| 6.14 × 9.21 in | 310 |
+| 6.69 × 9.61 in | 330 |
+| 7 × 10 in | 350 |
+| 8 × 10 in | 390 |
+| 8.25 × 10.25 in | 400 |
+| 8.27 × 11.69 in (A4) | 440 |
+
+These are mid-range estimates for 11–12pt body text with standard margins. The field is always editable; authors who know their exact page count from a formatted interior should override the pre-fill.
+
+Store the `wordsPerPage` lookup in `src/lib/kdp/paperbackDimensions.ts` alongside the spine-width constants so both use the same trim-size data.
+
+### Mode
+
+- `calculated` (default): derive canvas from formulas below.
+- `from_kdp_template`: user enters total canvas **width × height in px** (from Cover Creator download). Store as `canvasWidthPx` / `canvasHeightPx`. Panel rects are still computed using the calculated spine width (trim size + paper type + page count must still be entered). If the user also pastes **spine width in px** (optional advanced field), use that value instead of the formula result. Always display: **"Calculated: [n]px — Your template: [n]px"** so the user can see any discrepancy.
+
+Warning if user-entered canvas dimensions differ from the calculated value by more than 5px on either axis: *"Your template dimensions differ slightly from our calculation. This is usually fine — KDP Cover Creator sometimes rounds differently. Proceeding will use your entered dimensions."*
+
+### Amazon KDP spine-width formula (exact)
+
+KDP's published formula for spine width:
+
+```
+spineWidthInches = pageCount × paperThicknessPerPage
+```
+
+Paper thickness per page constants (from KDP's Cover Creator documentation):
+
+| Paper type | Thickness per page (inches) |
+|------------|---------------------------|
+| White 60lb | 0.002252 |
+| Cream 60lb | 0.002500 |
+| White 50lb | 0.002143 |
+| Cream 50lb | 0.002381 |
+
+KDP minimum spine width for text: 0.0625 inches (equivalent to roughly 100 pages on white 60lb). Spine **text** is out of scope for v1 — the spine is colour-filled only — so the only implication is display: show a note **"Spine will be colour-filled only"** regardless of width.
+
+### Full canvas dimensions formula
+
+At 300dpi (KDP's required print resolution):
+
+```
+// All values in inches first, then converted to px at 300dpi
+bleedInches = 0.125  // each edge
+
+canvasWidthInches  = bleedInches + trimWidthInches + spineWidthInches + trimWidthInches + bleedInches
+canvasHeightInches = bleedInches + trimHeightInches + bleedInches
+
+canvasWidthPx  = Math.round(canvasWidthInches  × 300)
+canvasHeightPx = Math.round(canvasHeightInches × 300)
+```
+
+Panel rectangles (pixel coords, origin top-left of full canvas):
+
+```
+backPanelRect  = { x: bleedPx, y: bleedPx, width: trimWidthPx, height: trimHeightPx }
+spineRect      = { x: bleedPx + trimWidthPx, y: bleedPx, width: spineWidthPx, height: trimHeightPx }
+frontPanelRect = { x: bleedPx + trimWidthPx + spineWidthPx, y: bleedPx, width: trimWidthPx, height: trimHeightPx }
+```
+
+where:
+
+```
+bleedPx      = Math.round(0.125 × 300)          // = 38px
+trimWidthPx  = Math.round(trimWidthInches × 300)
+trimHeightPx = Math.round(trimHeightInches × 300)
+spineWidthPx = Math.round(spineWidthInches × 300)
+```
+
+### Output (`paperback-spec` document)
+
+Persist: `mode`, trim dimensions, `paperType`, `pageCount`, `canvasWidthPx`, `canvasHeightPx`, `bleedPx`, `frontPanelRect`, `spineRect`, `backPanelRect`, `updatedAt`, and optional `spineWidthPxOverride` / template canvas when in override mode.
+
+### Implementation notes
+
+- Store all paper-thickness constants and the canvas formula in `src/lib/kdp/paperbackDimensions.ts`.
+- Unit-test against at least three KDP fixtures: a 250-page 6×9 white 60lb, a 400-page 5.5×8.5 cream 60lb, and a 150-page 5×8 white 60lb. Verify computed canvas dimensions match KDP Cover Creator output for those combinations.
+
+**No LLM.** Save and proceed unlocks Back cover brief.
+
+---
+
+### Stage G - Back cover brief (`back-cover-brief`)
+
+**Purpose:** Structured brief for the **back panel art only** — how the generated **image** should continue the front cover’s visual identity.
+
+> **Back cover is image only.** The back panel is a background art image that continues the front cover's visual style — no text, no blurb, no author name, no barcode image. The only non-image element on the back panel in the exported full wrap is the barcode reserve rectangle (white, drawn by the compositing step, not by the image model).
+
+**Inputs:**
+
+- Approved `cover-brief` + `approvedCoverImageId` (archetype, palette, mood, `visualAvoid`)
+
+**Output:** Document type `back-cover-brief` containing:
+
+- `backgroundStyle: string` — description of how the back background should continue the front's visual identity
+- `moodContinuity: string` — how atmosphere, lighting, and palette should carry across from the front
+- `avoidElements: string[]` — visual elements to exclude (drawn from `cover-brief.visualAvoid` plus back-specific notes)
+- `compositionNotes: string` — guidance on keeping the back calmer and less focal than the front, with generous negative space in the lower third for the barcode reserve zone
+- `approvedAt: string | null`
+
+**JSON-mode LLM** via `POST /api/generate`, stage `back-cover-brief`. User approves before generation.
+
+---
+
+### Stage H - Back cover generation (`back-cover-generate`)
+
+**Purpose:** gpt-image-2 **image-only** art for the back panel (no baked-in text). Prompt continues front archetype environment/palette/mood; emphasises negative space suitable for the **barcode reserve zone** and a calmer composition than the front.
+
+**Prerequisite:** Saved `paperback-spec` (so export aspect ratios are known) and approved `back-cover-brief`.
+
+- Model/size/quality/n match front-cover generation defaults (`1024×1536`, `n=4`)
+- Stored as `cover-image` with `surface: 'back'`
+
+---
+
+### Stage I - Back cover refinement (`back-cover-refine`)
+
+Same pattern as Stage D; quick-actions include “More negative space for barcode zone” and “Darken bottom for barcode legibility.” Optional: show approved front thumbnail as style reference in UI.
+
+**Approve:** Sets `approvedBackCoverImageId` on the project (only one approved back background at a time).
+
+**Prompt accumulation and drift.** Each refinement appends the change request to the accumulated prompt and fires a fresh generation — the model does not receive the previous image as input. After several rounds, the accumulated prompt can contain contradictory instructions (e.g. "darker sky... warmer mood... remove fog... add mist") and outputs will drift from the original direction.
+
+To address this:
+
+- After 3 or more refinements on a single candidate, show a banner: "Your prompt has accumulated several change requests. If results feel inconsistent, try 'Restart from here' to reset instructions while keeping this version as the new base."
+- A **"Restart from here"** button on any version clears all accumulated refinement instructions and sets that version's prompt as the new base prompt (i.e. the resolved original archetype prompt only, with no refinement history appended). The user can then make targeted change requests from a clean slate.
+- The full prompt history remains visible in the version sidebar for reference.
+
+---
+
+### Stage J - Paperback full-wrap export (`paperback-export`)
+
+**Purpose:** One **print-ready PNG** spanning back + spine + front at `paperback-spec` dimensions.
+
+**Composition (server, `sharp`):**
+
+1. Place approved front raster in `frontPanelRect` (scale/crop to fit).
+2. Fill spine rectangle with a solid colour or subtle vertical gradient derived from `cover-brief.paletteDirection`. **No text is placed on the spine.**
+3. Place approved back background image in `backPanelRect`.
+4. **Barcode reserve:** draw a fixed white rectangle in the bottom-right of the back panel matching KDP's barcode size/margin guidance; label in export legend **"Place ISBN barcode here."**
+
+**Output filename:** `[project-slug]-paperback-fullwrap-v[version].png`
 
 ---
 
@@ -243,10 +470,12 @@ The exported image is the approved version upscaled or cropped to the target spe
 The following values are added to the document `type` enum:
 
 
-| Type          | Description                                              |
-| ------------- | -------------------------------------------------------- |
-| `cover-brief` | Structured visual direction document (JSON)              |
-| `cover-image` | Individual generated image with metadata (base64 + JSON) |
+| Type               | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| `cover-brief`      | Front cover visual direction (JSON)                                         |
+| `cover-image`      | Generated raster + metadata; `surface` distinguishes `front` vs `back`      |
+| `paperback-spec`   | KDP paperback canvas + panel rectangles in px (JSON)                        |
+| `back-cover-brief` | Back panel **visual** brief for image-only generation (JSON)                |
 
 
 ### 4.2 `cover-brief` document schema
@@ -283,33 +512,90 @@ The following values are added to the document `type` enum:
   highClickEnabled: boolean,
   promptUsed: string,
   variantIndex: number,        // 0-3 within a generation run
-  parentImageId: string | null, // set when this is a refinement of another image
+  parentImageId: string | null,
   refinementRequest: string | null,
   version: number,
+  surface: 'front' | 'back',
   status: 'candidate' | 'discarded' | 'approved',
   imageData: string,           // base64 PNG
   generatedAt: string          // ISO-8601
 }
 ```
 
-### 4.4 Project-level fields added
+### 4.4 `paperback-spec` document schema
+
+```typescript
+{
+  schemaVersion: 1,
+  mode: 'calculated' | 'from_kdp_template',
+  trimWidthIn: number,
+  trimHeightIn: number,
+  paperType: string,           // KDP label, e.g. white 60lb
+  pageCount: number,
+  canvasWidthPx: number,
+  canvasHeightPx: number,
+  bleedPx: number,
+  frontPanelRect: { x: number, y: number, width: number, height: number },
+  spineRect: { x: number, y: number, width: number, height: number },
+  backPanelRect: { x: number, y: number, width: number, height: number },
+  spineWidthPxOverride?: number | null, // optional: from Cover Creator / advanced field
+  updatedAt: string
+}
+```
+
+### 4.5 `back-cover-brief` document schema
+
+```typescript
+{
+  schemaVersion: 1,
+  derivedFrom: {
+    coverBriefDocumentId: string,
+    approvedCoverImageId: string
+  },
+  backgroundStyle: string,
+  moodContinuity: string,
+  avoidElements: string[],
+  compositionNotes: string,
+  approvedAt: string | null
+}
+```
+
+### 4.6 Project-level fields added
 
 ```typescript
 approvedCoverImageId: string | null
+approvedBackCoverImageId: string | null
 coverGenerationStatus: 'not-started' | 'in-progress' | 'complete'
+paperbackGenerationStatus: 'not-started' | 'in-progress' | 'complete'
 ```
 
-### 4.5 New `WorkflowStage` values
+### 4.7 New `WorkflowStage` values
 
 ```typescript
+// Front / digital
 'cover-brief'
-'cover-archetype'    // configuration only, no LLM call
+'cover-archetype'
 'cover-generate'
 'cover-refine'
 'cover-export'
+// Paperback
+'paperback-spec'
+'back-cover-brief'
+'back-cover-generate'
+'back-cover-refine'
+'paperback-export'
 ```
 
-`cover-archetype` and `cover-export` are not routed through `POST /api/generate`. `cover-brief`, `cover-generate`, and `cover-refine` are.
+`cover-archetype`, `cover-export`, and `paperback-spec` are not routed through `POST /api/generate`. Text stages: `cover-brief`, `back-cover-brief`. Image stages: `cover-generate`, `cover-refine`, `back-cover-generate`, `back-cover-refine`. `paperback-export` is compositing only.
+
+### 4.8 Issue 4 — Model text bleed-through (image-only back cover)
+
+Image models sometimes render **legible text or symbols** despite prompt constraints. If that appears on a **back cover** candidate, the user should:
+
+- Issue a **refinement** explicitly requesting removal of all text, letters, numbers, and glyphs, and/or  
+- Use **Restart from here** (§3 Stages D and I) so the prompt does not accumulate contradictory instructions.
+
+See also §5.5 for the hard constraint line appended to every back-cover image prompt.
 
 ---
 
@@ -551,6 +837,31 @@ narrative tone into colour, composition, and typographic direction.
 Return only valid JSON matching the requested schema.
 ```
 
+### 5.5 Back cover background prompt (`BACK_COVER_IMAGE_PATTERN`)
+
+Assemble an **image-only** prompt from: front archetype **environment/mood lines** (not title/character/clinch instructions), `cover-brief` palette and mood keywords, and `back-cover-brief.backgroundStyle`. Calmer than front; generous negative space in the lower third for the barcode reserve zone.
+
+The assembled back cover image prompt must always end with the following hard constraint line:
+
+> No text of any kind, no letters, no numbers, no title, no author name, no blurb, no words anywhere in the image.
+
+See **§4.8** for guidance on handling model text bleed-through in refinement.
+
+### 5.6 Back cover brief system prompt (`BACK_COVER_BRIEF_SYSTEM`)
+
+```
+You are a paperback cover art director. Given an approved front-cover brief and
+front archetype, produce JSON for a back-cover layout brief describing how the
+rear background image should continue the front cover's visual identity.
+
+The back cover is an image only — no text, no blurb copy, no author name.
+Describe: how the background environment or mood should carry across from the
+front, what to avoid, and how to leave generous negative space in the lower
+third for the KDP barcode reserve zone.
+
+Return only valid JSON matching the requested schema.
+```
+
 ---
 
 ## 6. UI component specifications
@@ -631,17 +942,43 @@ Images are shown at approximately 200x300px in the grid. Clicking expands to a f
 
 ---
 
-### 6.5 Export screen
+### 6.5 Export screen — digital (`cover-export`)
 
-Clean summary screen showing the approved cover image, its archetype label, and version number.
+Summary of the approved **front** cover. Export buttons: **KDP ebook cover**, **Kindle thumbnail**, **square social** — each shows dimensions and estimated size.
 
-Export buttons for each format (KDP Front Cover, Kindle Thumbnail, Square Social). Each shows the target dimensions and estimated file size.
+Note: “**Kindle / ebook:** front cover only. **Paperback full wrap** is under Cover → Paperback → Full-wrap export.”
 
-A note at the bottom of the screen: "Full-wrap template (including spine) - coming in a future update."
+---
+
+### 6.6 Paperback spec screen (`paperback-spec`)
+
+UI implements **Stage F** in full: trim dropdown (default 6×9), paper-type dropdown, **page count** with formula pre-fill from word count and trim-based `wordsPerPage`, mode toggle for KDP template dimensions, calculated vs template comparison, validation warning when template dimensions differ from calculation by more than 5px on any edge, diagram of three panels.
+
+---
+
+### 6.7 Back cover brief screen
+
+Two columns: left = reference panel showing the approved front thumbnail, palette keywords, and mood keywords from `cover-brief`; right = editable `backgroundStyle`, `moodContinuity`, `compositionNotes`, and `avoidElements` fields, each pre-populated by the AI brief. An **Approve Brief** CTA is required before back cover generation.
+
+---
+
+### 6.8 Back cover generation / refinement screens
+
+Same patterns as §6.3–6.4; single archetype continuation; `surface: back` in storage. Optional side-by-side with approved front.
+
+---
+
+### 6.9 Paperback full-wrap export screen (`paperback-export`)
+
+Live preview of composed wrap; toggle for **barcode placeholder** visibility. **Export PNG** at exact `paperback-spec` dimensions. Help text: place KDP-issued barcode in reserved rectangle after export. **Spine title and all back-panel text are out of scope for v1** (see §11).
 
 ---
 
 ## 7. Connection to Marketing
+
+### 7.0 Sidebar order (Marketing before Cover)
+
+Cover intentionally appears **below** Marketing in the sidebar. Primary flow: write and approve **Blurb** (and Amazon Description) first; then use Cover for art.
 
 ### 7.1 Cover tone in Amazon Description
 
@@ -655,7 +992,7 @@ Palette direction: [cover-brief.paletteDirection]
 High-click optimised: [yes/no]
 ```
 
-This allows the Amazon Description model to write copy that is coherent with the visual marketing - e.g. a dark atmospheric silhouette cover should produce darker, more intense copy than a cosy illustrated cover would.
+This allows the Amazon Description model to write copy that is coherent with the visual marketing - e.g. a dark atmospheric silhouette cover should produce darker, more intense copy than a cosy illustrated cover would. With Cover after Marketing, expect authors to **re-run** Amazon Description after approving the cover if they want this block applied on the first pass after art exists.
 
 ### 7.2 Cover tone in Blurb (optional enrichment)
 
@@ -674,7 +1011,7 @@ buildAmazonDescriptionPrompt  ←── enriched prompt
 buildBlurbPrompt              ←── optional enrichment
 ```
 
-No new API stages are required - this is a prompt assembly enrichment within the existing `amazon-description` and `blurb` stage handlers.
+No new API stages are required for marketing prompt enrichment — prompt assembly in existing handlers. `paperback-export` reads `paperback-spec` and approved front/back `cover-image` documents.
 
 ---
 
@@ -688,9 +1025,11 @@ A new route `POST /api/cover/generate` handles cover generation calls separately
 - Parallel multi-archetype calls require different concurrency handling
 - Image storage (base64 to SQLite) is a different persistence pattern
 
-The cover-brief LLM call (text/JSON) continues to use `POST /api/generate` with stage `cover-brief`.
+The cover-brief and back-cover-brief LLM calls (text/JSON) use `POST /api/generate` with stages `cover-brief` and `back-cover-brief`.
 
 ### 8.2 `POST /api/cover/generate`
+
+**Front covers only** — stores `surface: 'front'` on each `cover-image`.
 
 **Request body:**
 
@@ -712,7 +1051,7 @@ The cover-brief LLM call (text/JSON) continues to use `POST /api/generate` with 
 
 - Fires parallel `openai.images.generate` calls, one per archetype entry
 - Each call: `model: 'gpt-image-2'`, `size: '1024x1536'`, `n`, `quality`, `response_format: 'b64_json'`
-- Results stored as `cover-image` documents per variant
+- Results stored as `cover-image` documents per variant with `surface: 'front'`
 - Returns array of stored document IDs and base64 data for immediate display
 
 **Error handling:**
@@ -723,6 +1062,8 @@ The cover-brief LLM call (text/JSON) continues to use `POST /api/generate` with 
 
 ### 8.3 `POST /api/cover/refine`
 
+Accepts either front or back parent images.
+
 **Request body:**
 
 ```typescript
@@ -731,20 +1072,32 @@ The cover-brief LLM call (text/JSON) continues to use `POST /api/generate` with 
   parentImageId: string,
   originalPrompt: string,
   refinementRequest: string,
+  surface: 'front' | 'back',
   n: number              // 2 default
 }
 ```
 
 **Behaviour:**
 
-- Composes `refinedPrompt` = `${originalPrompt}\n\nRefinement: ${refinementRequest}. Keep all other elements consistent with the above.`
+- Composes `refinedPrompt` as today
 - Fires `openai.images.generate` with composed prompt
-- Stores results as new `cover-image` documents with `parentImageId` set
-- Returns new document IDs and base64 for immediate display
+- Stores new `cover-image` rows with `parentImageId` and matching `surface`
 
-### 8.4 Model config addition
+### 8.4 `POST /api/cover/back/generate`
 
-A new entry in `ALL_MODELS`:
+**Request body:** `{ projectId, runId, prompt, n?, quality? }`
+
+Validates saved `paperback-spec`, approved `back-cover-brief`, and approved front cover. Stores variants with `surface: 'back'`.
+
+### 8.5 `POST /api/cover/paperback/export`
+
+**Request:** `projectId`, `includeBarcodePlaceholder: boolean` (default true).
+
+**Behaviour:** Loads `paperback-spec`, approved front and back `cover-image` documents; builds full-wrap PNG with **`sharp`** (raster placement, spine gradient fill, barcode reserve rectangle). Streams PNG download.
+
+Expected output file size: a 300dpi full wrap for a 6×9 book (canvas approximately 3825×2775px) typically yields a PNG around **4–10MB** depending on image complexity. Set the route's `maxDuration` consistent with other long-running export routes and confirm Node memory limits accommodate the `sharp` pipeline for the largest supported trim (8.27×11.69 A4, canvas approximately 5031×3675px, up to ~**18MB** PNG).
+
+### 8.6 Model config addition
 
 ```typescript
 {
@@ -752,8 +1105,13 @@ A new entry in `ALL_MODELS`:
   displayName: 'GPT Image 2',
   provider: 'openai',
   type: 'image',
-  maxContextTokens: null,  // not applicable
-  usedFor: ['cover-generate', 'cover-refine']
+  maxContextTokens: null,
+  usedFor: [
+    'cover-generate',
+    'cover-refine',
+    'back-cover-generate',
+    'back-cover-refine'
+  ]
 }
 ```
 
@@ -813,35 +1171,43 @@ The following decisions should be resolved before implementation begins.
 | 6   | Cover brief regeneration              | Allowed freely, or locked once archetype selection begins                            | Allowed freely - cheap text call, user may want to adjust direction                                     |
 | 7   | Marketing enrichment opt-in           | Auto-inject cover tone into marketing prompts vs opt-in toggle per stage             | Opt-in toggle per stage - users may not want it to influence the blurb                                  |
 | 8   | Multi-cover support                   | One approved cover per project vs allow multiple approved (e.g. for series variants) | One approved per project in v1; series support is v2                                                    |
+| 9   | KDP dimension source                  | Calculated-only vs require template upload                                         | Primary: calculated from trim/paper/pages using KDP's exact formula (§3 Stage F). Override mode stores user-entered canvas px but still calculates panel rects from the formula — the canvas override only affects `canvasWidthPx` and `canvasHeightPx`, not the internal rect calculations, unless the user also provides spine width in px via the optional advanced field.      |
+| 10  | Barcode block size                     | Fixed px from KDP docs vs user-adjustable margin                                   | Fixed default from KDP print guidance; document constant in code                                            |
+| 11  | Back-cover gen before paperback spec   | Require `paperback-spec` saved before `back-cover-generate`                         | **Yes** — generation needs panel aspect hints; brief can be edited earlier                                 |
 
 
 ---
 
 ## 11. Out of scope for v1
 
-- Full-wrap template with calculated spine width
-- Series cover consistency (shared style across books in a series)
-- Canva / Photoshop handoff with layered file export
-- Typography overlay compositor (in-app title positioning over image)
+- **Automated ISBN barcode generation** (reserved rectangle only; authors paste barcode from KDP/ISBN issuer)
+- **Back-cover text overlays** (tagline, author name, blurb) — back cover is **image-only** in v1
+- **In-image text overlays using bundled fonts** (spine title, back-cover tagline, author name) — deferred to v2 (bundled fonts may ship in the repo for future use but are not required for the initial paperback export build)
+- Series-wide cover consistency (shared style across books in a series)
+- Canva / Photoshop handoff with layered PSD export
+- Free-form **drag-and-drop** text and image layers in the composer
 - A/B testing integration with ad platforms
 - Cover preview mockups (3D book render, Kindle device frame)
 - Direct KDP metadata upload
+- Parsing uploaded KDP template PNG to auto-derive panel rects without user confirmation (optional future; v1 relies on calculated rects + optional canvas size override)
 
 ---
 
 ## 12. Dependencies and prerequisites
 
 
-| Dependency                                              | Status                    |
-| ------------------------------------------------------- | ------------------------- |
-| OpenAI API key configured in settings                   | Existing                  |
-| `gpt-image-2` available on the project's OpenAI account | Confirm                   |
-| `sharp` for image processing / upscaling                | Add to dependencies       |
-| Story bible or creative brief approved on project       | Existing (gate condition) |
-| Title approved on project                               | Existing (gate condition) |
-| Word count stored on project (for future full-wrap)     | Existing                  |
-
+| Dependency | Status |
+| ---------- | ------ |
+| OpenAI API key configured in settings | Existing |
+| `gpt-image-2` available on the project's OpenAI account | Confirm |
+| `sharp` for upscale, crop, spine gradient fill, barcode rectangle, and full-wrap composition | Add / confirm in dependencies |
+| Bundled fonts (OFL licensed): **EB Garamond** (serif, `EBGaramond-Regular/Italic`), **Inter** (sans-serif, `Inter-Regular/Bold`), **Playfair Display** (display, `PlayfairDisplay-Regular/Bold/Italic`) — placed under `src/assets/fonts/cover/`; ship each font's `OFL.txt` LICENSE file alongside | Add (may be deferred until v2 text-overlay features; see §11) |
+| `sharp` text compositing via **node-canvas**: compositing is handled using node-canvas for text rendering (blurb zone removed in v1; retained for potential future back-cover tagline feature); node-canvas output is composited onto the `sharp` pipeline as a PNG layer | Add / confirm (deferred if v1 exports image + barcode rectangle only) |
+| KDP spine-width, canvas, and `wordsPerPage` constants in `src/lib/kdp/paperbackDimensions.ts` | Add module + tests against KDP calculator fixtures |
+| Story bible or creative brief approved on project | Existing (front gate) |
+| Title approved on project | Existing (front gate) |
+| Word count stored on project (page-count estimate for paperback spec) | Existing |
 
 ---
 
-*Last updated: May 2026. Update this document when `src/app/api/cover/` routes, `src/lib/prompts/covers.ts`, or the cover document schema change.*
+*Last updated: May 2026. Update this document when `src/app/api/cover/` routes (including `paperback/export`, `back/generate`), `src/lib/prompts/covers.ts`, `src/lib/kdp/paperbackDimensions.ts`, `paperback-spec` / `back-cover-brief` schemas, or export dimensions change.*
