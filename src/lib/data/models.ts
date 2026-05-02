@@ -57,33 +57,75 @@ export const OPENAI_MODELS: LLMModel[] = [
   },
 ];
 
-// Anthropic Models (Claude Sonnet / Opus 4.6 only; thinking presets = extended thinking)
+/** Default models when `ending` stage branches (concepts vs expansion); see docs/model_recommendations.md */
+export const ENDING_CONCEPTS_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
+export const ENDING_EXPANSION_DEFAULT_MODEL_ID = 'claude-opus-4-7-medium';
+
+/** Default models when `editorial` stage branches (full report vs revision queue from report) */
+export const EDITORIAL_REPORT_DEFAULT_MODEL_ID = 'claude-opus-4-7-high';
+export const EDITORIAL_QUEUE_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
+
+/**
+ * Anthropic catalog: Haiku 4.5, Sonnet 4.6, Opus 4.7 (API IDs per docs/model_recommendations.md).
+ * Thinking presets use extended thinking budgets; “Low effort” Sonnet/Haiku rows omit thinking.
+ */
 export const ANTHROPIC_MODELS: LLMModel[] = [
   {
-    id: 'claude-sonnet-4-6-thinking',
-    name: 'Claude Sonnet 4.6 (Thinking)',
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
     provider: 'anthropic',
-    description: 'Default: Sonnet 4.6 with extended thinking for reasoning-heavy generation',
-    apiModelId: 'claude-sonnet-4-6',
+    description: 'Fast, low-cost tasks (summaries, titles, simple JSON)',
+    apiModelId: 'claude-haiku-4-5-20251001',
+    maxTokens: 8192,
+    maxContextTokens: 200_000,
+  },
+  {
+    id: 'claude-opus-4-7-xhigh',
+    name: 'Claude Opus 4.7 (xHigh thinking)',
+    provider: 'anthropic',
+    description: 'Primary chapter drafting — maximum reasoning depth',
+    apiModelId: 'claude-opus-4-7',
+    thinkingBudgetTokens: 48_000,
+    maxTokens: 128_000,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-opus-4-7-high',
+    name: 'Claude Opus 4.7 (High thinking)',
+    provider: 'anthropic',
+    description: 'Scene prose, editorial report — strong long-context reasoning',
+    apiModelId: 'claude-opus-4-7',
     thinkingBudgetTokens: 32_000,
+    maxTokens: 64_000,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-opus-4-7-medium',
+    name: 'Claude Opus 4.7 (Medium thinking)',
+    provider: 'anthropic',
+    description: 'Polish, revision, ending expansion — bounded refinement',
+    apiModelId: 'claude-opus-4-7',
+    thinkingBudgetTokens: 24_000,
+    maxTokens: 64_000,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-sonnet-4-6-thinking-medium',
+    name: 'Claude Sonnet 4.6 (Medium thinking)',
+    provider: 'anthropic',
+    description: 'Default Anthropic preset — structured planning and extraction',
+    apiModelId: 'claude-sonnet-4-6',
+    thinkingBudgetTokens: 20_000,
     maxTokens: 32_768,
     maxContextTokens: 1_000_000,
     isDefault: true,
   },
   {
-    id: 'claude-opus-4-6',
-    name: 'Claude Opus 4.6',
+    id: 'claude-sonnet-4-6-thinking-high',
+    name: 'Claude Sonnet 4.6 (High thinking)',
     provider: 'anthropic',
-    description: 'Most capable Claude tier for complex writing and analysis',
-    maxTokens: 128_000,
-    maxContextTokens: 1_000_000,
-  },
-  {
-    id: 'claude-opus-4-6-thinking',
-    name: 'Claude Opus 4.6 (Thinking)',
-    provider: 'anthropic',
-    description: 'Same model with extended thinking enabled for harder reasoning',
-    apiModelId: 'claude-opus-4-6',
+    description: 'Heavier Sonnet reasoning; editorial fallback for long manuscripts',
+    apiModelId: 'claude-sonnet-4-6',
     thinkingBudgetTokens: 32_000,
     maxTokens: 32_768,
     maxContextTokens: 1_000_000,
@@ -92,8 +134,39 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
     id: 'claude-sonnet-4-6',
     name: 'Claude Sonnet 4.6',
     provider: 'anthropic',
-    description: 'High quality and speed for long-form creative writing',
+    description: 'Sonnet without extended thinking — low-effort structured tasks',
+    apiModelId: 'claude-sonnet-4-6',
     maxTokens: 64_000,
+    maxContextTokens: 1_000_000,
+  },
+  // Legacy / alternate ids (same API models; kept for saved UI preferences)
+  {
+    id: 'claude-sonnet-4-6-thinking',
+    name: 'Claude Sonnet 4.6 (Thinking)',
+    provider: 'anthropic',
+    description: 'Legacy: Sonnet 4.6 with high thinking budget',
+    apiModelId: 'claude-sonnet-4-6',
+    thinkingBudgetTokens: 32_000,
+    maxTokens: 32_768,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
+    provider: 'anthropic',
+    description: 'Legacy Opus tier',
+    apiModelId: 'claude-opus-4-6',
+    maxTokens: 128_000,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6 (Thinking)',
+    provider: 'anthropic',
+    description: 'Legacy Opus 4.6 with extended thinking',
+    apiModelId: 'claude-opus-4-6',
+    thinkingBudgetTokens: 32_000,
+    maxTokens: 32_768,
     maxContextTokens: 1_000_000,
   },
 ];
@@ -151,40 +224,73 @@ export function getModelsByProvider(provider: LLMProvider): LLMModel[] {
     : OPENROUTER_MODELS;
 }
 
-// Default LLM provider per workflow stage.
-// TypeScript will error if a WorkflowStage value is missing from this map.
+/**
+ * Canonical default model registry id per workflow stage (docs/model_recommendations.md quick reference).
+ * Branch-specific stages (`ending`, `editorial`) also use {@link ENDING_*_DEFAULT_MODEL_ID} / {@link EDITORIAL_*_DEFAULT_MODEL_ID} in `/api/generate` when the client does not pass `model`.
+ */
+export const STAGE_DEFAULT_MODEL_IDS = {
+  setup: 'claude-sonnet-4-6',
+  'genre-research': 'claude-sonnet-4-6',
+  niche: 'claude-sonnet-4-6',
+  /** Concepts default; expansion uses {@link ENDING_EXPANSION_DEFAULT_MODEL_ID}. */
+  ending: ENDING_CONCEPTS_DEFAULT_MODEL_ID,
+  characters: 'claude-sonnet-4-6-thinking-medium',
+  structure: 'claude-sonnet-4-6-thinking-medium',
+  title: 'claude-haiku-4-5-20251001',
+  'chapter-outlines': 'claude-sonnet-4-6-thinking-medium',
+  'chapter-summary': 'claude-haiku-4-5-20251001',
+  'chapter-scene-plan': 'claude-sonnet-4-6-thinking-medium',
+  'chapter-scenes-prose': 'claude-opus-4-7-high',
+  'chapter-polish': 'claude-opus-4-7-medium',
+  'chapter-scene-eval': 'claude-sonnet-4-6-thinking-medium',
+  'story-bible': 'claude-sonnet-4-6-thinking-medium',
+  'creative-brief': 'claude-sonnet-4-6',
+  chapters: 'claude-opus-4-7-xhigh',
+  compilation: 'claude-sonnet-4-6',
+  'export-draft': 'claude-sonnet-4-6',
+  /** Report default; queue-from-report uses {@link EDITORIAL_QUEUE_DEFAULT_MODEL_ID}. */
+  editorial: EDITORIAL_REPORT_DEFAULT_MODEL_ID,
+  'editorial-issues': 'claude-sonnet-4-6-thinking-medium',
+  revision: 'claude-opus-4-7-medium',
+  'revision-verify': 'claude-sonnet-4-6',
+  'export-final': 'claude-sonnet-4-6',
+  blurb: 'claude-sonnet-4-6',
+  'amazon-description': 'claude-sonnet-4-6',
+} as const satisfies Record<WorkflowStage, string>;
+
+// Default LLM provider per workflow stage (mirrors registry ids — all Anthropic for generation stages).
 export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
-  'setup': 'openrouter',
-  'genre-research': 'openrouter',
-  'niche': 'openrouter',
-  'ending': 'openrouter',
-  'characters': 'openrouter',
-  'structure': 'openrouter',
-  'title': 'openrouter',
-  'chapter-outlines': 'openrouter',
-  'chapter-summary': 'openrouter',
-  'chapter-scene-plan': 'openrouter',
-  'chapter-scenes-prose': 'openrouter',
-  'chapter-polish': 'openrouter',
-  'chapter-scene-eval': 'openrouter',
-  'story-bible': 'openrouter',
-  'creative-brief': 'openrouter',
-  'chapters': 'openrouter',
-  'compilation': 'openrouter',
-  'export-draft': 'openrouter',
-  'editorial': 'openrouter',
-  'editorial-issues': 'openrouter',
-  'revision': 'openrouter',
-  'revision-verify': 'openrouter',
-  'export-final': 'openrouter',
-  'blurb': 'openrouter',
-  'amazon-description': 'openrouter',
+  setup: 'anthropic',
+  'genre-research': 'anthropic',
+  niche: 'anthropic',
+  ending: 'anthropic',
+  characters: 'anthropic',
+  structure: 'anthropic',
+  title: 'anthropic',
+  'chapter-outlines': 'anthropic',
+  'chapter-summary': 'anthropic',
+  'chapter-scene-plan': 'anthropic',
+  'chapter-scenes-prose': 'anthropic',
+  'chapter-polish': 'anthropic',
+  'chapter-scene-eval': 'anthropic',
+  'story-bible': 'anthropic',
+  'creative-brief': 'anthropic',
+  chapters: 'anthropic',
+  compilation: 'anthropic',
+  'export-draft': 'anthropic',
+  editorial: 'anthropic',
+  'editorial-issues': 'anthropic',
+  revision: 'anthropic',
+  'revision-verify': 'anthropic',
+  'export-final': 'anthropic',
+  blurb: 'anthropic',
+  'amazon-description': 'anthropic',
 };
 
 // Get default model for a stage
 export function getDefaultModelForStage(stage: WorkflowStage): LLMModel {
-  const provider = STAGE_DEFAULT_PROVIDERS[stage] ?? 'openrouter';
-  return getDefaultModel(provider);
+  const id = STAGE_DEFAULT_MODEL_IDS[stage];
+  return getModelById(id) ?? getDefaultModel('anthropic');
 }
 
 // LocalStorage key for model preferences

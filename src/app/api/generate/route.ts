@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateForStage } from '@/lib/llm';
-import { getModelById, getDefaultModelForStage, ALL_MODELS } from '@/lib/data/models';
+import {
+  getModelById,
+  getDefaultModelForStage,
+  ALL_MODELS,
+  ENDING_CONCEPTS_DEFAULT_MODEL_ID,
+  ENDING_EXPANSION_DEFAULT_MODEL_ID,
+  EDITORIAL_REPORT_DEFAULT_MODEL_ID,
+  EDITORIAL_QUEUE_DEFAULT_MODEL_ID,
+} from '@/lib/data/models';
 import { TARGET_MANUSCRIPT_WORDS, CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET } from '@/lib/constants';
 import type { WorkflowStage, EditorialPass, GenerationUsageSource } from '@/types';
 import * as dbq from '@/lib/db/queries';
@@ -339,7 +347,11 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
 };
 
 function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutputKind | null {
-  if (stage === 'ending' && !data.selectedEnding) return 'ending-concepts';
+  if (stage === 'ending') {
+    const hasEndingExpansion =
+      typeof data.selectedEnding === 'string' && data.selectedEnding.trim().length > 0;
+    if (!hasEndingExpansion) return 'ending-concepts';
+  }
   if (stage === 'title') return 'title';
   if (stage === 'chapter-outlines') return 'chapter-outlines';
   if (stage === 'chapter-summary') return 'chapter-summary';
@@ -563,7 +575,13 @@ export async function POST(request: NextRequest) {
       }
       data = parsedStageData.data as Record<string, unknown>;
     }
-    
+
+    if (!model && stage === 'ending') {
+      const isExpansion =
+        typeof data.selectedEnding === 'string' && data.selectedEnding.trim().length > 0;
+      model = isExpansion ? ENDING_EXPANSION_DEFAULT_MODEL_ID : ENDING_CONCEPTS_DEFAULT_MODEL_ID;
+    }
+
     let prompt: string;
     let systemPrompt: string;
 
@@ -576,7 +594,9 @@ export async function POST(request: NextRequest) {
 
       case 'ending':
         systemPrompt = ENDING_SYSTEM;
-        if (data.selectedEnding) {
+        const isEndingExpansion =
+          typeof data.selectedEnding === 'string' && data.selectedEnding.trim().length > 0;
+        if (isEndingExpansion) {
           prompt = buildEndingExpansionPrompt({
             premise: data.premise as string | undefined,
             genre: data.genre as string,
@@ -607,8 +627,10 @@ export async function POST(request: NextRequest) {
       case 'editorial':
         systemPrompt = EDITORIAL_SYSTEM;
         
-        // Use requested model or stage default (e.g. Claude Sonnet 4.6 Thinking)
-        let selectedModel = model || getDefaultModelForStage('editorial').id;
+        // Report: Opus 4.7 High; createQueue: Sonnet Medium (docs/model_recommendations.md)
+        let selectedModel =
+          model ||
+          (data.createQueue ? EDITORIAL_QUEUE_DEFAULT_MODEL_ID : EDITORIAL_REPORT_DEFAULT_MODEL_ID);
         // modelSwitched and switchMessage are already declared at function scope
         
         if (data.createQueue) {
@@ -621,7 +643,7 @@ export async function POST(request: NextRequest) {
           const manuscript = data.manuscript as string;
           const gate = gateEditorialManuscriptContext({
             requestedModelId: selectedModel,
-            defaultStageModelId: getDefaultModelForStage('editorial').id,
+            defaultStageModelId: EDITORIAL_REPORT_DEFAULT_MODEL_ID,
             manuscript,
             nicheReference: data.nicheReference,
             charactersReference: data.charactersReference,

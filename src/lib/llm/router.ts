@@ -194,7 +194,7 @@ export async function generate(
   prompt: string,
   options: GenerateOptions = {}
 ): Promise<GenerateResult> {
-  // Derive default model from models.ts so it stays in sync with STAGE_DEFAULT_PROVIDERS
+  // Derive default model from models.ts so it stays in sync with STAGE_DEFAULT_MODEL_IDS / STAGE_DEFAULT_PROVIDERS
   const modelId = options.model ?? getDefaultModel(provider).id;
   
   if (provider === 'openai') {

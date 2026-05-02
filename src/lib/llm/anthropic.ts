@@ -66,7 +66,7 @@ export async function generateWithClaude(
   options: AnthropicGenerateOptions = {}
 ): Promise<{ content: string; tokensUsed: number }> {
   const {
-    model: registryModelId = 'claude-sonnet-4-6-thinking',
+    model: registryModelId = 'claude-sonnet-4-6-thinking-medium',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,
@@ -169,7 +169,7 @@ export async function* streamWithClaude(
   options: AnthropicGenerateOptions = {}
 ): AsyncGenerator<string, { tokensUsed: number }, unknown> {
   const {
-    model: registryModelId = 'claude-sonnet-4-6-thinking',
+    model: registryModelId = 'claude-sonnet-4-6-thinking-medium',
     temperature = 0.7,
     maxTokens = 4096,
     systemPrompt,

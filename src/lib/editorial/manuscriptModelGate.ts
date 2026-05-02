@@ -1,7 +1,7 @@
 import { getModelById } from '@/lib/data/models';
 import { MAX_MANUSCRIPT_TOKENS } from '@/lib/constants';
 
-const FALLBACK_EDITORIAL_MODEL = 'claude-sonnet-4-6-thinking';
+const FALLBACK_EDITORIAL_MODEL = 'claude-sonnet-4-6-thinking-high';
 
 export type EditorialManuscriptGateFailure = { ok: false; status: 400; error: string };
 
