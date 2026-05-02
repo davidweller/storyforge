@@ -22,7 +22,7 @@ The sidebar organizes work into:
 |--------|----------|
 | **Planning** | Setup through title — everything needed before drafting. |
 | **Writing** | Chapter outlines plus chapter drafting; expands to **per-chapter links** once chapters exist. |
-| **Editing** | Manuscript assembly, draft export, editorial, revisions, final export — plus nested **Editing passes** when multi-pass editorial is enabled. |
+| **Editing** | Manuscript assembly, draft export, editorial, revisions, final export — plus per-pass **Review** links under **Editorial Analysis** and **Revisions** under **Apply Revisions** when multi-pass editorial is enabled. |
 | **Marketing** | Blurb and Amazon description (outside the linear stage counter). |
 
 **Project Dashboard** links to the overview for the current project (title, canon tools, shortcuts, usage, etc.).
@@ -55,12 +55,12 @@ These are the **sequential stages** (`STAGE_ORDER`). Each row is one step in ord
 - **Compilation** may become reachable while you are still in **chapters** if **every chapter is already approved**, so you can assemble without artificially advancing stage first.
 - **Export Final** unlocks after the **revision workflow** satisfies completion rules — stricter when **four-pass editorial** is enabled (must complete the full pass ladder including the final-report pass tasks).
 
-### Multi-pass editorial (Editing passes)
+### Multi-pass editorial
 
-Some projects run **Structural → Line edit → Copy edit → Proofread → Final report**. In the sidebar, under **Editing passes**, each pass has:
+Some projects run **Structural → Line edit → Copy edit → Proofread → Final report**. After **Editorial Analysis** is in play, the sidebar nests a collapsible list per pass:
 
-- **Review** — editorial run for that pass (linked to **Editorial Analysis** routes with `?pass=…`).
-- **Revisions** — tasks for that pass (linked to **Apply Revisions** with the same pass).
+- **Review** — under **Editorial Analysis** (routes with `?pass=…`).
+- **Revisions** — under **Apply Revisions** (same pass in the query string).
 
 Passes unlock in order: the next review only starts after the previous pass’s revisions are finished.
 

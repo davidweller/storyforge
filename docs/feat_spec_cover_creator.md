@@ -1,5 +1,3 @@
-
-
 **Product:** StoryForge  
 **Feature:** Cover Generation  
 **Status:** Draft  
@@ -38,7 +36,7 @@ A new sidebar group **Cover** is added between **Editing** and **Marketing**. It
 Planning
 Writing
 Editing
-  └── Editing passes (when multi-pass enabled)
+  └── Multi-pass: Review under Editorial Analysis; Revisions under Apply Revisions
 Cover                          ← new group
   └── Cover Generation
         ├── Cover Brief
@@ -71,17 +69,19 @@ Each sub-stage tracks one of: `not-started`, `in-progress`, `complete`. The top-
 
 **Inputs (assembled automatically from project documents):**
 
-|Canon field|Source|
-|---|---|
-|Genre|Project metadata|
-|Niche / subgenre|Niche reference document|
-|Title|Approved title|
-|Tone and mood|Creative brief / story bible `voiceAndStyle`|
-|Protagonist description|Story bible `characters[0]`|
-|Key symbols and objects|Story bible `worldRules`, `unresolvedThreads`|
-|Ending promise|Story bible `endingPromises`|
-|Style rules and avoid list|Story bible `voiceAndStyle.styleRules`, `.avoid`|
-|Word count|Stored chapter word count total|
+
+| Canon field                | Source                                           |
+| -------------------------- | ------------------------------------------------ |
+| Genre                      | Project metadata                                 |
+| Niche / subgenre           | Niche reference document                         |
+| Title                      | Approved title                                   |
+| Tone and mood              | Creative brief / story bible `voiceAndStyle`     |
+| Protagonist description    | Story bible `characters[0]`                      |
+| Key symbols and objects    | Story bible `worldRules`, `unresolvedThreads`    |
+| Ending promise             | Story bible `endingPromises`                     |
+| Style rules and avoid list | Story bible `voiceAndStyle.styleRules`, `.avoid` |
+| Word count                 | Stored chapter word count total                  |
+
 
 **Output:** A structured document stored as document type `cover-brief`, containing:
 
@@ -193,16 +193,18 @@ Refinement: [user change request]. Keep all other elements consistent with the a
 
 **Quick-action buttons** for common refinements (append a preset modifier to the change request field):
 
-|Button|Appended text|
-|---|---|
-|Stronger contrast|"Increase contrast significantly between subject and background."|
-|Simplify background|"Simplify and de-clutter the background, reduce detail."|
-|Zoom in|"Zoom in on the focal element, crop closer."|
-|Darker mood|"Shift the overall mood and lighting darker and more dramatic."|
-|Lighter mood|"Shift the overall mood and lighting warmer and more inviting."|
-|Bolder typography|"Make the title typography larger and heavier weight."|
-|Warmer palette|"Shift the colour palette warmer."|
-|Cooler palette|"Shift the colour palette cooler."|
+
+| Button              | Appended text                                                     |
+| ------------------- | ----------------------------------------------------------------- |
+| Stronger contrast   | "Increase contrast significantly between subject and background." |
+| Simplify background | "Simplify and de-clutter the background, reduce detail."          |
+| Zoom in             | "Zoom in on the focal element, crop closer."                      |
+| Darker mood         | "Shift the overall mood and lighting darker and more dramatic."   |
+| Lighter mood        | "Shift the overall mood and lighting warmer and more inviting."   |
+| Bolder typography   | "Make the title typography larger and heavier weight."            |
+| Warmer palette      | "Shift the colour palette warmer."                                |
+| Cooler palette      | "Shift the colour palette cooler."                                |
+
 
 **Output per refinement:** 2 variants (n=2) by default to reduce cost while still offering a choice. User can request 4 if preferred.
 
@@ -218,11 +220,13 @@ Refinement: [user change request]. Keep all other elements consistent with the a
 
 **Export options:**
 
-|Format|Spec|Use|
-|---|---|---|
-|KDP Front Cover PNG|2560x1600px, RGB, 300dpi equivalent|KDP upload|
-|Kindle Thumbnail PNG|1000x625px|Store preview, ads|
-|Square Social PNG|1400x1400px, title centred crop|Social media|
+
+| Format               | Spec                                | Use                |
+| -------------------- | ----------------------------------- | ------------------ |
+| KDP Front Cover PNG  | 2560x1600px, RGB, 300dpi equivalent | KDP upload         |
+| Kindle Thumbnail PNG | 1000x625px                          | Store preview, ads |
+| Square Social PNG    | 1400x1400px, title centred crop     | Social media       |
+
 
 The exported image is the approved version upscaled or cropped to the target spec. gpt-image-2 outputs at 1024x1536; upscaling to KDP spec is handled server-side using sharp or equivalent (already available in the Node environment).
 
@@ -238,10 +242,12 @@ The exported image is the approved version upscaled or cropped to the target spe
 
 The following values are added to the document `type` enum:
 
-|Type|Description|
-|---|---|
-|`cover-brief`|Structured visual direction document (JSON)|
-|`cover-image`|Individual generated image with metadata (base64 + JSON)|
+
+| Type          | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `cover-brief` | Structured visual direction document (JSON)              |
+| `cover-image` | Individual generated image with metadata (base64 + JSON) |
+
 
 ### 4.2 `cover-brief` document schema
 
@@ -755,36 +761,40 @@ A new entry in `ALL_MODELS`:
 
 ## 9. Archetype reference table
 
-|ID|Archetype|Primary genres|Thumbnail strength|
-|---|---|---|---|
-|`a1`|Icon / Symbol|Fantasy, sci-fi|Very High|
-|`a2`|Character-Centric|Epic fantasy, space opera, romantasy|High|
-|`a3`|Landscape / Worldbuilding|Epic fantasy, hard sci-fi|Medium|
-|`a4`|Object-in-World|Modern fantasy, grounded sci-fi|High|
-|`a5`|Action / Battle Scene|Military fantasy, space opera|High|
-|`a6`|Emblem / Typography-Driven|Series branding, sci-fi|High|
-|`a7`|Mystery / Atmospheric Teaser|Sci-fi, dystopian, speculative|High|
-|`r1`|The Clinch / Couple Embrace|All romance subgenres|Very High|
-|`r2`|Solo Character (Aspirational)|Historical, Regency, contemporary|High|
-|`r3`|Object / Symbol (Romantic)|Contemporary, women's fiction|High|
-|`r4`|Illustrated / Graphic|Contemporary, romcom, cosy|Very High|
-|`r5`|Setting / Atmosphere|Historical, small-town, destination|Medium|
-|`r6`|Typography-Dominant|Commercial romance, crossover|High|
+
+| ID   | Archetype                     | Primary genres                       | Thumbnail strength |
+| ---- | ----------------------------- | ------------------------------------ | ------------------ |
+| `a1` | Icon / Symbol                 | Fantasy, sci-fi                      | Very High          |
+| `a2` | Character-Centric             | Epic fantasy, space opera, romantasy | High               |
+| `a3` | Landscape / Worldbuilding     | Epic fantasy, hard sci-fi            | Medium             |
+| `a4` | Object-in-World               | Modern fantasy, grounded sci-fi      | High               |
+| `a5` | Action / Battle Scene         | Military fantasy, space opera        | High               |
+| `a6` | Emblem / Typography-Driven    | Series branding, sci-fi              | High               |
+| `a7` | Mystery / Atmospheric Teaser  | Sci-fi, dystopian, speculative       | High               |
+| `r1` | The Clinch / Couple Embrace   | All romance subgenres                | Very High          |
+| `r2` | Solo Character (Aspirational) | Historical, Regency, contemporary    | High               |
+| `r3` | Object / Symbol (Romantic)    | Contemporary, women's fiction        | High               |
+| `r4` | Illustrated / Graphic         | Contemporary, romcom, cosy           | Very High          |
+| `r5` | Setting / Atmosphere          | Historical, small-town, destination  | Medium             |
+| `r6` | Typography-Dominant           | Commercial romance, crossover        | High               |
+
 
 Genre pre-filtering logic for the selector:
 
-|Project genre/niche|Recommended archetype IDs surfaced first|
-|---|---|
-|Epic fantasy|`a2`, `a3`, `a1`, `a5`|
-|Modern / urban fantasy|`a1`, `a4`, `a7`, `a2`|
-|Sci-fi (hard)|`a3`, `a6`, `a7`, `a1`|
-|Space opera|`a2`, `a5`, `a6`, `a3`|
-|Romantasy|`r1`, `a2`, `a7`, `r2`|
-|Historical romance|`r1`, `r2`, `r5`, `r3`|
-|Contemporary romance|`r1`, `r4`, `r3`, `r6`|
-|Regency / period|`r2`, `r5`, `r1`, `r3`|
-|Romcom / cosy|`r4`, `r6`, `r3`, `r5`|
-|Dystopian / speculative|`a7`, `a1`, `a3`, `a6`|
+
+| Project genre/niche     | Recommended archetype IDs surfaced first |
+| ----------------------- | ---------------------------------------- |
+| Epic fantasy            | `a2`, `a3`, `a1`, `a5`                   |
+| Modern / urban fantasy  | `a1`, `a4`, `a7`, `a2`                   |
+| Sci-fi (hard)           | `a3`, `a6`, `a7`, `a1`                   |
+| Space opera             | `a2`, `a5`, `a6`, `a3`                   |
+| Romantasy               | `r1`, `a2`, `a7`, `r2`                   |
+| Historical romance      | `r1`, `r2`, `r5`, `r3`                   |
+| Contemporary romance    | `r1`, `r4`, `r3`, `r6`                   |
+| Regency / period        | `r2`, `r5`, `r1`, `r3`                   |
+| Romcom / cosy           | `r4`, `r6`, `r3`, `r5`                   |
+| Dystopian / speculative | `a7`, `a1`, `a3`, `a6`                   |
+
 
 ---
 
@@ -792,16 +802,18 @@ Genre pre-filtering logic for the selector:
 
 The following decisions should be resolved before implementation begins.
 
-|#|Question|Options|Recommended|
-|---|---|---|---|
-|1|Reference thumbnail source|Static curated assets shipped with app vs generated once at cover-brief time|Static curated - lower cost, no generation dependency|
-|2|Image storage in SQLite|Base64 in `documents` table vs separate `cover_images` table vs filesystem|Separate `cover_images` table - base64 blobs in the main documents table will degrade query performance|
-|3|Maximum archetypes per generation run|Hard cap at 4 or soft warning|Soft warning at 4, hard cap at 6|
-|4|Refinement default n|2 or 4|2 - keeps cost manageable for iteration|
-|5|Export upscaling library|`sharp` (already likely available), `jimp`, or external|`sharp` - fast, Node-native, already used in DOCX export pipeline|
-|6|Cover brief regeneration|Allowed freely, or locked once archetype selection begins|Allowed freely - cheap text call, user may want to adjust direction|
-|7|Marketing enrichment opt-in|Auto-inject cover tone into marketing prompts vs opt-in toggle per stage|Opt-in toggle per stage - users may not want it to influence the blurb|
-|8|Multi-cover support|One approved cover per project vs allow multiple approved (e.g. for series variants)|One approved per project in v1; series support is v2|
+
+| #   | Question                              | Options                                                                              | Recommended                                                                                             |
+| --- | ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| 1   | Reference thumbnail source            | Static curated assets shipped with app vs generated once at cover-brief time         | Static curated - lower cost, no generation dependency                                                   |
+| 2   | Image storage in SQLite               | Base64 in `documents` table vs separate `cover_images` table vs filesystem           | Separate `cover_images` table - base64 blobs in the main documents table will degrade query performance |
+| 3   | Maximum archetypes per generation run | Hard cap at 4 or soft warning                                                        | Soft warning at 4, hard cap at 6                                                                        |
+| 4   | Refinement default n                  | 2 or 4                                                                               | 2 - keeps cost manageable for iteration                                                                 |
+| 5   | Export upscaling library              | `sharp` (already likely available), `jimp`, or external                              | `sharp` - fast, Node-native, already used in DOCX export pipeline                                       |
+| 6   | Cover brief regeneration              | Allowed freely, or locked once archetype selection begins                            | Allowed freely - cheap text call, user may want to adjust direction                                     |
+| 7   | Marketing enrichment opt-in           | Auto-inject cover tone into marketing prompts vs opt-in toggle per stage             | Opt-in toggle per stage - users may not want it to influence the blurb                                  |
+| 8   | Multi-cover support                   | One approved cover per project vs allow multiple approved (e.g. for series variants) | One approved per project in v1; series support is v2                                                    |
+
 
 ---
 
@@ -819,15 +831,17 @@ The following decisions should be resolved before implementation begins.
 
 ## 12. Dependencies and prerequisites
 
-|Dependency|Status|
-|---|---|
-|OpenAI API key configured in settings|Existing|
-|`gpt-image-2` available on the project's OpenAI account|Confirm|
-|`sharp` for image processing / upscaling|Add to dependencies|
-|Story bible or creative brief approved on project|Existing (gate condition)|
-|Title approved on project|Existing (gate condition)|
-|Word count stored on project (for future full-wrap)|Existing|
+
+| Dependency                                              | Status                    |
+| ------------------------------------------------------- | ------------------------- |
+| OpenAI API key configured in settings                   | Existing                  |
+| `gpt-image-2` available on the project's OpenAI account | Confirm                   |
+| `sharp` for image processing / upscaling                | Add to dependencies       |
+| Story bible or creative brief approved on project       | Existing (gate condition) |
+| Title approved on project                               | Existing (gate condition) |
+| Word count stored on project (for future full-wrap)     | Existing                  |
+
 
 ---
 
-_Last updated: May 2026. Update this document when `src/app/api/cover/` routes, `src/lib/prompts/covers.ts`, or the cover document schema change._
+*Last updated: May 2026. Update this document when `src/app/api/cover/` routes, `src/lib/prompts/covers.ts`, or the cover document schema change.*

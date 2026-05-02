@@ -65,7 +65,7 @@ The workflow sidebar groups stages for clarity:
 |--------|------------------------|
 | **Planning** | Setup through title |
 | **Writing** | Chapter outlines and chapter drafting (expands to **per-chapter links** once chapters exist) |
-| **Editing** | Manuscript assembly, draft export, editorial, revisions, final export — plus nested **Editing passes** when multi-pass editorial is enabled |
+| **Editing** | Manuscript assembly, draft export, editorial, revisions, final export — plus per-pass Review under **Editorial Analysis** and Revisions under **Apply Revisions** when multi-pass editorial is enabled |
 | **Marketing** | Blurb and Amazon description (**outside** the linear stage counter; does not block export final) |
 | **Project Dashboard** | Overview, canon tooling shortcuts, usage, and cross-cutting actions |
 
@@ -224,7 +224,7 @@ Mid-process **`.docx` / `.txt`** export before editorial.
 
 **Outputs:** Editorial feedback; when applicable, structured data for downstream revision (e.g. issue lists / revision queue).
 
-**Multi-pass editorial (optional per project):** Structural → Line → Copy → Proofread → **Final report**. Sidebar **Editing passes** expose Review + Revisions per pass; passes unlock in order. Document types include pass-specific editorial artifacts (e.g. `editorial-structural`, … `editorial-final`).
+**Multi-pass editorial (optional per project):** Structural → Line → Copy → Proofread → **Final report**. The sidebar nests **Review** links under **Editorial Analysis** and **Revisions** under **Apply Revisions** per pass; passes unlock in order. Document types include pass-specific editorial artifacts (e.g. `editorial-structural`, … `editorial-final`).
 
 **Related generate stages (experienced inside Editorial / Revision flows):**
 - `editorial-issues` — structured revision-queue style output from manuscript/editorial context
@@ -320,7 +320,7 @@ Including but not limited to:
 ## UI / UX Requirements
 
 ### Core Layout
-- **Left sidebar:** Workflow stages (progress tracker) — grey (not started), amber (in progress), green (approved); **per-chapter** entries under Writing when chapters exist; **Editing passes** when multi-pass editorial is on
+- **Left sidebar:** Workflow stages (progress tracker) — grey (not started), amber (in progress), green (approved); **per-chapter** entries under Writing when chapters exist; **per-pass Review / Revisions** nested under Editorial Analysis / Apply Revisions when multi-pass editorial is on
 - **Main panel:** Current stage content
 - **Right drawer (collapsible):** Reference docs quick view; “what the AI sees” / context transparency where implemented
 

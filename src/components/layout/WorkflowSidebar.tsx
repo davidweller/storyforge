@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,7 @@ interface WorkflowSidebarProps {
   chapters?: Chapter[];
   approvedChapterIds?: Set<string>;
   revisionTasks?: RevisionTask[];  // Optional - for checking revision completion
-  documents?: ProjectDocument[];  // For per-pass editorial doc status in Editing passes
+  documents?: ProjectDocument[];  // Status for per-pass Review links under Editorial Analysis
   fourPassEditorial?: boolean;     // Affects revision / export-final sidebar status
   finalExportedAt?: Date;  // Optional - timestamp when final export was completed
   blurbFilled?: boolean;  // When true, show Blurb tab as green (generated)
@@ -206,16 +206,20 @@ export function WorkflowSidebar({
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isChaptersExpanded, setIsChaptersExpanded] = useState(true);
-  const [isEditingPassesExpanded, setIsEditingPassesExpanded] = useState(true);
-  
+  const [isChaptersExpanded, setIsChaptersExpanded] = useState(false);
+  const [isEditorialPassesExpanded, setIsEditorialPassesExpanded] = useState(true);
+  const [isRevisionPassesExpanded, setIsRevisionPassesExpanded] = useState(true);
+
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
-  
+
   // Group stages: planning (0-6), writing (7-8), editing (9+)
   const planningStages = STAGE_ORDER.slice(0, 7); // setup through title
   const writingStages = STAGE_ORDER.slice(7, 9); // chapter-outlines, chapters
   const editingStages = STAGE_ORDER.slice(9); // compilation, export-draft, editorial, revision, export-final
+
+  const showPassSubnav =
+    getStageIndex(currentStage) >= getStageIndex('editorial') && chapters.length > 0;
   
   const getStageItemClass = (status: StageStatus, isActive: boolean) =>
     cn(
@@ -283,6 +287,85 @@ export function WorkflowSidebar({
             >
               <svg
                 className={cn('w-3.5 h-3.5 transition-transform duration-200', !isChaptersExpanded && '-rotate-90')}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {statusIndicators[status]}
+          </Link>
+        </div>
+      );
+    }
+
+    const isEditorialWithPassNav = stage === 'editorial' && showPassSubnav;
+    const isRevisionWithPassNav = stage === 'revision' && showPassSubnav;
+
+    if (isEditorialWithPassNav) {
+      return (
+        <div key={stage} className="relative">
+          <Link
+            href={isLocked ? '#' : stageHref}
+            className={getStageItemClass(status, isActive)}
+            onClick={(e) => isLocked && e.preventDefault()}
+          >
+            <span className="shrink-0">{stageIcons[stage]}</span>
+            <span className="flex-1 text-sm font-medium truncate">
+              {STAGE_NAMES[stage]}
+            </span>
+            <button
+              type="button"
+              aria-expanded={isEditorialPassesExpanded}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsEditorialPassesExpanded(!isEditorialPassesExpanded);
+              }}
+              className="shrink-0 ml-1 p-1 flex items-center justify-center bg-transparent border-none cursor-pointer"
+              title={isEditorialPassesExpanded ? 'Collapse editorial passes' : 'Expand editorial passes'}
+            >
+              <svg
+                className={cn('w-3.5 h-3.5 transition-transform duration-200', !isEditorialPassesExpanded && '-rotate-90')}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {statusIndicators[status]}
+          </Link>
+        </div>
+      );
+    }
+
+    if (isRevisionWithPassNav) {
+      return (
+        <div key={stage} className="relative">
+          <Link
+            href={isLocked ? '#' : stageHref}
+            className={getStageItemClass(status, isActive)}
+            onClick={(e) => isLocked && e.preventDefault()}
+          >
+            <span className="shrink-0">{stageIcons[stage]}</span>
+            <span className="flex-1 text-sm font-medium truncate">
+              {STAGE_NAMES[stage]}
+            </span>
+            <button
+              type="button"
+              aria-expanded={isRevisionPassesExpanded}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsRevisionPassesExpanded(!isRevisionPassesExpanded);
+              }}
+              className="shrink-0 ml-1 p-1 flex items-center justify-center bg-transparent border-none cursor-pointer"
+              title={isRevisionPassesExpanded ? 'Collapse revision passes' : 'Expand revision passes'}
+            >
+              <svg
+                className={cn('w-3.5 h-3.5 transition-transform duration-200', !isRevisionPassesExpanded && '-rotate-90')}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -391,82 +474,83 @@ export function WorkflowSidebar({
             Editing
           </p>
           <div className="flex flex-col gap-1">
-            {editingStages.map(renderStageItem)}
-          </div>
+            {editingStages.map((stage) => (
+              <Fragment key={stage}>
+                {renderStageItem(stage)}
+                {stage === 'editorial' && showPassSubnav && isEditorialPassesExpanded && (
+                  <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
+                    {EDITORIAL_PASSES.map((pass) => {
+                      const canReview = canStartEditorialPass(
+                        pass,
+                        chapters,
+                        getApprovedStub,
+                        revisionTasks
+                      );
+                      const reviewDone = approvedEditorialDocForPass(documents, pass);
+                      const passParam = searchParams.get('pass');
+                      const reviewActive = pathname.includes('/stage/editorial') && passParam === pass;
 
-          {getStageIndex(currentStage) >= getStageIndex('editorial') && chapters.length > 0 && (
-            <div className="mt-2 ml-1 pl-3 border-l border-border">
-              <button
-                type="button"
-                onClick={() => setIsEditingPassesExpanded(!isEditingPassesExpanded)}
-                className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded text-[0.6875rem] font-medium text-muted-foreground/80 hover:bg-muted/50 border-none bg-transparent cursor-pointer"
-              >
-                <svg
-                  className={cn('w-3 h-3 transition-transform shrink-0', !isEditingPassesExpanded && '-rotate-90')}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                Editing passes
-              </button>
-              {isEditingPassesExpanded && (
-                <div className="mt-1 space-y-2 pb-1">
-                  {EDITORIAL_PASSES.map((pass) => {
-                    const canReview = canStartEditorialPass(
-                      pass,
-                      chapters,
-                      getApprovedStub,
-                      revisionTasks
-                    );
-                    const reviewDone = approvedEditorialDocForPass(documents, pass);
-                    const revDone = passRevisionTasksAllDone(revisionTasks, pass);
-                    const hasRevTasks = revisionTasks.some((t) => t.editPass === pass);
-                    const passParam = searchParams.get('pass');
-                    const reviewActive = pathname.includes('/stage/editorial') && passParam === pass;
-                    const revActive = pathname.includes('/stage/revision') && passParam === pass;
-
-                    return (
-                      <div key={pass} className="text-xs">
-                        <p className="text-muted-foreground/70 font-medium px-2 mb-0.5">
-                          {EDITORIAL_PASS_LABELS[pass]}
-                        </p>
-                        <div className="flex flex-col gap-0.5 pl-1">
-                          <Link
-                            href={canReview ? `/projects/${projectId}/stage/editorial?pass=${pass}` : '#'}
-                            onClick={(e) => !canReview && e.preventDefault()}
-                            className={cn(
-                              'flex items-center gap-1.5 px-2 py-1 rounded no-underline',
-                              !canReview && 'opacity-50 cursor-not-allowed pointer-events-none',
-                              reviewActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50',
-                              reviewDone && 'text-[var(--status-approved)]'
-                            )}
-                          >
-                            {reviewDone && statusIndicators.approved}
-                            <span>Review</span>
-                          </Link>
-                          <Link
-                            href={hasRevTasks ? `/projects/${projectId}/stage/revision?pass=${pass}` : '#'}
-                            onClick={(e) => !hasRevTasks && e.preventDefault()}
-                            className={cn(
-                              'flex items-center gap-1.5 px-2 py-1 rounded no-underline',
-                              !hasRevTasks && 'opacity-50 cursor-not-allowed pointer-events-none',
-                              revActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50',
-                              revDone && hasRevTasks && 'text-[var(--status-approved)]'
-                            )}
-                          >
-                            {revDone && hasRevTasks && statusIndicators.approved}
-                            <span>Revisions</span>
-                          </Link>
+                      return (
+                        <div key={pass} className="text-xs">
+                          <p className="text-muted-foreground/70 font-medium px-2 mb-0.5">
+                            {EDITORIAL_PASS_LABELS[pass]}
+                          </p>
+                          <div className="pl-1">
+                            <Link
+                              href={canReview ? `/projects/${projectId}/stage/editorial?pass=${pass}` : '#'}
+                              onClick={(e) => !canReview && e.preventDefault()}
+                              className={cn(
+                                'flex items-center gap-1.5 px-2 py-1 rounded no-underline',
+                                !canReview && 'opacity-50 cursor-not-allowed pointer-events-none',
+                                reviewActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+                                reviewDone && 'text-[var(--status-approved)]'
+                              )}
+                            >
+                              {reviewDone && statusIndicators.approved}
+                              <span>Review</span>
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                      );
+                    })}
+                  </div>
+                )}
+                {stage === 'revision' && showPassSubnav && isRevisionPassesExpanded && (
+                  <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
+                    {EDITORIAL_PASSES.map((pass) => {
+                      const revDone = passRevisionTasksAllDone(revisionTasks, pass);
+                      const hasRevTasks = revisionTasks.some((t) => t.editPass === pass);
+                      const passParam = searchParams.get('pass');
+                      const revActive = pathname.includes('/stage/revision') && passParam === pass;
+
+                      return (
+                        <div key={pass} className="text-xs">
+                          <p className="text-muted-foreground/70 font-medium px-2 mb-0.5">
+                            {EDITORIAL_PASS_LABELS[pass]}
+                          </p>
+                          <div className="pl-1">
+                            <Link
+                              href={hasRevTasks ? `/projects/${projectId}/stage/revision?pass=${pass}` : '#'}
+                              onClick={(e) => !hasRevTasks && e.preventDefault()}
+                              className={cn(
+                                'flex items-center gap-1.5 px-2 py-1 rounded no-underline',
+                                !hasRevTasks && 'opacity-50 cursor-not-allowed pointer-events-none',
+                                revActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+                                revDone && hasRevTasks && 'text-[var(--status-approved)]'
+                              )}
+                            >
+                              {revDone && hasRevTasks && statusIndicators.approved}
+                              <span>Revisions</span>
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Fragment>
+            ))}
+          </div>
         </div>
 
         {/* Marketing */}
