@@ -4,13 +4,14 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { WorkflowSidebar } from '@/components/layout';
 import { ModelSelector } from '@/components/stages';
-import type { WorkflowStage, Chapter, RevisionTask, Project } from '@/types';
+import type { WorkflowStage, Chapter, RevisionTask, Project, ProjectDocument } from '@/types';
 
 interface MarketingLayoutProps {
   projectId: string;
   title: string;
   stage: 'blurb' | 'amazon-description';
   project: Project;
+  documents?: ProjectDocument[];
   chapters?: Chapter[];
   revisionTasks?: RevisionTask[];
   children: ReactNode;
@@ -21,6 +22,7 @@ export function MarketingLayout({
   title,
   stage,
   project,
+  documents = [],
   chapters = [],
   revisionTasks = [],
   children,
@@ -38,9 +40,11 @@ export function MarketingLayout({
         chapters={chapters}
         approvedChapterIds={approvedChapterIds}
         revisionTasks={revisionTasks}
+        documents={documents}
         finalExportedAt={project.finalExportedAt}
         blurbFilled={!!project.blurb?.trim()}
         amazonDescriptionFilled={!!project.amazonDescription?.trim()}
+        approvedCoverImageId={project.approvedCoverImageId ?? null}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="border-b border-border bg-card px-12 py-8">

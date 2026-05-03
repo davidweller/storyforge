@@ -45,6 +45,24 @@ export function runMigrations(db: Database.Database): void {
     ON editorial_issues (projectId, editPass, status, chapterNumber)
   `);
 
+  const pr2 = columnNames(db, 'projects');
+  if (!pr2.has('approvedCoverImageId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN approvedCoverImageId TEXT`);
+  }
+  if (!pr2.has('approvedBackCoverImageId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN approvedBackCoverImageId TEXT`);
+  }
+  if (!pr2.has('coverGenerationStatus')) {
+    db.exec(
+      `ALTER TABLE projects ADD COLUMN coverGenerationStatus TEXT NOT NULL DEFAULT 'not-started'`
+    );
+  }
+  if (!pr2.has('paperbackGenerationStatus')) {
+    db.exec(
+      `ALTER TABLE projects ADD COLUMN paperbackGenerationStatus TEXT NOT NULL DEFAULT 'not-started'`
+    );
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS generation_usage (
       id TEXT PRIMARY KEY,

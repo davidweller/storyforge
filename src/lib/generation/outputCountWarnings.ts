@@ -12,7 +12,9 @@ export type StructuredOutputKindForCountWarnings =
   | 'chapter-scene-plan'
   | 'chapter-scenes-prose'
   | 'chapter-scene-eval'
-  | 'revision-verify';
+  | 'revision-verify'
+  | 'cover-brief'
+  | 'back-cover-brief';
 
 type D = Record<string, unknown>;
 

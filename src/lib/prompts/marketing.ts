@@ -1,76 +1,31 @@
 export const BLURB_SYSTEM = `Role
-You are a professional fiction copywriter specialising in back-of-the-book blurbs that sell without summarising the full plot.
+You are a professional fiction copywriter specialising in high-conversion back-of-the-book blurbs.
 
 Task
-Write a compelling back-cover blurb for a novel using best practices for commercial fiction.
+Write a compelling back-cover blurb for a novel. Your goal is to "sell the sizzle, not the steak"—create intrigue and emotional connection without summarising the entire plot.
 
 Requirements
 
-Length: 120–180 words (concise, high-impact)
+Length: 120–180 words.
 
-Tone and style appropriate to the specified genre
+Tone and Style: Match the specified genre and niche. Use evocative, punchy prose.
 
-Present tense
+Voice: Third-person, present tense (unless the genre specifically demands otherwise).
 
-No spoilers beyond the first act
+Protagonist Integrity: You MUST use the exact character names and traits provided in the Character Profiles reference. Do not hallucinate or change names.
 
-Focus on emotional promise, not plot mechanics
+Structure:
+1. The Hook: A bold opening that captures the central conflict or premise.
+2. The Setup: Introduce the protagonist and their world. What do they want? What is their current state?
+3. The Disruption: What changes everything? What is the inciting incident?
+4. The Stakes: What happens if they fail? Focus on internal and external consequences.
+5. The Promise: A final sentence that signals the genre's payoff and leaves the reader wanting more.
 
-Avoid rhetorical questions unless explicitly requested
-
-Avoid clichés and generic phrasing
-
-Do not mention themes explicitly—show them through setup
-
-Blurb Structure
-
-Hook (1–2 sentences)
-
-Introduce the protagonist and their core problem or emotional state
-
-Establish tone immediately
-
-Disruption / Inciting Change
-
-What forces the protagonist into a new situation?
-
-What is at stake if they fail or refuse to change?
-
-Escalation / Emotional Stakes
-
-Hint at relationships, inner conflict, or central tension
-
-Suggest the journey without revealing outcomes
-
-Promise Line (Final sentence or paragraph)
-
-Clearly signal genre and reader experience
-
-Reinforce why this story will be satisfying to the target audience
-
-Input Information
-Use the following details to tailor the blurb:
-
-Genre and subgenre:
-
-Target audience:
-
-Protagonist (age, role, emotional state):
-
-Setting:
-
-Core internal conflict:
-
-External situation or change:
-
-Key relationship(s) (if relevant):
-
-Emotional tone (e.g. cozy, dark, hopeful, romantic):
-
-Comparable titles (optional):
-
-Output
-Produce one polished back-cover blurb, formatted as final publishing copy, suitable for Amazon, paperback backs, and marketing materials.`;
+Constraints:
+- No spoilers beyond the first act.
+- Avoid clichés like "In a world where..." or "Everything changes when..."
+- Do not mention themes explicitly.
+- Avoid rhetorical questions.`;
 
 export function buildBlurbPrompt(params: {
   genre: string;
@@ -80,29 +35,36 @@ export function buildBlurbPrompt(params: {
   marketAnalysis?: string;
   readerTargeting?: string;
   plotBlueprint?: string;
+  charactersReference?: string;
 }): string {
-  const { genre, niche, title, premise, marketAnalysis, readerTargeting, plotBlueprint } = params;
+  const { genre, niche, title, premise, marketAnalysis, readerTargeting, plotBlueprint, charactersReference } = params;
 
-  let prompt = `Write a back-cover blurb using the structure and requirements you have been given.
+  let prompt = `Write a professional back-cover blurb.
 
 **Title:** ${title || 'Untitled'}
+**Genre/Niche:** ${genre}${niche ? `; ${niche}` : ''}`;
 
-**Genre and subgenre:** ${genre}${niche ? `; ${niche}` : ''}`;
+  if (charactersReference) {
+    prompt += `\n\n**Character Profiles (PRIMARY SOURCE FOR NAMES):**\n${charactersReference.slice(0, 2000)}`;
+  }
 
   if (premise) {
-    prompt += `\n\n**Premise (use to inform protagonist, setting, conflict, and situation):** ${premise}`;
-  }
-  if (readerTargeting) {
-    prompt += `\n\nUse the following to inform target audience, protagonist, emotional tone, and key relationships:\n${readerTargeting.slice(0, 1000)}`;
-  }
-  if (plotBlueprint) {
-    prompt += `\n\nUse the following story structure to inform protagonist, setting, core internal conflict, external situation, and key relationships. Do not spoil beyond the first act:\n${plotBlueprint.slice(0, 1200)}`;
-  }
-  if (marketAnalysis) {
-    prompt += `\n\nUse for genre tone and optional comparable titles / positioning:\n${marketAnalysis.slice(0, 600)}`;
+    prompt += `\n\n**Premise:** ${premise}`;
   }
 
-  prompt += `\n\nFrom the material above, derive the Input Information (genre and subgenre, target audience, protagonist, setting, core internal conflict, external situation, key relationships, emotional tone) and write one polished back-cover blurb (120–180 words) in present tense. Output the blurb only, no labels or meta-commentary.`;
+  if (plotBlueprint) {
+    prompt += `\n\n**Story Structure (Plot Blueprint):**\n${plotBlueprint.slice(0, 2500)}`;
+  }
+
+  if (readerTargeting) {
+    prompt += `\n\n**Reader Targeting & Audience:**\n${readerTargeting.slice(0, 1000)}`;
+  }
+
+  if (marketAnalysis) {
+    prompt += `\n\n**Market Analysis & Tone:**\n${marketAnalysis.slice(0, 1000)}`;
+  }
+
+  prompt += `\n\nBased on the above, write one polished blurb (120–180 words) in present tense. Ensure the protagonist's name and role strictly match the Character Profiles provided. Output the blurb only.`;
 
   return prompt;
 }
@@ -110,103 +72,16 @@ export function buildBlurbPrompt(params: {
 export const AMAZON_DESCRIPTION_SYSTEM = `You are an expert Amazon KDP copywriter and fiction marketing specialist.
 
 Task:
-Write a high-converting, SEO-optimised Amazon book description that follows this exact structure and purpose.
+Write a high-converting, SEO-optimised Amazon book description.
 
-Requirements
+Requirements:
+1. Opening Excerpt (The Hook): A 150–300 word scene from the book that establishes tone and character voice.
+2. Narrative Sales Copy (The Pitch): A concise, evocative description of the journey.
+3. "Perfect for readers who love" (The Targeting): A bulleted list of tropes, genres, and comparable vibes.
 
-The description must do three things, in this order:
+Character Integrity: Use the exact names and details from the Character Profiles. Do not deviate from canonical names.
 
-1. Opening Excerpt (Hook)
-
-Begin with a short in-book excerpt (150–300 words max).
-
-Choose a scene that is emotionally compelling for the target audience.
-
-The excerpt must not spoil the ending or resolution.
-
-It should introduce tone, voice, and emotional promise (not plot twists).
-
-Format as normal paragraph text (no quotation marks around the whole excerpt).
-
-2. Narrative Description (Sales Copy)
-
-After a clear separator (e.g. ---), write a concise but evocative description of the book.
-
-Introduce:
-
-The protagonist(s)
-
-Their emotional state or problem
-
-The central setting
-
-The speculative or genre hook (magic, romance trope, mystery, etc.)
-
-Focus on emotional promise rather than plot summary.
-
-Avoid spoilers.
-
-Use clean, readable prose suitable for Amazon KDP.
-
-Keep language accessible and warm, not overly literary or pretentious.
-
-End with a short, resonant thematic line (1–2 sentences).
-
-3. Targeted Niche List
-
-Add a section titled "Perfect for readers who love:"
-
-Use bullet points.
-
-Each bullet should name a specific reader niche, trope, or promise, such as:
-
-Genre + sub-genre
-
-Romance tropes
-
-Protagonist age or life stage
-
-Tone (cozy, low-stakes, emotional, etc.)
-
-Setting type
-
-Content guarantees (e.g. no love triangles, happy ending)
-
-Optimise bullets for Amazon SEO and skimmability.
-
-Use plain text or simple emphasis (bold optional).
-
-Constraints
-
-Do not mention "this book," "the author," or "the reader."
-
-Do not include metadata labels (e.g. "blurb," "synopsis").
-
-Do not include content warnings unless explicitly requested.
-
-Assume the goal is conversion and discoverability, not literary analysis.
-
-Input Variables (to be provided)
-
-Genre and sub-niche:
-
-Protagonist(s):
-
-Setting:
-
-Core emotional theme:
-
-Primary tropes:
-
-Tone:
-
-Ending type (e.g. HEA, hopeful, bittersweet):
-
-Any exclusions (e.g. no cheating, no love triangle):
-
-Output
-
-Return a fully written Amazon-ready description following the structure above, formatted as plain text suitable for direct upload to Amazon KDP.`;
+Formatting: Use HTML-style bolding (<b>...</b>) sparingly for emphasis if requested, or plain text with clear headings. Use --- as a separator between the excerpt and the pitch.`;
 
 export function buildAmazonDescriptionPrompt(params: {
   genre: string;
@@ -216,29 +91,46 @@ export function buildAmazonDescriptionPrompt(params: {
   marketAnalysis?: string;
   readerTargeting?: string;
   plotBlueprint?: string;
+  charactersReference?: string;
+  blurb?: string;
 }): string {
-  const { genre, niche, title, premise, marketAnalysis, readerTargeting, plotBlueprint } = params;
+  const { genre, niche, title, premise, marketAnalysis, readerTargeting, plotBlueprint, charactersReference, blurb } = params;
 
-  let prompt = `Write an Amazon KDP description using the structure and requirements you have been given.
+  let prompt = `Write an Amazon KDP description.
 
 **Title:** ${title || 'Untitled'}
+**Genre/Niche:** ${genre}${niche ? `; ${niche}` : ''}`;
 
-**Genre and sub-niche:** ${genre}${niche ? `; ${niche}` : ''}`;
+  if (charactersReference) {
+    prompt += `\n\n**Character Profiles (CANONICAL NAMES):**\n${charactersReference.slice(0, 2000)}`;
+  }
+
+  if (blurb) {
+    prompt += `\n\n**Approved Blurb (Use for tone and consistency):**\n${blurb}`;
+  }
+
+  if (plotBlueprint) {
+    prompt += `\n\n**Story Structure (Plot Blueprint):**\n${plotBlueprint.slice(0, 3000)}`;
+  }
+
+  if (readerTargeting) {
+    prompt += `\n\n**Target Audience & Tropes:**\n${readerTargeting.slice(0, 1500)}`;
+  }
 
   if (marketAnalysis) {
-    prompt += `\n\nUse the following market/genre context to inform genre, sub-niche, tone, and positioning:\n${marketAnalysis.slice(0, 1000)}`;
+    prompt += `\n\n**Market Analysis:**\n${marketAnalysis.slice(0, 1000)}`;
   }
-  if (readerTargeting) {
-    prompt += `\n\nUse the following reader targeting to inform protagonist(s), tropes, tone, ending type, and exclusions:\n${readerTargeting.slice(0, 1200)}`;
-  }
-  if (plotBlueprint) {
-    prompt += `\n\nUse the following story structure to inform protagonist(s), setting, core emotional theme, and to choose an excerpt that does not spoil the ending:\n${plotBlueprint.slice(0, 1500)}`;
-  }
+
   if (premise) {
     prompt += `\n\n**Premise:** ${premise}`;
   }
 
-  prompt += `\n\nFrom the material above, derive the Input Variables (genre and sub-niche, protagonist(s), setting, core emotional theme, primary tropes, tone, ending type, any exclusions) and then write the full Amazon-ready description in three parts: Opening Excerpt, Narrative Description (after ---), and "Perfect for readers who love:" bullet list. Output plain text only, no meta labels.`;
+  prompt += `\n\nWrite the description in three parts:
+1. An immersive opening excerpt (choose/invent based on character voice and blueprint).
+2. A compelling narrative description (pitch) after a --- separator.
+3. A "Perfect for readers who love:" bulleted list.
+
+Strictly adhere to the character names in the reference. Output plain text only.`;
 
   return prompt;
 }

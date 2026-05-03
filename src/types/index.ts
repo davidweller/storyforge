@@ -25,7 +25,9 @@ export type WorkflowStage =
   | 'creative-brief'  // Internal compact canon brief generation stage
   | 'blurb'           // Marketing: back-cover blurb
   | 'amazon-description'  // Marketing: Amazon product description
-  | 'revision-verify'; // Post-revision checklist (structured JSON)
+  | 'revision-verify' // Post-revision checklist (structured JSON)
+  | 'cover-brief'     // Structured cover direction (JSON)
+  | 'back-cover-brief'; // Back-panel visual brief (JSON)
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 
@@ -45,7 +47,11 @@ export type DocumentType =
   | 'editorial-line'
   | 'editorial-copy'
   | 'editorial-proofread'
-  | 'editorial-final';
+  | 'editorial-final'
+  | 'cover-brief'
+  | 'cover-image'
+  | 'paperback-spec'
+  | 'back-cover-brief';
 
 /** Ordered editorial pipeline passes (structural → line → copy → proofread → final_report). */
 export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread' | 'final_report';
@@ -77,8 +83,90 @@ export interface Project {
   finalExportedAt?: Date;  // Timestamp when final export was completed
   blurb?: string;          // Back-cover / marketing blurb
   amazonDescription?: string;  // Amazon product description
+  /** Approved front cover raster document id (`cover-image`, surface front). */
+  approvedCoverImageId?: string | null;
+  /** Approved back panel background document id (`cover-image`, surface back). */
+  approvedBackCoverImageId?: string | null;
+  coverGenerationStatus?: CoverTrackStatus;
+  paperbackGenerationStatus?: CoverTrackStatus;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export type CoverTrackStatus = 'not-started' | 'in-progress' | 'complete';
+
+/** JSON stored in document `cover-brief` rows. */
+export interface CoverBriefDocument {
+  schemaVersion: 1;
+  generatedAt: string;
+  derivedFrom: {
+    storyBibleDocumentId: string;
+    creativeBriefDocumentId: string | null;
+    titleApprovedAt: string;
+  };
+  recommendedArchetypes: Array<{
+    archetypeId: string;
+    rationale: string;
+  }>;
+  paletteDirection: string;
+  visualElements: string[];
+  visualAvoid: string[];
+  typographyDirection: string;
+  moodKeywords: string[];
+  coverComps: string[];
+}
+
+/** JSON stored in document `cover-image` rows (`content`). */
+export interface CoverImagePayload {
+  schemaVersion: 1;
+  runId: string;
+  archetypeId: string;
+  highClickEnabled: boolean;
+  promptUsed: string;
+  variantIndex: number;
+  parentImageId: string | null;
+  refinementRequest: string | null;
+  version: number;
+  surface: 'front' | 'back';
+  status: 'candidate' | 'discarded' | 'approved';
+  imageData: string;
+  generatedAt: string;
+  /** Accumulated refinement lines appended to prompt (restart clears). */
+  refinementHistory?: string[];
+}
+
+/** JSON in `paperback-spec` documents. */
+export interface PaperbackSpecPayload {
+  schemaVersion: 1;
+  mode: 'calculated' | 'from_kdp_template';
+  trimWidthIn: number;
+  trimHeightIn: number;
+  paperType: string;
+  pageCount: number;
+  canvasWidthPx: number;
+  canvasHeightPx: number;
+  bleedPx: number;
+  frontPanelRect: { x: number; y: number; width: number; height: number };
+  spineRect: { x: number; y: number; width: number; height: number };
+  backPanelRect: { x: number; y: number; width: number; height: number };
+  spineWidthPxOverride?: number | null;
+  calculatedCanvas?: { canvasWidthPx: number; canvasHeightPx: number } | null;
+  updatedAt: string;
+  trimPresetKey?: string | null;
+}
+
+/** JSON in `back-cover-brief` documents. */
+export interface BackCoverBriefDocument {
+  schemaVersion: 1;
+  derivedFrom: {
+    coverBriefDocumentId: string;
+    approvedCoverImageId: string;
+  };
+  backgroundStyle: string;
+  moodContinuity: string;
+  avoidElements: string[];
+  compositionNotes: string;
+  approvedAt: string | null;
 }
 
 export interface ProjectDocument {

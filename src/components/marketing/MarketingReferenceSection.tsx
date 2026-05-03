@@ -7,6 +7,7 @@ import type { ProjectDocument } from '@/types';
 const REFERENCE_ITEMS = [
   { type: 'genre' as const, label: 'Market Analysis', stageId: 'genre-research' },
   { type: 'niche' as const, label: 'Reader Targeting', stageId: 'niche' },
+  { type: 'characters' as const, label: 'Character Profiles', stageId: 'characters' },
   { type: 'structure' as const, label: 'Plot Blueprint', stageId: 'structure' },
 ] as const;
 
@@ -20,8 +21,9 @@ interface MarketingReferenceSectionProps {
 
 export function MarketingReferenceSection({ projectId, getDocumentByType }: MarketingReferenceSectionProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    'genre': true,
-    'niche': true,
+    'genre': false,
+    'niche': false,
+    'characters': true,
     'structure': true,
   });
 
@@ -35,7 +37,7 @@ export function MarketingReferenceSection({ projectId, getDocumentByType }: Mark
         Reference
       </h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Use your Market Analysis, Reader Targeting, and Plot Blueprint below while writing your marketing copy.
+        Use your Market Analysis, Reader Targeting, Character Profiles, and Plot Blueprint below while writing your marketing copy.
       </p>
       <div className="flex flex-col gap-3">
         {REFERENCE_ITEMS.map(({ type, label, stageId }) => {

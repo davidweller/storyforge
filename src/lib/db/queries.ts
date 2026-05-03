@@ -60,6 +60,16 @@ function rowToProject(row: Record<string, unknown>): Project {
     finalExportedAt: row.finalExportedAt ? toDate(row.finalExportedAt as string) : undefined,
     blurb: (row.blurb as string) ?? undefined,
     amazonDescription: (row.amazonDescription as string) ?? undefined,
+    approvedCoverImageId: (row.approvedCoverImageId as string | null) ?? undefined,
+    approvedBackCoverImageId: (row.approvedBackCoverImageId as string | null) ?? undefined,
+    coverGenerationStatus:
+      typeof row.coverGenerationStatus === 'string'
+        ? (row.coverGenerationStatus as import('@/types').CoverTrackStatus)
+        : 'not-started',
+    paperbackGenerationStatus:
+      typeof row.paperbackGenerationStatus === 'string'
+        ? (row.paperbackGenerationStatus as import('@/types').CoverTrackStatus)
+        : 'not-started',
     createdAt: toDate(row.createdAt as string),
     updatedAt: toDate(row.updatedAt as string),
   };
@@ -235,6 +245,22 @@ export async function updateProject(
   }
   if (data.blurb !== undefined) { fields.push('blurb = ?'); values.push(data.blurb ?? null); }
   if (data.amazonDescription !== undefined) { fields.push('amazonDescription = ?'); values.push(data.amazonDescription ?? null); }
+  if (data.approvedCoverImageId !== undefined) {
+    fields.push('approvedCoverImageId = ?');
+    values.push(data.approvedCoverImageId ?? null);
+  }
+  if (data.approvedBackCoverImageId !== undefined) {
+    fields.push('approvedBackCoverImageId = ?');
+    values.push(data.approvedBackCoverImageId ?? null);
+  }
+  if (data.coverGenerationStatus !== undefined) {
+    fields.push('coverGenerationStatus = ?');
+    values.push(data.coverGenerationStatus);
+  }
+  if (data.paperbackGenerationStatus !== undefined) {
+    fields.push('paperbackGenerationStatus = ?');
+    values.push(data.paperbackGenerationStatus);
+  }
 
   if (fields.length === 0) return;
   fields.push('updatedAt = ?');

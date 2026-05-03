@@ -47,6 +47,10 @@ import {
   BLURB_SYSTEM, buildBlurbPrompt,
   AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt,
   STORY_BIBLE_SYSTEM, buildStoryBiblePrompt, buildCreativeBriefPrompt,
+  COVER_BRIEF_SYSTEM,
+  BACK_COVER_BRIEF_SYSTEM,
+  buildCoverBriefPrompt,
+  buildBackCoverBriefPrompt,
   CHAPTER_SCENE_PLAN_SYSTEM, buildChapterScenePlanPrompt,
   CHAPTER_SCENE_PROSE_SYSTEM, buildChapterSceneProsePrompt,
   CHAPTER_POLISH_SYSTEM, buildChapterPolishPrompt,
@@ -67,6 +71,7 @@ import {
   ChapterOutlineSchema,
   SceneCardSchema,
 } from '@/lib/generation/schemas';
+import { parseCoverBrief, parseBackCoverBrief } from '@/lib/generation/coverSchemas';
 import { structuredOutputCountWarnings } from '@/lib/generation/outputCountWarnings';
 import { strictCardinalityViolation } from '@/lib/generation/cardinalityGate';
 import { gateEditorialManuscriptContext } from '@/lib/editorial/manuscriptModelGate';
@@ -80,6 +85,7 @@ const WORKFLOW_STAGES = [
   'chapter-scene-plan', 'chapter-scenes-prose', 'chapter-polish', 'chapter-scene-eval',
   'story-bible', 'creative-brief', 'chapters', 'compilation', 'export-draft',
   'editorial', 'editorial-issues', 'revision', 'revision-verify', 'export-final', 'blurb', 'amazon-description',
+  'cover-brief', 'back-cover-brief',
 ] as const;
 
 const USAGE_SOURCE_VALUES = [
@@ -116,7 +122,9 @@ type StructuredOutputKind =
   | 'chapter-scene-plan'
   | 'chapter-scenes-prose'
   | 'chapter-scene-eval'
-  | 'revision-verify';
+  | 'revision-verify'
+  | 'cover-brief'
+  | 'back-cover-brief';
 
 const EditorialPassSchema = z.enum(['structural', 'line', 'copy', 'proofread', 'final_report']);
 const optionalString = z.string().optional();
@@ -334,6 +342,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     marketAnalysis: optionalString,
     readerTargeting: optionalString,
     plotBlueprint: optionalString,
+    charactersReference: optionalString,
   }).passthrough(),
   'amazon-description': z.object({
     genre: requiredString,
@@ -343,7 +352,14 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     marketAnalysis: optionalString,
     readerTargeting: optionalString,
     plotBlueprint: optionalString,
+    charactersReference: optionalString,
     blurb: optionalString,
+  }).passthrough(),
+  'cover-brief': z.object({
+    assembledCanon: requiredString,
+  }).passthrough(),
+  'back-cover-brief': z.object({
+    assembledContext: requiredString,
   }).passthrough(),
 };
 
@@ -358,6 +374,8 @@ function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutpu
   if (stage === 'chapter-summary') return 'chapter-summary';
   if (stage === 'story-bible') return 'story-bible';
   if (stage === 'creative-brief') return 'creative-brief';
+  if (stage === 'cover-brief') return 'cover-brief';
+  if (stage === 'back-cover-brief') return 'back-cover-brief';
   if (stage === 'editorial' && data.createQueue) return 'revision-queue';
   if (stage === 'editorial-issues') return 'revision-queue';
   if (stage === 'chapter-scene-plan') return 'chapter-scene-plan';
@@ -393,6 +411,12 @@ function normalizeStructuredOutput(kind: StructuredOutputKind, content: string):
   }
   if (kind === 'creative-brief') {
     return JSON.stringify(parseCreativeBrief(content), null, 2);
+  }
+  if (kind === 'cover-brief') {
+    return JSON.stringify(parseCoverBrief(content), null, 2);
+  }
+  if (kind === 'back-cover-brief') {
+    return JSON.stringify(parseBackCoverBrief(content), null, 2);
   }
   if (kind === 'chapter-scene-plan') {
     return JSON.stringify(parseChapterScenePlan(content), null, 2);
@@ -459,8 +483,16 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
   'story-bible': (d) => ({ system: STORY_BIBLE_SYSTEM, prompt: buildStoryBiblePrompt({ title: d.title as string | undefined, premise: d.premise as string | undefined, genre: d.genre as string, niche: d.niche as string | undefined, research: d.research as string | undefined, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, endingReference: d.endingReference as string | undefined, endingChoice: d.endingChoice as string | undefined, charactersReference: d.charactersReference as string | undefined, structureReference: d.structureReference as string | undefined, chapterOutlinesReference: d.chapterOutlinesReference as string | undefined, derivedFrom: d.derivedFrom as import('@/types').StoryBibleSourceRef[] }) }),
   'creative-brief': (d) => ({ system: STORY_BIBLE_SYSTEM, prompt: buildCreativeBriefPrompt({ storyBibleContent: d.storyBibleContent as string, storyBibleDocumentId: d.storyBibleDocumentId as string, storyBibleVersion: d.storyBibleVersion as number, storyBibleUpdatedAt: d.storyBibleUpdatedAt as string }) }),
   'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, assembledContext: d.assembledContext as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummaries: d.previousChapterSummaries as Array<{ chapterNumber: number; title: string; summary: string }> | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, wordTarget: d.wordTarget as number | undefined }) }),
-  'blurb': (d) => ({ system: BLURB_SYSTEM, prompt: buildBlurbPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined }) }),
-  'amazon-description': (d) => ({ system: AMAZON_DESCRIPTION_SYSTEM, prompt: buildAmazonDescriptionPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined }) }),
+  'blurb': (d) => ({ system: BLURB_SYSTEM, prompt: buildBlurbPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined, charactersReference: d.charactersReference as string | undefined }) }),
+  'amazon-description': (d) => ({ system: AMAZON_DESCRIPTION_SYSTEM, prompt: buildAmazonDescriptionPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined, charactersReference: d.charactersReference as string | undefined, blurb: d.blurb as string | undefined }) }),
+  'cover-brief': (d) => ({
+    system: COVER_BRIEF_SYSTEM,
+    prompt: buildCoverBriefPrompt(d.assembledCanon as string),
+  }),
+  'back-cover-brief': (d) => ({
+    system: BACK_COVER_BRIEF_SYSTEM,
+    prompt: buildBackCoverBriefPrompt(d.assembledContext as string),
+  }),
   'chapter-scene-plan': (d) => {
     let outlineChapter: import('@/lib/generation/schemas').ChapterOutline | undefined;
     const slice = d.outlineSliceJson as string | undefined;

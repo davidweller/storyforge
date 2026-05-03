@@ -16,6 +16,7 @@ export default function AmazonDescriptionPage() {
   const projectId = params?.projectId as string | undefined;
   const {
     project,
+    documents,
     chapters,
     revisionTasks,
     loading,
@@ -59,6 +60,7 @@ export default function AmazonDescriptionPage() {
     const genreDoc = getDocumentByType('genre');
     const nicheDoc = getDocumentByType('niche');
     const structureDoc = getDocumentByType('structure');
+    const charactersDoc = getDocumentByType('characters');
     const selectedModel = getEffectiveModelForStage('amazon-description');
     try {
       const result = await generate('amazon-description', {
@@ -69,6 +71,8 @@ export default function AmazonDescriptionPage() {
         marketAnalysis: genreDoc?.content,
         readerTargeting: nicheDoc?.content,
         plotBlueprint: structureDoc?.content,
+        charactersReference: charactersDoc?.content,
+        blurb: project.blurb,
       }, { model: selectedModel.id, projectId, usageSource: 'manual-stage' });
       setValue(result.content);
       save(result.content);
@@ -122,6 +126,7 @@ export default function AmazonDescriptionPage() {
       title="Amazon Description"
       stage="amazon-description"
       project={project}
+      documents={documents ?? []}
       chapters={chapters ?? []}
       revisionTasks={revisionTasks ?? []}
     >

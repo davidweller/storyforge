@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
-import type { WorkflowStage, ProjectFormData, DocumentType } from '@/types';
+import type { WorkflowStage, ProjectFormData, DocumentType, Project } from '@/types';
 
 const LOCAL_USER_ID = 'local';
 
@@ -114,7 +114,7 @@ export function useProject(projectId: string | null) {
     revisionTasks,
     loading,
     error,
-    updateProject: (data: Partial<{ title: string; genre: string; niche?: string; premise?: string; research?: string; blurb?: string; amazonDescription?: string; fullAutoMode?: boolean }>) =>
+    updateProject: (data: Partial<Omit<Project, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) =>
       currentProject && updateProject(currentProject.id, data),
     createDocument,
     updateDocument,

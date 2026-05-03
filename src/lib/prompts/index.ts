@@ -25,4 +25,21 @@ export {
 } from './editorial';
 export { BLURB_SYSTEM, buildBlurbPrompt, AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt } from './marketing';
 export { STORY_BIBLE_SYSTEM, buildStoryBiblePrompt, buildCreativeBriefPrompt } from './storyBible';
+export {
+  COVER_GENERATION_SYSTEM,
+  COVER_BRIEF_SYSTEM,
+  BACK_COVER_BRIEF_SYSTEM,
+  BACK_COVER_HARD_NO_TEXT_LINE,
+  HIGH_CLICK_BLOCK,
+  COVER_ARCHETYPES,
+  buildCoverBriefPrompt,
+  buildBackCoverBriefPrompt,
+  assembleCoverPrompt,
+  buildCoverPromptTokens,
+  archetypesForGenreRows,
+  genreLooksRomance,
+  buildBackCoverImagePrompt,
+  type CoverArchetypeMeta,
+  type CoverArchetypeId,
+} from './covers';
 export { contextBlock } from './utils';

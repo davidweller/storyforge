@@ -28,6 +28,7 @@ interface WorkflowSidebarProps {
   finalExportedAt?: Date;  // Optional - timestamp when final export was completed
   blurbFilled?: boolean;  // When true, show Blurb tab as green (generated)
   amazonDescriptionFilled?: boolean;  // When true, show Amazon Description tab as green (generated)
+  approvedCoverImageId?: string | null;
 }
 
 const stageIcons: Record<WorkflowStage, React.ReactNode> = {
@@ -156,6 +157,16 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   ),
+  'cover-brief': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  ),
+  'back-cover-brief': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12M8 12h8m-8 5h12M4 5h2v14H4V5z" />
+    </svg>
+  ),
 };
 
 const statusColors: Record<StageStatus, string> = {
@@ -203,15 +214,21 @@ export function WorkflowSidebar({
   finalExportedAt,
   blurbFilled = false,
   amazonDescriptionFilled = false,
+  approvedCoverImageId,
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isChaptersExpanded, setIsChaptersExpanded] = useState(false);
-  const [isEditorialPassesExpanded, setIsEditorialPassesExpanded] = useState(true);
-  const [isRevisionPassesExpanded, setIsRevisionPassesExpanded] = useState(true);
+  const [isEditorialPassesExpanded, setIsEditorialPassesExpanded] = useState(false);
+  const [isRevisionPassesExpanded, setIsRevisionPassesExpanded] = useState(false);
 
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
+
+  const coverCanonUnlocked = documents.some(
+    (d) => (d.type === 'story-bible' || d.type === 'creative-brief') && d.approved
+  );
+  const paperbackUnlocked = Boolean(approvedCoverImageId);
 
   // Group stages: planning (0-6), writing (7-8), editing (9+)
   const planningStages = STAGE_ORDER.slice(0, 7); // setup through title
@@ -586,6 +603,82 @@ export function WorkflowSidebar({
                   )}
                   {mktStage === 'amazon-description' ? 'Amazon Description' : 'Blurb for back of book'}
                   {isFilled && marketingCheck}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Cover */}
+        <div>
+          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
+            Cover
+          </p>
+          <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground/60 px-3 mb-1">Front cover</p>
+          <div className="flex flex-col gap-1 mb-3">
+            {(
+              [
+                ['brief', 'Cover Brief'],
+                ['archetype', 'Archetype Selection'],
+                ['generate', 'Generation'],
+                ['refine', 'Refinement'],
+                ['export', 'Export (Kindle / ebook)'],
+              ] as const
+            ).map(([slug, label]) => {
+              const href = coverCanonUnlocked ? `/projects/${projectId}/cover/front/${slug}` : '#';
+              const active = pathname.includes(`/cover/front/${slug}`);
+              return (
+                <Link
+                  key={slug}
+                  href={href}
+                  title={
+                    !coverCanonUnlocked ? 'Complete your Story Bible first to unlock Cover Generation.' : undefined
+                  }
+                  onClick={(e) => !coverCanonUnlocked && e.preventDefault()}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                    !coverCanonUnlocked && 'opacity-50 cursor-not-allowed',
+                    active
+                      ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                      : 'text-muted-foreground hover:bg-muted/60'
+                  )}
+                >
+                  <span className="shrink-0">{stageIcons['cover-brief']}</span>
+                  <span className="flex-1 truncate">{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+          <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground/60 px-3 mb-1">Paperback</p>
+          <div className="flex flex-col gap-1">
+            {(
+              [
+                ['spec', 'Paperback spec'],
+                ['back-brief', 'Back cover brief'],
+                ['back-generate', 'Back cover generation'],
+                ['back-refine', 'Back cover refinement'],
+                ['paperback-export', 'Full-wrap export'],
+              ] as const
+            ).map(([slug, label]) => {
+              const unlocked = coverCanonUnlocked && paperbackUnlocked;
+              const href = unlocked ? `/projects/${projectId}/cover/paperback/${slug}` : '#';
+              const active = pathname.includes(`/cover/paperback/${slug}`);
+              return (
+                <Link
+                  key={slug}
+                  href={href}
+                  title={!paperbackUnlocked ? 'Approve the front cover first' : !coverCanonUnlocked ? 'Complete your Story Bible first' : undefined}
+                  onClick={(e) => !unlocked && e.preventDefault()}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                    !unlocked && 'opacity-50 cursor-not-allowed',
+                    active
+                      ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                      : 'text-muted-foreground hover:bg-muted/60'
+                  )}
+                >
+                  <span className="shrink-0">{stageIcons['back-cover-brief']}</span>
+                  <span className="flex-1 truncate">{label}</span>
                 </Link>
               );
             })}

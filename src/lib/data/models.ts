@@ -256,6 +256,8 @@ export const STAGE_DEFAULT_MODEL_IDS = {
   'export-final': 'claude-sonnet-4-6',
   blurb: 'claude-sonnet-4-6',
   'amazon-description': 'claude-sonnet-4-6',
+  'cover-brief': 'claude-sonnet-4-6-thinking-medium',
+  'back-cover-brief': 'claude-sonnet-4-6-thinking-medium',
 } as const satisfies Record<WorkflowStage, string>;
 
 // Default LLM provider per workflow stage (mirrors registry ids — all Anthropic for generation stages).
@@ -285,6 +287,8 @@ export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
   'export-final': 'anthropic',
   blurb: 'anthropic',
   'amazon-description': 'anthropic',
+  'cover-brief': 'anthropic',
+  'back-cover-brief': 'anthropic',
 };
 
 // Get default model for a stage

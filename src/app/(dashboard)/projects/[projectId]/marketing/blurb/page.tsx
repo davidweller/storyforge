@@ -16,6 +16,7 @@ export default function BlurbPage() {
   const projectId = params?.projectId as string | undefined;
   const {
     project,
+    documents,
     chapters,
     revisionTasks,
     loading,
@@ -59,6 +60,7 @@ export default function BlurbPage() {
     const genreDoc = getDocumentByType('genre');
     const nicheDoc = getDocumentByType('niche');
     const structureDoc = getDocumentByType('structure');
+    const charactersDoc = getDocumentByType('characters');
     const selectedModel = getEffectiveModelForStage('blurb');
     try {
       const result = await generate('blurb', {
@@ -69,6 +71,7 @@ export default function BlurbPage() {
         marketAnalysis: genreDoc?.content,
         readerTargeting: nicheDoc?.content,
         plotBlueprint: structureDoc?.content,
+        charactersReference: charactersDoc?.content,
       }, { model: selectedModel.id, projectId, usageSource: 'manual-stage' });
       setValue(result.content);
       save(result.content);
@@ -122,6 +125,7 @@ export default function BlurbPage() {
       title="Blurb for back of book"
       stage="blurb"
       project={project}
+      documents={documents ?? []}
       chapters={chapters ?? []}
       revisionTasks={revisionTasks ?? []}
     >
