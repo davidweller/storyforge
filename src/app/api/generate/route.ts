@@ -13,6 +13,7 @@ import {
 } from '@/lib/data/models';
 import { TARGET_MANUSCRIPT_WORDS, CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET } from '@/lib/constants';
 import type { WorkflowStage, EditorialPass, GenerationUsageSource } from '@/types';
+import type { CoverArchetypeId } from '@/lib/prompts/covers';
 import * as dbq from '@/lib/db/queries';
 
 const EDITORIAL_PASS_VALUES: EditorialPass[] = [
@@ -50,7 +51,11 @@ import {
   COVER_BRIEF_SYSTEM,
   BACK_COVER_BRIEF_SYSTEM,
   buildCoverBriefPrompt,
+  buildCoverBriefPromptForArchetype,
   buildBackCoverBriefPrompt,
+  buildBackCoverBriefPromptV2,
+  syncResolvedPromptFromLayers,
+  syncBackCoverResolvedFromLayers,
   CHAPTER_SCENE_PLAN_SYSTEM, buildChapterScenePlanPrompt,
   CHAPTER_SCENE_PROSE_SYSTEM, buildChapterSceneProsePrompt,
   CHAPTER_POLISH_SYSTEM, buildChapterPolishPrompt,
@@ -72,9 +77,60 @@ import {
   SceneCardSchema,
 } from '@/lib/generation/schemas';
 import { parseCoverBrief, parseBackCoverBrief } from '@/lib/generation/coverSchemas';
+import { isCoverBriefV2, isBackCoverBriefV2 } from '@/types';
 import { structuredOutputCountWarnings } from '@/lib/generation/outputCountWarnings';
 import { strictCardinalityViolation } from '@/lib/generation/cardinalityGate';
 import { gateEditorialManuscriptContext } from '@/lib/editorial/manuscriptModelGate';
+
+const COVER_ARCHETYPE_IDS = new Set<CoverArchetypeId>([
+  'A1',
+  'A2',
+  'A3',
+  'A4',
+  'A5',
+  'A6',
+  'A7',
+  'R1',
+  'R2',
+  'R3',
+  'R4',
+  'R5',
+  'R6',
+]);
+
+function isCoverArchetypeId(s: string): s is CoverArchetypeId {
+  return COVER_ARCHETYPE_IDS.has(s as CoverArchetypeId);
+}
+
+type NormalizeCtx = {
+  genre?: string;
+  backCover?: {
+    genre: string;
+    paletteDirection: string;
+    moodKeywords: string[];
+    archetypeEcho?: string;
+    blurb?: string;
+  };
+};
+
+function buildNormalizeCtx(stage: WorkflowStage, data: D): NormalizeCtx | undefined {
+  if (stage === 'cover-brief') {
+    return { genre: typeof data.genre === 'string' ? data.genre : undefined };
+  }
+  if (stage === 'back-cover-brief') {
+    return {
+      backCover: {
+        genre: typeof data.genre === 'string' && data.genre.trim() ? data.genre : 'fiction',
+        paletteDirection:
+          typeof data.paletteDirection === 'string' ? data.paletteDirection : '',
+        moodKeywords: Array.isArray(data.moodKeywords) ? (data.moodKeywords as string[]) : [],
+        archetypeEcho: typeof data.archetypeEcho === 'string' ? data.archetypeEcho : undefined,
+        blurb: typeof data.blurb === 'string' ? data.blurb : undefined,
+      },
+    };
+  }
+  return undefined;
+}
 
 /** Long editorials need headroom on Vercel and similar hosts (local dev usually ignores this). */
 export const maxDuration = 800;
@@ -343,6 +399,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     readerTargeting: optionalString,
     plotBlueprint: optionalString,
     charactersReference: optionalString,
+    coverToneBlock: optionalString,
   }).passthrough(),
   'amazon-description': z.object({
     genre: requiredString,
@@ -354,13 +411,25 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     plotBlueprint: optionalString,
     charactersReference: optionalString,
     blurb: optionalString,
+    coverToneBlock: optionalString,
   }).passthrough(),
-  'cover-brief': z.object({
-    assembledCanon: requiredString,
-  }).passthrough(),
-  'back-cover-brief': z.object({
-    assembledContext: requiredString,
-  }).passthrough(),
+  'cover-brief': z
+    .object({
+      assembledCanon: requiredString,
+      archetypeId: z.string().optional(),
+      genre: z.string().optional(),
+    })
+    .passthrough(),
+  'back-cover-brief': z
+    .object({
+      assembledContext: requiredString,
+      genre: z.string().optional(),
+      paletteDirection: z.string().optional(),
+      moodKeywords: z.array(z.string()).optional(),
+      archetypeEcho: z.string().optional(),
+      blurb: z.string().optional(),
+    })
+    .passthrough(),
 };
 
 function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutputKind | null {
@@ -385,7 +454,7 @@ function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutpu
   return null;
 }
 
-function normalizeStructuredOutput(kind: StructuredOutputKind, content: string): string {
+function normalizeStructuredOutput(kind: StructuredOutputKind, content: string, ctx?: NormalizeCtx): string {
   if (kind === 'ending-concepts') {
     const endings = parseEndingConcepts(content);
     if (endings.length === 0) throw new Error('No ending concepts found in structured output.');
@@ -413,10 +482,19 @@ function normalizeStructuredOutput(kind: StructuredOutputKind, content: string):
     return JSON.stringify(parseCreativeBrief(content), null, 2);
   }
   if (kind === 'cover-brief') {
-    return JSON.stringify(parseCoverBrief(content), null, 2);
+    const brief = parseCoverBrief(content);
+    if (isCoverBriefV2(brief)) {
+      const genre = ctx?.genre?.trim() || 'fiction';
+      return JSON.stringify(syncResolvedPromptFromLayers(brief, genre, false), null, 2);
+    }
+    return JSON.stringify(brief, null, 2);
   }
   if (kind === 'back-cover-brief') {
-    return JSON.stringify(parseBackCoverBrief(content), null, 2);
+    const brief = parseBackCoverBrief(content);
+    if (isBackCoverBriefV2(brief) && ctx?.backCover?.paletteDirection.trim()) {
+      return JSON.stringify(syncBackCoverResolvedFromLayers(brief, ctx.backCover), null, 2);
+    }
+    return JSON.stringify(brief, null, 2);
   }
   if (kind === 'chapter-scene-plan') {
     return JSON.stringify(parseChapterScenePlan(content), null, 2);
@@ -483,15 +561,46 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
   'story-bible': (d) => ({ system: STORY_BIBLE_SYSTEM, prompt: buildStoryBiblePrompt({ title: d.title as string | undefined, premise: d.premise as string | undefined, genre: d.genre as string, niche: d.niche as string | undefined, research: d.research as string | undefined, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, endingReference: d.endingReference as string | undefined, endingChoice: d.endingChoice as string | undefined, charactersReference: d.charactersReference as string | undefined, structureReference: d.structureReference as string | undefined, chapterOutlinesReference: d.chapterOutlinesReference as string | undefined, derivedFrom: d.derivedFrom as import('@/types').StoryBibleSourceRef[] }) }),
   'creative-brief': (d) => ({ system: STORY_BIBLE_SYSTEM, prompt: buildCreativeBriefPrompt({ storyBibleContent: d.storyBibleContent as string, storyBibleDocumentId: d.storyBibleDocumentId as string, storyBibleVersion: d.storyBibleVersion as number, storyBibleUpdatedAt: d.storyBibleUpdatedAt as string }) }),
   'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, assembledContext: d.assembledContext as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummaries: d.previousChapterSummaries as Array<{ chapterNumber: number; title: string; summary: string }> | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, wordTarget: d.wordTarget as number | undefined }) }),
-  'blurb': (d) => ({ system: BLURB_SYSTEM, prompt: buildBlurbPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined, charactersReference: d.charactersReference as string | undefined }) }),
-  'amazon-description': (d) => ({ system: AMAZON_DESCRIPTION_SYSTEM, prompt: buildAmazonDescriptionPrompt({ genre: d.genre as string, niche: d.niche as string | undefined, title: d.title as string | undefined, premise: d.premise as string | undefined, marketAnalysis: d.marketAnalysis as string | undefined, readerTargeting: d.readerTargeting as string | undefined, plotBlueprint: d.plotBlueprint as string | undefined, charactersReference: d.charactersReference as string | undefined, blurb: d.blurb as string | undefined }) }),
-  'cover-brief': (d) => ({
-    system: COVER_BRIEF_SYSTEM,
-    prompt: buildCoverBriefPrompt(d.assembledCanon as string),
+  'blurb': (d) => ({
+    system: BLURB_SYSTEM,
+    prompt: buildBlurbPrompt({
+      genre: d.genre as string,
+      niche: d.niche as string | undefined,
+      title: d.title as string | undefined,
+      premise: d.premise as string | undefined,
+      marketAnalysis: d.marketAnalysis as string | undefined,
+      readerTargeting: d.readerTargeting as string | undefined,
+      plotBlueprint: d.plotBlueprint as string | undefined,
+      charactersReference: d.charactersReference as string | undefined,
+      coverToneBlock: typeof d.coverToneBlock === 'string' ? d.coverToneBlock : undefined,
+    }),
   }),
+  'amazon-description': (d) => ({
+    system: AMAZON_DESCRIPTION_SYSTEM,
+    prompt: buildAmazonDescriptionPrompt({
+      genre: d.genre as string,
+      niche: d.niche as string | undefined,
+      title: d.title as string | undefined,
+      premise: d.premise as string | undefined,
+      marketAnalysis: d.marketAnalysis as string | undefined,
+      readerTargeting: d.readerTargeting as string | undefined,
+      plotBlueprint: d.plotBlueprint as string | undefined,
+      charactersReference: d.charactersReference as string | undefined,
+      blurb: d.blurb as string | undefined,
+      coverToneBlock: typeof d.coverToneBlock === 'string' ? d.coverToneBlock : undefined,
+    }),
+  }),
+  'cover-brief': (d) => {
+    const assembled = d.assembledCanon as string;
+    const arch = typeof d.archetypeId === 'string' ? d.archetypeId.trim() : '';
+    if (arch && isCoverArchetypeId(arch)) {
+      return { system: COVER_BRIEF_SYSTEM, prompt: buildCoverBriefPromptForArchetype(assembled, arch) };
+    }
+    return { system: COVER_BRIEF_SYSTEM, prompt: buildCoverBriefPrompt(assembled) };
+  },
   'back-cover-brief': (d) => ({
     system: BACK_COVER_BRIEF_SYSTEM,
-    prompt: buildBackCoverBriefPrompt(d.assembledContext as string),
+    prompt: buildBackCoverBriefPromptV2(d.assembledContext as string),
   }),
   'chapter-scene-plan': (d) => {
     let outlineChapter: import('@/lib/generation/schemas').ChapterOutline | undefined;
@@ -843,6 +952,7 @@ export async function POST(request: NextRequest) {
     });
     
     const structuredOutputKind = getStructuredOutputKind(stage, data);
+    const normalizeCtx = buildNormalizeCtx(stage, data);
     const useJsonMode = !!structuredOutputKind;
     const sceneEvalMaxTokens = stage === 'chapter-scene-eval' ? CHAPTER_SCENE_EVAL_OUTPUT_TOKEN_BUDGET : undefined;
 
@@ -857,7 +967,7 @@ export async function POST(request: NextRequest) {
 
     if (structuredOutputKind) {
       try {
-        result.content = normalizeStructuredOutput(structuredOutputKind, result.content);
+        result.content = normalizeStructuredOutput(structuredOutputKind, result.content, normalizeCtx);
       } catch (validationError) {
         const repairPrompt = buildRepairPrompt(
           structuredOutputKind,
@@ -873,7 +983,7 @@ export async function POST(request: NextRequest) {
           anthropicSystem: undefined,
           ...(sceneEvalMaxTokens ? { maxTokens: sceneEvalMaxTokens } : {}),
         });
-        result.content = normalizeStructuredOutput(structuredOutputKind, repairResult.content);
+        result.content = normalizeStructuredOutput(structuredOutputKind, repairResult.content, normalizeCtx);
         result.tokensUsed += repairResult.tokensUsed;
       }
     }

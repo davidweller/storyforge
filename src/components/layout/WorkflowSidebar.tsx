@@ -221,6 +221,8 @@ export function WorkflowSidebar({
   const [isChaptersExpanded, setIsChaptersExpanded] = useState(false);
   const [isEditorialPassesExpanded, setIsEditorialPassesExpanded] = useState(false);
   const [isRevisionPassesExpanded, setIsRevisionPassesExpanded] = useState(false);
+  const [isFrontCoverExpanded, setIsFrontCoverExpanded] = useState(true);
+  const [isBackCoverExpanded, setIsBackCoverExpanded] = useState(true);
 
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
@@ -614,74 +616,135 @@ export function WorkflowSidebar({
           <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
             Cover
           </p>
-          <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground/60 px-3 mb-1">Front cover</p>
-          <div className="flex flex-col gap-1 mb-3">
-            {(
-              [
-                ['brief', 'Cover Brief'],
-                ['archetype', 'Archetype Selection'],
-                ['generate', 'Generation'],
-                ['refine', 'Refinement'],
-                ['export', 'Export (Kindle / ebook)'],
-              ] as const
-            ).map(([slug, label]) => {
-              const href = coverCanonUnlocked ? `/projects/${projectId}/cover/front/${slug}` : '#';
-              const active = pathname.includes(`/cover/front/${slug}`);
-              return (
-                <Link
-                  key={slug}
-                  href={href}
-                  title={
-                    !coverCanonUnlocked ? 'Complete your Story Bible first to unlock Cover Generation.' : undefined
-                  }
-                  onClick={(e) => !coverCanonUnlocked && e.preventDefault()}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
-                    !coverCanonUnlocked && 'opacity-50 cursor-not-allowed',
-                    active
-                      ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
-                      : 'text-muted-foreground hover:bg-muted/60'
-                  )}
+          <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1 mb-3">
+            <div className="text-xs">
+              <button
+                type="button"
+                aria-expanded={isFrontCoverExpanded}
+                onClick={() => setIsFrontCoverExpanded(!isFrontCoverExpanded)}
+                className="w-full flex items-center gap-1.5 px-2 mb-0.5 bg-transparent border-none cursor-pointer text-muted-foreground/70 font-medium"
+                title={isFrontCoverExpanded ? 'Collapse front cover' : 'Expand front cover'}
+              >
+                <span className="flex-1 text-left">Front cover</span>
+                <svg
+                  className={cn('w-3.5 h-3.5 transition-transform duration-200', !isFrontCoverExpanded && '-rotate-90')}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <span className="shrink-0">{stageIcons['cover-brief']}</span>
-                  <span className="flex-1 truncate">{label}</span>
-                </Link>
-              );
-            })}
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {isFrontCoverExpanded && (
+                <div className="pl-1 flex flex-col gap-1">
+                  {(
+                    [
+                      ['archetype', 'Archetype Selection'],
+                      ['brief', 'Cover Brief'],
+                      ['generate', 'Generation'],
+                      ['refine', 'Refinement'],
+                      ['export', 'Export'],
+                    ] as const
+                  ).map(([slug, label]) => {
+                    const href = coverCanonUnlocked ? `/projects/${projectId}/cover/front/${slug}` : '#';
+                    const active = pathname.includes(`/cover/front/${slug}`);
+                    return (
+                      <Link
+                        key={slug}
+                        href={href}
+                        title={
+                          !coverCanonUnlocked ? 'Complete your Story Bible first to unlock Cover Generation.' : undefined
+                        }
+                        onClick={(e) => !coverCanonUnlocked && e.preventDefault()}
+                        className={cn(
+                          'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
+                          !coverCanonUnlocked && 'opacity-50 cursor-not-allowed',
+                          active
+                            ? 'bg-muted text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/50'
+                        )}
+                      >
+                        <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
+                          {stageIcons['cover-brief']}
+                        </span>
+                        <span className="flex-1 truncate">{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-          <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground/60 px-3 mb-1">Paperback</p>
-          <div className="flex flex-col gap-1">
-            {(
-              [
-                ['spec', 'Paperback spec'],
-                ['back-brief', 'Back cover brief'],
-                ['back-generate', 'Back cover generation'],
-                ['back-refine', 'Back cover refinement'],
-                ['paperback-export', 'Full-wrap export'],
-              ] as const
-            ).map(([slug, label]) => {
-              const unlocked = coverCanonUnlocked && paperbackUnlocked;
-              const href = unlocked ? `/projects/${projectId}/cover/paperback/${slug}` : '#';
-              const active = pathname.includes(`/cover/paperback/${slug}`);
-              return (
-                <Link
-                  key={slug}
-                  href={href}
-                  title={!paperbackUnlocked ? 'Approve the front cover first' : !coverCanonUnlocked ? 'Complete your Story Bible first' : undefined}
-                  onClick={(e) => !unlocked && e.preventDefault()}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
-                    !unlocked && 'opacity-50 cursor-not-allowed',
-                    active
-                      ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
-                      : 'text-muted-foreground hover:bg-muted/60'
-                  )}
+          <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
+            <div className="text-xs">
+              <button
+                type="button"
+                aria-expanded={isBackCoverExpanded}
+                onClick={() => setIsBackCoverExpanded(!isBackCoverExpanded)}
+                className="w-full flex items-center gap-1.5 px-2 mb-0.5 bg-transparent border-none cursor-pointer text-muted-foreground/70 font-medium"
+                title={isBackCoverExpanded ? 'Collapse back cover' : 'Expand back cover'}
+              >
+                <span className="flex-1 text-left">Back cover</span>
+                <svg
+                  className={cn('w-3.5 h-3.5 transition-transform duration-200', !isBackCoverExpanded && '-rotate-90')}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <span className="shrink-0">{stageIcons['back-cover-brief']}</span>
-                  <span className="flex-1 truncate">{label}</span>
-                </Link>
-              );
-            })}
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {isBackCoverExpanded && (
+                <div className="pl-1 flex flex-col gap-1">
+                  {(
+                    [
+                      ['back-brief', 'Back cover brief'],
+                      ['back-generate', 'Back cover generation'],
+                      ['back-refine', 'Back cover refinement'],
+                      ['back-export', 'Back cover export'],
+                      ['/cover/paperback/full-wrap', 'Full wrap'],
+                    ] as const
+                  ).map(([slug, label]) => {
+                    const unlocked = coverCanonUnlocked && paperbackUnlocked;
+                    const hrefPath =
+                      slug === '/cover/paperback/full-wrap'
+                        ? `/projects/${projectId}/cover/paperback/full-wrap`
+                        : `/projects/${projectId}/cover/paperback/${slug}`;
+                    const href = unlocked ? hrefPath : '#';
+                    const active =
+                      slug === '/cover/paperback/full-wrap'
+                        ? pathname.includes('/cover/paperback/full-wrap')
+                        : pathname.includes(`/cover/paperback/${slug}`);
+                    return (
+                      <Link
+                        key={slug}
+                        href={href}
+                        title={
+                          !paperbackUnlocked
+                            ? 'Approve the front cover first'
+                            : !coverCanonUnlocked
+                              ? 'Complete your Story Bible first'
+                              : undefined
+                        }
+                        onClick={(e) => !unlocked && e.preventDefault()}
+                        className={cn(
+                          'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
+                          !unlocked && 'opacity-50 cursor-not-allowed',
+                          active
+                            ? 'bg-muted text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/50'
+                        )}
+                      >
+                        <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
+                          {stageIcons['back-cover-brief']}
+                        </span>
+                        <span className="flex-1 truncate">{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>

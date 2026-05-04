@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${playfair.variable} ${crimson.variable}`}>
+    <html lang="en" className={`${playfair.variable} ${crimson.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         {children}
       </body>

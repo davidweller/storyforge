@@ -1,10 +1,12 @@
 import type { CoverBriefDocument, StoryBibleDocument } from '@/types';
+import { parseCoverBrief } from '@/lib/generation/coverSchemas';
 
 export function assembleCanonForCoverBrief(params: {
   genre: string;
   niche?: string;
   microniche?: string;
   title?: string;
+  authorName?: string;
   wordCountApprox: number;
   storyBible: StoryBibleDocument;
   storyBibleDocumentId: string;
@@ -17,6 +19,7 @@ export function assembleCanonForCoverBrief(params: {
     params.niche ? `NICHE: ${params.niche}` : null,
     params.microniche ? `MICRONICHE: ${params.microniche}` : null,
     `APPROVED TITLE: ${params.title ?? '(not selected yet — use premise/title stage output where present)'}`,
+    `AUTHOR DISPLAY NAME (for cover type): ${params.authorName?.trim() || '(set in project metadata if needed)'}`,
     `APPROX. MANUSCRIPT WORD COUNT: ${params.wordCountApprox}`,
     '',
     'STORY BIBLE (approved JSON source):',
@@ -40,8 +43,7 @@ export function isoNow(): string {
 
 export function safeParseCoverBrief(content: string): CoverBriefDocument | null {
   try {
-    const t = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-    return JSON.parse(t) as CoverBriefDocument;
+    return parseCoverBrief(content.trim());
   } catch {
     return null;
   }

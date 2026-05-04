@@ -8,6 +8,7 @@ import { Button, Textarea } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { getEffectiveModelForStage } from '@/lib/data/models';
+import { formatCoverToneForPrompt, resolveApprovedCoverTone } from '@/lib/cover/marketingCoverTone';
 
 const DEBOUNCE_MS = 500;
 
@@ -63,23 +64,31 @@ export default function AmazonDescriptionPage() {
     const charactersDoc = getDocumentByType('characters');
     const selectedModel = getEffectiveModelForStage('amazon-description');
     try {
-      const result = await generate('amazon-description', {
-        genre: project.genre,
-        niche: project.niche,
-        title: project.title,
-        premise: project.premise,
-        marketAnalysis: genreDoc?.content,
-        readerTargeting: nicheDoc?.content,
-        plotBlueprint: structureDoc?.content,
-        charactersReference: charactersDoc?.content,
-        blurb: project.blurb,
-      }, { model: selectedModel.id, projectId, usageSource: 'manual-stage' });
+      const tone = resolveApprovedCoverTone(documents ?? [], project.approvedCoverImageId);
+      const coverToneBlock =
+        project.marketingAlignCoverToneAmazon && tone ? formatCoverToneForPrompt(tone) : undefined;
+      const result = await generate(
+        'amazon-description',
+        {
+          genre: project.genre,
+          niche: project.niche,
+          title: project.title,
+          premise: project.premise,
+          marketAnalysis: genreDoc?.content,
+          readerTargeting: nicheDoc?.content,
+          plotBlueprint: structureDoc?.content,
+          charactersReference: charactersDoc?.content,
+          blurb: project.blurb,
+          ...(coverToneBlock ? { coverToneBlock } : {}),
+        },
+        { model: selectedModel.id, projectId, usageSource: 'manual-stage' }
+      );
       setValue(result.content);
       save(result.content);
     } catch {
       // Error surfaced by useGenerate
     }
-  }, [project, getDocumentByType, generate, save, clearError, projectId]);
+  }, [project, documents, getDocumentByType, generate, save, clearError, projectId]);
 
   if (!projectId) {
     return (
@@ -139,6 +148,32 @@ export default function AmazonDescriptionPage() {
             <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{generateError}</p>
           </div>
         )}
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.875rem',
+            color: '#525252',
+            marginBottom: '0.75rem',
+            cursor: project.approvedCoverImageId ? 'pointer' : 'not-allowed',
+          }}
+          title={
+            !project.approvedCoverImageId
+              ? 'Approve a front cover first to enable this option.'
+              : undefined
+          }
+        >
+          <input
+            type="checkbox"
+            checked={Boolean(project.marketingAlignCoverToneAmazon)}
+            disabled={!project.approvedCoverImageId}
+            onChange={(e) =>
+              updateProject({ marketingAlignCoverToneAmazon: e.target.checked })
+            }
+          />
+          Align description tone with approved cover
+        </label>
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
           <Button onClick={handleGenerate} disabled={isGenerating}>
             {value ? 'Regenerate description' : 'Generate Amazon description'}

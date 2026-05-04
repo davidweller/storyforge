@@ -8,6 +8,7 @@ import { Button, Textarea } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { getEffectiveModelForStage } from '@/lib/data/models';
+import { formatCoverToneForPrompt, resolveApprovedCoverTone } from '@/lib/cover/marketingCoverTone';
 
 const DEBOUNCE_MS = 500;
 
@@ -63,22 +64,30 @@ export default function BlurbPage() {
     const charactersDoc = getDocumentByType('characters');
     const selectedModel = getEffectiveModelForStage('blurb');
     try {
-      const result = await generate('blurb', {
-        genre: project.genre,
-        niche: project.niche,
-        title: project.title,
-        premise: project.premise,
-        marketAnalysis: genreDoc?.content,
-        readerTargeting: nicheDoc?.content,
-        plotBlueprint: structureDoc?.content,
-        charactersReference: charactersDoc?.content,
-      }, { model: selectedModel.id, projectId, usageSource: 'manual-stage' });
+      const tone = resolveApprovedCoverTone(documents ?? [], project.approvedCoverImageId);
+      const coverToneBlock =
+        project.marketingAlignCoverToneBlurb && tone ? formatCoverToneForPrompt(tone) : undefined;
+      const result = await generate(
+        'blurb',
+        {
+          genre: project.genre,
+          niche: project.niche,
+          title: project.title,
+          premise: project.premise,
+          marketAnalysis: genreDoc?.content,
+          readerTargeting: nicheDoc?.content,
+          plotBlueprint: structureDoc?.content,
+          charactersReference: charactersDoc?.content,
+          ...(coverToneBlock ? { coverToneBlock } : {}),
+        },
+        { model: selectedModel.id, projectId, usageSource: 'manual-stage' }
+      );
       setValue(result.content);
       save(result.content);
     } catch {
       // Error surfaced by useGenerate
     }
-  }, [project, getDocumentByType, generate, save, clearError, projectId]);
+  }, [project, documents, getDocumentByType, generate, save, clearError, projectId]);
 
   if (!projectId) {
     return (
@@ -138,6 +147,32 @@ export default function BlurbPage() {
             <p style={{ fontSize: '0.875rem', color: '#dc2626' }}>{generateError}</p>
           </div>
         )}
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.875rem',
+            color: '#525252',
+            marginBottom: '0.75rem',
+            cursor: project.approvedCoverImageId ? 'pointer' : 'not-allowed',
+          }}
+          title={
+            !project.approvedCoverImageId
+              ? 'Approve a front cover first to enable this option.'
+              : undefined
+          }
+        >
+          <input
+            type="checkbox"
+            checked={Boolean(project.marketingAlignCoverToneBlurb)}
+            disabled={!project.approvedCoverImageId}
+            onChange={(e) =>
+              updateProject({ marketingAlignCoverToneBlurb: e.target.checked })
+            }
+          />
+          Align blurb tone with approved cover
+        </label>
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
           <Button onClick={handleGenerate} disabled={isGenerating}>
             {value ? 'Regenerate blurb' : 'Generate blurb'}

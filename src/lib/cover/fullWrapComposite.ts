@@ -1,92 +1,116 @@
+import { PDFDocument as PDFLibDoc } from 'pdf-lib';
 import sharp from 'sharp';
-import type { PaperbackSpecPayload } from '@/types';
 
-const ISBN_BARCODE_W_PX = Math.round(2 * 300);
-const ISBN_BARCODE_H_PX = Math.round(1.25 * 300);
-/** ~0.32" margin inside back panel toward trim. */
-const BARCODE_MARGIN_PX = Math.round(0.32 * 300);
+import type { WrapRect } from '@/lib/cover/fullWrapZones';
+export type { WrapRect } from '@/lib/cover/fullWrapZones';
 
-/** Place front/back in panel rects; spine as vertical gradient; barcode reserve on back. */
-export async function compositePaperbackFullWrap(params: {
-  spec: PaperbackSpecPayload;
-  frontB64: string;
-  backB64: string;
-  spineTopHex?: string;
-  spineBottomHex?: string;
-}): Promise<Buffer> {
-  const {
-    spec,
-    frontB64,
-    backB64,
-    spineTopHex = '#2d3748',
-    spineBottomHex = '#1a202c',
-  } = params;
+export type SpineConfig = {
+  titleText: string;
+  authorText: string;
+  seriesText: string | null;
+  backgroundColour: string;
+  textColour: string;
+};
 
-  const w = spec.canvasWidthPx;
-  const h = spec.canvasHeightPx;
-
-  const frontBuf = Buffer.from(frontB64, 'base64');
-  const backBuf = Buffer.from(backB64, 'base64');
-
-  const frontPlaced = await fitImageToPanel(frontBuf, spec.frontPanelRect);
-  const backPlaced = await fitImageToPanel(backBuf, spec.backPanelRect);
-
-  const spineSvg = buildSpineGradientSvg(spec.spineRect.width, spec.spineRect.height, spineTopHex, spineBottomHex);
-  const spineBuf = await sharp(Buffer.from(spineSvg)).png().toBuffer();
-
-  const composites: sharp.OverlayOptions[] = [
-    { input: backPlaced, left: spec.backPanelRect.x, top: spec.backPanelRect.y },
-    { input: spineBuf, left: spec.spineRect.x, top: spec.spineRect.y },
-    { input: frontPlaced, left: spec.frontPanelRect.x, top: spec.frontPanelRect.y },
-  ];
-
-  const back = spec.backPanelRect;
-  const bx = back.x + back.width - BARCODE_MARGIN_PX - ISBN_BARCODE_W_PX;
-  const by = back.y + back.height - BARCODE_MARGIN_PX - ISBN_BARCODE_H_PX;
-  const barcodeSvg = `<svg width="${ISBN_BARCODE_W_PX}" height="${ISBN_BARCODE_H_PX}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="white"/>
-</svg>`;
-  composites.push({
-    input: await sharp(Buffer.from(barcodeSvg)).png().toBuffer(),
-    left: bx,
-    top: by,
-  });
-
-  const base = sharp({
-    create: {
-      width: w,
-      height: h,
-      channels: 3,
-      background: '#ffffff',
-    },
-  }).png();
-
-  return base.composite(composites).toBuffer();
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-async function fitImageToPanel(
-  imgBuf: Buffer,
-  rect: PaperbackSpecPayload['frontPanelRect']
-): Promise<Buffer> {
-  return sharp(imgBuf)
-    .resize({
-      width: rect.width,
-      height: rect.height,
-      fit: 'cover',
-      position: sharp.strategy.attention,
-    })
+/** Rough dominant colour mean from cover image (RGB hex). */
+export async function dominantHexFromCoverB64(imageDataBase64: string): Promise<string> {
+  try {
+    const buf = Buffer.from(imageDataBase64, 'base64');
+    const stats = await sharp(buf).resize(40, 60).stats();
+    const r = Math.round(stats.channels[0]?.mean ?? 45);
+    const g = Math.round(stats.channels[1]?.mean ?? 45);
+    const b = Math.round(stats.channels[2]?.mean ?? 55);
+    const hx = (n: number) => n.toString(16).padStart(2, '0');
+    return `#${hx(r)}${hx(g)}${hx(b)}`;
+  } catch {
+    return '#1e293b';
+  }
+}
+
+export async function renderSpinePng(widthPx: number, heightPx: number, cfg: SpineConfig): Promise<Buffer> {
+  const cx = widthPx / 2;
+  const cy = heightPx / 2;
+  const titleFs = Math.max(10, Math.min(40, Math.floor(heightPx / 32)));
+  const authorFs = Math.max(9, Math.floor(titleFs * 0.55));
+  const series = cfg.seriesText?.trim() ? escapeXml(cfg.seriesText) : '';
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">
+  <rect width="100%" height="100%" fill="${escapeXml(cfg.backgroundColour)}"/>
+  <text x="${cx}" y="${cy - titleFs * 0.6}" font-family="Georgia, serif" font-weight="700"
+        font-size="${titleFs}" fill="${escapeXml(cfg.textColour)}" text-anchor="middle"
+        dominant-baseline="middle"
+        transform="rotate(-90, ${cx}, ${cy})">${escapeXml(cfg.titleText)}</text>
+  <text x="${cx}" y="${cy + titleFs}" font-family="Georgia, serif" font-weight="400"
+        font-size="${authorFs}" fill="${escapeXml(cfg.textColour)}" text-anchor="middle"
+        dominant-baseline="middle"
+        transform="rotate(-90, ${cx}, ${cy})">${escapeXml(cfg.authorText)}</text>
+  ${
+    series
+      ? `<text x="${cx}" y="${cy + titleFs + authorFs * 1.4}" font-family="Georgia, serif" font-weight="400"
+           font-size="${authorFs}" fill="${escapeXml(cfg.textColour)}" text-anchor="middle"
+           dominant-baseline="middle"
+           transform="rotate(-90, ${cx}, ${cy})">${series}</text>`
+      : ''
+  }
+</svg>`;
+
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+export async function compositeFullWrapToPng(params: {
+  canvasWidth: number;
+  canvasHeight: number;
+  backZone: WrapRect;
+  spineZone: WrapRect;
+  frontZone: WrapRect;
+  backImageB64: string;
+  spinePngBuffer: Buffer;
+  frontImageB64: string;
+}): Promise<Buffer> {
+  const { canvasWidth: cw, canvasHeight: ch } = params;
+  const backResized = await sharp(Buffer.from(params.backImageB64, 'base64'))
+    .resize(Math.round(params.backZone.width), Math.round(params.backZone.height), { fit: 'fill' })
+    .png()
+    .toBuffer();
+  const spineResized = await sharp(params.spinePngBuffer)
+    .resize(Math.round(params.spineZone.width), Math.round(params.spineZone.height), { fit: 'fill' })
+    .png()
+    .toBuffer();
+  const frontResized = await sharp(Buffer.from(params.frontImageB64, 'base64'))
+    .resize(Math.round(params.frontZone.width), Math.round(params.frontZone.height), { fit: 'fill' })
+    .png()
+    .toBuffer();
+
+  return sharp({
+    create: {
+      width: cw,
+      height: ch,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .composite([
+      { input: backResized, left: Math.round(params.backZone.x), top: Math.round(params.backZone.y) },
+      { input: spineResized, left: Math.round(params.spineZone.x), top: Math.round(params.spineZone.y) },
+      { input: frontResized, left: Math.round(params.frontZone.x), top: Math.round(params.frontZone.y) },
+    ])
     .png()
     .toBuffer();
 }
 
-function buildSpineGradientSvg(w: number, h: number, top: string, bottom: string): string {
-  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="${top}"/>
-      <stop offset="100%" stop-color="${bottom}"/>
-    </linearGradient>
-  </defs>
-  <rect width="100%" height="100%" fill="url(#g)"/>
-</svg>`;
+export async function rasterPngTopdfSheet(png: Buffer, widthPx: number, heightPx: number): Promise<Buffer> {
+  const doc = await PDFLibDoc.create();
+  const img = await doc.embedPng(png);
+  const page = doc.addPage([widthPx, heightPx]);
+  page.drawImage(img, { x: 0, y: 0, width: widthPx, height: heightPx });
+  return Buffer.from(await doc.save());
 }

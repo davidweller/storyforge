@@ -36,8 +36,20 @@ export function buildBlurbPrompt(params: {
   readerTargeting?: string;
   plotBlueprint?: string;
   charactersReference?: string;
+  /** When set (opt-in), append approved cover visual tone for alignment. */
+  coverToneBlock?: string;
 }): string {
-  const { genre, niche, title, premise, marketAnalysis, readerTargeting, plotBlueprint, charactersReference } = params;
+  const {
+    genre,
+    niche,
+    title,
+    premise,
+    marketAnalysis,
+    readerTargeting,
+    plotBlueprint,
+    charactersReference,
+    coverToneBlock,
+  } = params;
 
   let prompt = `Write a professional back-cover blurb.
 
@@ -62,6 +74,10 @@ export function buildBlurbPrompt(params: {
 
   if (marketAnalysis) {
     prompt += `\n\n**Market Analysis & Tone:**\n${marketAnalysis.slice(0, 1000)}`;
+  }
+
+  if (coverToneBlock?.trim()) {
+    prompt += `\n\n${coverToneBlock.trim()}`;
   }
 
   prompt += `\n\nBased on the above, write one polished blurb (120–180 words) in present tense. Ensure the protagonist's name and role strictly match the Character Profiles provided. Output the blurb only.`;
@@ -93,8 +109,20 @@ export function buildAmazonDescriptionPrompt(params: {
   plotBlueprint?: string;
   charactersReference?: string;
   blurb?: string;
+  coverToneBlock?: string;
 }): string {
-  const { genre, niche, title, premise, marketAnalysis, readerTargeting, plotBlueprint, charactersReference, blurb } = params;
+  const {
+    genre,
+    niche,
+    title,
+    premise,
+    marketAnalysis,
+    readerTargeting,
+    plotBlueprint,
+    charactersReference,
+    blurb,
+    coverToneBlock,
+  } = params;
 
   let prompt = `Write an Amazon KDP description.
 
@@ -123,6 +151,10 @@ export function buildAmazonDescriptionPrompt(params: {
 
   if (premise) {
     prompt += `\n\n**Premise:** ${premise}`;
+  }
+
+  if (coverToneBlock?.trim()) {
+    prompt += `\n\n${coverToneBlock.trim()}`;
   }
 
   prompt += `\n\nWrite the description in three parts:

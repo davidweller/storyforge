@@ -8,7 +8,9 @@ import { Button, Textarea } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { getEffectiveModelForStage } from '@/lib/data/models';
-import type { ProjectDocument } from '@/types';
+import { parseCoverBrief } from '@/lib/generation/coverSchemas';
+import type { CoverImagePayload, ProjectDocument } from '@/types';
+import { isCoverBriefV2 } from '@/types';
 
 function latestApprovedByType(documents: ProjectDocument[], type: ProjectDocument['type']): ProjectDocument | undefined {
   const row = [...documents.filter((d) => d.type === type && d.approved)].sort(
@@ -48,21 +50,35 @@ export default function BackCoverBriefPage() {
   }, [existing?.content, existing?.id]);
 
   const ctx = useMemo(() => {
-    if (!covBrief?.content || !frontId) return '';
+    if (!covBrief?.content || !frontId || !project) return '';
     try {
-      JSON.parse(covBrief.content);
+      parseCoverBrief(covBrief.content);
     } catch {
       return '';
+    }
+    const fid = documents.find((d) => d.id === frontId);
+    let archeEcho = '';
+    if (fid?.content) {
+      try {
+        const fp = JSON.parse(fid.content) as CoverImagePayload;
+        archeEcho =
+          fp.archetypeId && fp.promptUsed ? `${fp.archetypeId}: ${fp.promptUsed.slice(0, 400)}`.trim() : '';
+      } catch {
+        /* ignore */
+      }
     }
     return [
       `FRONT COVER IMAGE DOC: ${frontId}`,
       `COVER BRIEF JSON:`,
       covBrief.content,
+      `BLURB / placeholder text:\n${project.blurb || project.premise || '(not yet generated — leave abstract)'}`,
+      `GENRE: ${project.genre}`,
+      archeEcho ? `ARCHETYPE ECHO (front prompt excerpt):\n${archeEcho}` : '',
       story?.content ? `STORY BIBLE (extra context):\n${story.content}` : '',
     ]
       .filter(Boolean)
       .join('\n\n');
-  }, [covBrief, frontId, story]);
+  }, [covBrief, frontId, story, documents, project]);
 
   const persist = async (): Promise<string | null> => {
     if (!projectId || !json.trim()) return null;
@@ -77,10 +93,42 @@ export default function BackCoverBriefPage() {
   const handleGen = async () => {
     clearError();
     const model = getEffectiveModelForStage('back-cover-brief');
-    if (!ctx.trim() || !covBrief || !frontId) return;
+    if (!ctx.trim() || !covBrief || !frontId || !project) return;
+    let paletteDirection = '';
+    let moodKeywords: string[] = [];
+    try {
+      const c = parseCoverBrief(covBrief.content);
+      if (isCoverBriefV2(c)) {
+        paletteDirection = c.layers.background.paletteDirection;
+        moodKeywords = c.moodKeywords;
+      } else {
+        paletteDirection = c.paletteDirection;
+        moodKeywords = c.moodKeywords;
+      }
+    } catch {
+      return;
+    }
+    const fid = documents.find((d) => d.id === frontId);
+    let archetypeEcho = '';
+    if (fid?.content) {
+      try {
+        const fp = JSON.parse(fid.content) as CoverImagePayload;
+        archetypeEcho =
+          fp.archetypeId && fp.promptUsed ? `${fp.archetypeId}: ${fp.promptUsed.slice(0, 420)}`.trim() : '';
+      } catch {
+        /* ignore */
+      }
+    }
     const res = await generate(
       'back-cover-brief',
-      { assembledContext: ctx },
+      {
+        assembledContext: ctx,
+        genre: project.genre,
+        paletteDirection,
+        moodKeywords,
+        archetypeEcho: archetypeEcho || undefined,
+        blurb: project.blurb || undefined,
+      },
       { model: model.id, projectId, usageSource: 'manual-stage' }
     );
     setJson(res.content);

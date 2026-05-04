@@ -13,11 +13,11 @@ type CoverSlug =
   | 'generate'
   | 'refine'
   | 'export'
-  | 'spec'
   | 'back-brief'
   | 'back-generate'
   | 'back-refine'
-  | 'paperback-export';
+  | 'back-export'
+  | 'full-wrap';
 
 interface CoverLayoutProps {
   projectId: string;
@@ -33,25 +33,32 @@ interface CoverLayoutProps {
 }
 
 const FRONT_NAV: {
-  slug: Exclude<CoverSlug, 'spec' | 'back-brief' | 'back-generate' | 'back-refine' | 'paperback-export'>;
+  slug: Exclude<
+    CoverSlug,
+    | 'back-brief'
+    | 'back-generate'
+    | 'back-refine'
+    | 'back-export'
+    | 'full-wrap'
+  >;
   label: string;
 }[] = [
-  { slug: 'brief', label: 'Cover Brief' },
   { slug: 'archetype', label: 'Archetype Selection' },
+  { slug: 'brief', label: 'Cover Brief' },
   { slug: 'generate', label: 'Generation' },
   { slug: 'refine', label: 'Refinement' },
-  { slug: 'export', label: 'Export (Kindle / ebook)' },
+  { slug: 'export', label: 'Export' },
 ];
 
 const PB_NAV: {
-  slug: Extract<CoverSlug, 'spec' | 'back-brief' | 'back-generate' | 'back-refine' | 'paperback-export'>;
+  slug: Extract<CoverSlug, 'back-brief' | 'back-generate' | 'back-refine' | 'back-export' | 'full-wrap'>;
   label: string;
 }[] = [
-  { slug: 'spec', label: 'Paperback spec' },
   { slug: 'back-brief', label: 'Back cover brief' },
   { slug: 'back-generate', label: 'Back cover generation' },
   { slug: 'back-refine', label: 'Back cover refinement' },
-  { slug: 'paperback-export', label: 'Full-wrap export' },
+  { slug: 'back-export', label: 'Back cover export' },
+  { slug: 'full-wrap', label: 'Full wrap' },
 ];
 
 export function CoverLayout({
@@ -68,7 +75,7 @@ export function CoverLayout({
   const pathname = usePathname();
   const approvedChapterIds = new Set<string>();
 
-  const trail = section === 'front' ? 'Front cover' : 'Paperback';
+  const trail = section === 'front' ? 'Front cover' : 'Back Cover';
 
   return (
     <div className="flex h-[calc(100vh-var(--header-height))]">
@@ -91,7 +98,7 @@ export function CoverLayout({
         <div className="border-b border-border bg-card px-12 py-8">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center gap-2 mb-1 text-sm text-muted-foreground">
-              <Link href={`/projects/${projectId}/cover/front/brief`} className="hover:opacity-80 no-underline">
+              <Link href={`/projects/${projectId}/cover/front/archetype`} className="hover:opacity-80 no-underline">
                 Cover
               </Link>
               <span>/</span>
@@ -119,8 +126,14 @@ export function CoverLayout({
                     );
                   })
                 : PB_NAV.map((n) => {
-                    const href = `/projects/${projectId}/cover/paperback/${n.slug}`;
-                    const active = pathname.includes(`/cover/paperback/${n.slug}`);
+                    const href =
+                      n.slug === 'full-wrap'
+                        ? `/projects/${projectId}/cover/paperback/full-wrap`
+                        : `/projects/${projectId}/cover/paperback/${n.slug}`;
+                    const active =
+                      n.slug === 'full-wrap'
+                        ? pathname.includes('/cover/paperback/full-wrap')
+                        : pathname.includes(`/cover/paperback/${n.slug}`);
                     return (
                       <Link
                         key={n.slug}

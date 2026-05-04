@@ -50,8 +50,8 @@ export type DocumentType =
   | 'editorial-final'
   | 'cover-brief'
   | 'cover-image'
-  | 'paperback-spec'
-  | 'back-cover-brief';
+  | 'back-cover-brief'
+  | 'cover-full-wrap';
 
 /** Ordered editorial pipeline passes (structural → line → copy → proofread → final_report). */
 export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread' | 'final_report';
@@ -83,38 +83,37 @@ export interface Project {
   finalExportedAt?: Date;  // Timestamp when final export was completed
   blurb?: string;          // Back-cover / marketing blurb
   amazonDescription?: string;  // Amazon product description
+  /** Display / cover credit name (optional). */
+  authorName?: string;
   /** Approved front cover raster document id (`cover-image`, surface front). */
   approvedCoverImageId?: string | null;
   /** Approved back panel background document id (`cover-image`, surface back). */
   approvedBackCoverImageId?: string | null;
   coverGenerationStatus?: CoverTrackStatus;
   paperbackGenerationStatus?: CoverTrackStatus;
+  /** Base64 KDP template (PNG/JPEG) for full-wrap compositing. */
+  kdpTemplateImageData?: string | null;
+  /** When true, blurb generation appends approved cover tone context. */
+  marketingAlignCoverToneBlurb?: boolean;
+  /** When true, Amazon description appends approved cover tone context. */
+  marketingAlignCoverToneAmazon?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export type CoverTrackStatus = 'not-started' | 'in-progress' | 'complete';
 
-/** JSON stored in document `cover-brief` rows. */
-export interface CoverBriefDocument {
-  schemaVersion: 1;
-  generatedAt: string;
-  derivedFrom: {
-    storyBibleDocumentId: string;
-    creativeBriefDocumentId: string | null;
-    titleApprovedAt: string;
-  };
-  recommendedArchetypes: Array<{
-    archetypeId: string;
-    rationale: string;
-  }>;
-  paletteDirection: string;
-  visualElements: string[];
-  visualAvoid: string[];
-  typographyDirection: string;
-  moodKeywords: string[];
-  coverComps: string[];
-}
+export type {
+  CoverBriefDocument,
+  CoverBriefDocumentLegacy,
+  CoverBriefDocumentV2,
+  CoverBriefLayers,
+  BackCoverBriefDocument,
+  BackCoverBriefDocumentLegacy,
+  BackCoverBriefDocumentV2,
+  CoverFullWrapDocument,
+} from './coverBrief';
+export { isCoverBriefV2, isBackCoverBriefV2 } from './coverBrief';
 
 /** JSON stored in document `cover-image` rows (`content`). */
 export interface CoverImagePayload {
@@ -135,39 +134,6 @@ export interface CoverImagePayload {
   refinementHistory?: string[];
 }
 
-/** JSON in `paperback-spec` documents. */
-export interface PaperbackSpecPayload {
-  schemaVersion: 1;
-  mode: 'calculated' | 'from_kdp_template';
-  trimWidthIn: number;
-  trimHeightIn: number;
-  paperType: string;
-  pageCount: number;
-  canvasWidthPx: number;
-  canvasHeightPx: number;
-  bleedPx: number;
-  frontPanelRect: { x: number; y: number; width: number; height: number };
-  spineRect: { x: number; y: number; width: number; height: number };
-  backPanelRect: { x: number; y: number; width: number; height: number };
-  spineWidthPxOverride?: number | null;
-  calculatedCanvas?: { canvasWidthPx: number; canvasHeightPx: number } | null;
-  updatedAt: string;
-  trimPresetKey?: string | null;
-}
-
-/** JSON in `back-cover-brief` documents. */
-export interface BackCoverBriefDocument {
-  schemaVersion: 1;
-  derivedFrom: {
-    coverBriefDocumentId: string;
-    approvedCoverImageId: string;
-  };
-  backgroundStyle: string;
-  moodContinuity: string;
-  avoidElements: string[];
-  compositionNotes: string;
-  approvedAt: string | null;
-}
 
 export interface ProjectDocument {
   id: string;

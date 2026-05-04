@@ -7,12 +7,9 @@ import { CoverLayout } from '@/components/layout/CoverLayout';
 import { Button } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
 import { buildBackCoverImagePrompt, COVER_ARCHETYPES } from '@/lib/prompts';
-import type {
-  BackCoverBriefDocument,
-  CoverBriefDocument,
-  CoverImagePayload,
-  ProjectDocument,
-} from '@/types';
+import { parseCoverBrief } from '@/lib/generation/coverSchemas';
+import type { BackCoverBriefDocument, CoverBriefDocument, CoverImagePayload, ProjectDocument } from '@/types';
+import { isBackCoverBriefV2, isCoverBriefV2 } from '@/types';
 
 function latestApprovedByType(documents: ProjectDocument[], type: ProjectDocument['type']): ProjectDocument | undefined {
   const row = [...documents.filter((d) => d.type === type && d.approved)].sort(
@@ -24,8 +21,9 @@ function latestApprovedByType(documents: ProjectDocument[], type: ProjectDocumen
 export default function BackCoverGeneratePage() {
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
-  const { project, documents, chapters, revisionTasks, loading, error, createDocument, refresh, updateProject } =
-    useProject(projectId ?? null);
+  const { project, documents, chapters, revisionTasks, loading, error, refresh, updateProject } = useProject(
+    projectId ?? null
+  );
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -60,64 +58,61 @@ export default function BackCoverGeneratePage() {
       let cov: CoverBriefDocument;
       let backBrief: BackCoverBriefDocument;
       try {
-        cov = JSON.parse(approvedCoverBrief.content) as CoverBriefDocument;
+        cov = parseCoverBrief(approvedCoverBrief.content);
         backBrief = JSON.parse(approvedBackBrief.content) as BackCoverBriefDocument;
       } catch {
         throw new Error('Could not parse cover brief or back cover brief JSON.');
       }
+
+      const paletteDirection =
+        isCoverBriefV2(cov) ? cov.layers.background.paletteDirection : cov.paletteDirection;
 
       const archMeta = COVER_ARCHETYPES.find((a) => a.id === frontPayload!.archetypeId);
       const archetypeEcho =
         `${frontPayload!.archetypeId}${archMeta ? ` (${archMeta.name})` : ''}: ` +
         frontPayload!.promptUsed.slice(0, 400).trim();
 
-      const prompt = buildBackCoverImagePrompt({
-        genre: project.genre,
-        paletteDirection: cov.paletteDirection,
-        moodKeywords: cov.moodKeywords?.length ? cov.moodKeywords : ['commercial fiction'],
-        backBrief,
-        archetypeEcho,
-      });
+      const moodKeywords =
+        (isCoverBriefV2(cov) ? cov.moodKeywords?.length : cov.moodKeywords?.length)
+          ? (isCoverBriefV2(cov) ? cov.moodKeywords : cov.moodKeywords)
+          : ['commercial fiction'];
+
+      const prompt =
+        isBackCoverBriefV2(backBrief) && backBrief.resolvedPrompt?.trim()?.length ?
+          backBrief.resolvedPrompt
+        : buildBackCoverImagePrompt({
+            genre: project.genre,
+            paletteDirection,
+            moodKeywords,
+            backBrief,
+            archetypeEcho,
+            blurb: project.blurb || project.premise || 'Coming soon...',
+          });
 
       const runId = crypto.randomUUID();
       await updateProject({ paperbackGenerationStatus: 'in-progress' });
 
-      const res = await fetch('/api/cover/images', {
+      const res = await fetch('/api/cover/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, n: 4 }),
+        body: JSON.stringify({
+          projectId,
+          runId,
+          coverSide: 'back',
+          archetypes: [
+            {
+              archetypeId: frontPayload!.archetypeId,
+              prompt,
+              highClickEnabled: false,
+            },
+          ],
+          n: 4,
+          quality: 'high',
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(typeof j.error === 'string' ? j.error : 'Image API failed');
-      }
-      const data = (await res.json()) as { images: string[] };
-      let i = 0;
-      for (const b64 of data.images) {
-        const payload: CoverImagePayload = {
-          schemaVersion: 1,
-          runId,
-          archetypeId: frontPayload!.archetypeId,
-          highClickEnabled: false,
-          promptUsed: prompt,
-          variantIndex: i,
-          parentImageId: null,
-          refinementRequest: null,
-          version: 1,
-          surface: 'back',
-          status: 'candidate',
-          imageData: b64,
-          generatedAt: new Date().toISOString(),
-          refinementHistory: [],
-        };
-        await createDocument({
-          projectId,
-          type: 'cover-image',
-          content: JSON.stringify(payload),
-          version: 1,
-          approved: false,
-        });
-        i += 1;
       }
 
       setDone(true);
@@ -130,7 +125,6 @@ export default function BackCoverGeneratePage() {
   }, [
     approvedBackBrief?.content,
     approvedCoverBrief?.content,
-    createDocument,
     frontPayload,
     project,
     projectId,

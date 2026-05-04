@@ -62,6 +62,19 @@ export function runMigrations(db: Database.Database): void {
       `ALTER TABLE projects ADD COLUMN paperbackGenerationStatus TEXT NOT NULL DEFAULT 'not-started'`
     );
   }
+  const pr3 = columnNames(db, 'projects');
+  if (!pr3.has('authorName')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN authorName TEXT`);
+  }
+  if (!pr3.has('kdpTemplateImageData')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN kdpTemplateImageData TEXT`);
+  }
+  if (!pr3.has('marketingAlignCoverToneBlurb')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN marketingAlignCoverToneBlurb INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!pr3.has('marketingAlignCoverToneAmazon')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN marketingAlignCoverToneAmazon INTEGER NOT NULL DEFAULT 0`);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS generation_usage (

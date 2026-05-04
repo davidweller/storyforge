@@ -60,6 +60,10 @@ function rowToProject(row: Record<string, unknown>): Project {
     finalExportedAt: row.finalExportedAt ? toDate(row.finalExportedAt as string) : undefined,
     blurb: (row.blurb as string) ?? undefined,
     amazonDescription: (row.amazonDescription as string) ?? undefined,
+    authorName: (row.authorName as string) ?? undefined,
+    kdpTemplateImageData: (row.kdpTemplateImageData as string | null) ?? undefined,
+    marketingAlignCoverToneBlurb: Boolean(row.marketingAlignCoverToneBlurb),
+    marketingAlignCoverToneAmazon: Boolean(row.marketingAlignCoverToneAmazon),
     approvedCoverImageId: (row.approvedCoverImageId as string | null) ?? undefined,
     approvedBackCoverImageId: (row.approvedBackCoverImageId as string | null) ?? undefined,
     coverGenerationStatus:
@@ -245,6 +249,19 @@ export async function updateProject(
   }
   if (data.blurb !== undefined) { fields.push('blurb = ?'); values.push(data.blurb ?? null); }
   if (data.amazonDescription !== undefined) { fields.push('amazonDescription = ?'); values.push(data.amazonDescription ?? null); }
+  if (data.authorName !== undefined) { fields.push('authorName = ?'); values.push(data.authorName ?? null); }
+  if (data.kdpTemplateImageData !== undefined) {
+    fields.push('kdpTemplateImageData = ?');
+    values.push(data.kdpTemplateImageData ?? null);
+  }
+  if (data.marketingAlignCoverToneBlurb !== undefined) {
+    fields.push('marketingAlignCoverToneBlurb = ?');
+    values.push(data.marketingAlignCoverToneBlurb ? 1 : 0);
+  }
+  if (data.marketingAlignCoverToneAmazon !== undefined) {
+    fields.push('marketingAlignCoverToneAmazon = ?');
+    values.push(data.marketingAlignCoverToneAmazon ? 1 : 0);
+  }
   if (data.approvedCoverImageId !== undefined) {
     fields.push('approvedCoverImageId = ?');
     values.push(data.approvedCoverImageId ?? null);

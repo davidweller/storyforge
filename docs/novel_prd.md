@@ -31,7 +31,7 @@ The product should feel like a **guided production pipeline**, not a chat tool.
 
 All project data is stored locally on the user's machine. No cloud database, no authentication, no internet dependency beyond LLM API calls.
 
-Current implementation ships as a Next.js app (with optional Electron desktop packaging), and LLM generation is orchestrated through a server-side `POST /api/generate` route.
+Current implementation ships as a Next.js app (with optional Electron desktop packaging). Text/JSON LLM generation is orchestrated through `POST /api/generate`, while cover image generation/export uses dedicated `/api/cover/*` routes.
 
 ## Target User
 Primary:
@@ -67,6 +67,7 @@ The workflow sidebar groups stages for clarity:
 | **Writing** | Chapter outlines and chapter drafting (expands to **per-chapter links** once chapters exist) |
 | **Editing** | Manuscript assembly, draft export, editorial, revisions, final export — plus per-pass Review under **Editorial Analysis** and Revisions under **Apply Revisions** when multi-pass editorial is enabled |
 | **Marketing** | Blurb and Amazon description (**outside** the linear stage counter; does not block export final) |
+| **Cover** | Front cover (archetype, brief, generation, refine, export) and paperback/back-cover flow (back brief, generation, refine, back export, full wrap), unlocked by canon and front-cover approval rules |
 | **Project Dashboard** | Overview, canon tooling shortcuts, usage, and cross-cutting actions |
 
 ### Linear order (`STAGE_ORDER`)
@@ -114,6 +115,7 @@ Official sequence (indices 0–13):
 10. User applies revisions from structured tasks
 11. User exports the final manuscript
 12. User may generate marketing copy (blurb, Amazon description) **in parallel** with late pipeline steps
+13. User may run Cover flows (front cover and paperback full-wrap branch) outside `STAGE_ORDER` once unlock criteria are met
 
 ---
 
@@ -262,6 +264,32 @@ Final **`.docx` / `.txt`**; show final word count and revision status.
 
 ---
 
+### Cover (parallel) — Front Cover + Paperback Branch
+
+Cover is presented in its own sidebar group and runs outside `STAGE_ORDER`, similar to Marketing.
+
+**Unlock rules (implemented):**
+- Front-cover subpages unlock once canon exists (`story-bible` or `creative-brief` approved).
+- Paperback/back-cover subpages unlock after front-cover approval (`approvedCoverImageId`).
+
+**Front cover flow:**
+- `cover-archetype` (configuration-only UI step)
+- `cover-brief` (OpenAI JSON, one per archetype when selected)
+- `cover-generate` (image generation via dedicated cover API)
+- `cover-refine` (iterative image refinement via dedicated cover API)
+- `cover-export` (front cover download formats)
+
+**Paperback/back flow:**
+- `back-cover-brief` (OpenAI JSON visual brief for back panel)
+- `back-cover-generate` (implemented in app flow via dedicated cover API; not a `WorkflowStage` union key)
+- `back-cover-refine` (implemented in app flow via dedicated cover API; not a `WorkflowStage` union key)
+- `back-cover-export` (dedicated export route for approved back image)
+- `cover-full-wrap` (full-wrap composite export: front + spine + back)
+
+**Status fields:** `coverGenerationStatus` and `paperbackGenerationStatus` track progress (`not-started` / `in-progress` / `complete`).
+
+---
+
 ### Canon tooling (Project Dashboard — not numbered in `STAGE_ORDER`)
 - **`story-bible`** — consolidated canon document (voice, themes, continuity) generated from approved planning docs
 - **`creative-brief`** — compact brief derived from an approved story bible
@@ -292,8 +320,18 @@ Including but not limited to:
 **Marketing:**  
 `blurb`, `amazon-description`
 
+**Cover text briefs (JSON):**
+`cover-brief`, `back-cover-brief`
+
+### Dedicated cover/image routes (not `/api/generate`)
+- `POST /api/cover/generate` — gpt-image-2 generation for front/back variants (`coverSide: front | back`)
+- `POST /api/cover/refine` — gpt-image-2 refinement from a parent cover image
+- `GET /api/cover/digital-export` — approved front export (`kdp-ebook`, `kindle-thumb`, `social-square`)
+- `GET /api/cover/back-digital-export` — approved back export (`kdp-back`, `social-square`)
+- `POST /api/cover/full-wrap` — composite full wrap export (`pdf` or `png`) from front/back assets + template zones + spine config
+
 ### Stages that do not use `/api/generate` for LLM
-`setup`, `compilation`, `export-draft`, `export-final`
+`setup`, `compilation`, `export-draft`, `export-final`, cover export/composite routes
 
 ### Editorial behavior (summary)
 - Pass-specific editorial modes: `structural`, `line`, `copy`, `proofread`, `final_report`
@@ -321,6 +359,7 @@ Including but not limited to:
 
 ### Core Layout
 - **Left sidebar:** Workflow stages (progress tracker) — grey (not started), amber (in progress), green (approved); **per-chapter** entries under Writing when chapters exist; **per-pass Review / Revisions** nested under Editorial Analysis / Apply Revisions when multi-pass editorial is on
+- **Cover group in sidebar:** Separate **Front cover** and **Back cover** collapsible sections with unlock gating and tooltip guidance
 - **Main panel:** Current stage content
 - **Right drawer (collapsible):** Reference docs quick view; “what the AI sees” / context transparency where implemented
 
@@ -341,6 +380,12 @@ Including but not limited to:
 - Revision Queue / per-pass task lists
 - Side-by-side diff where implemented
 - Approve / reject / regenerate with notes
+
+### Cover Interface
+- Front cover tabs: Archetype Selection → Cover Brief → Generation → Refinement → Export
+- Back/paperback tabs: Back cover brief → generation → refinement → back export → full wrap
+- Prompt transparency in cover brief / generation flows and candidate/version handling for images
+- Full-wrap composer accepts KDP template dimensions/zones and exports PDF/PNG
 
 ### Settings Page
 - OpenAI and Anthropic API keys (optional OpenRouter path per routing config)
@@ -386,6 +431,7 @@ None — single-user local app.
 ### File & Export Handling
 - DOCX via `docx` library; streaming download from route handlers
 - Markdown-style content mapped to paragraphs / emphasis per house style
+- Cover raster processing/compositing via `sharp`; full-wrap can export PDF or PNG
 
 ### Distribution
 - `npm run electron:build:win`, `npm run electron:dev`
@@ -400,9 +446,10 @@ None — single-user local app.
 - `currentStage`: `WorkflowStage`
 - `fullAutoMode`, `fourPassEditorial` (multi-pass editorial flag)
 - Marketing fields, `finalExportedAt`, timestamps
+- Cover fields: `approvedCoverImageId`, `approvedBackCoverImageId`, `coverGenerationStatus`, `paperbackGenerationStatus`, optional `kdpTemplateImageData`
 
 **Document**
-- `type` includes: `genre`, `niche`, `ending`, `ending-choice`, `characters`, `structure`, `chapter-outlines`, `chapter-scene-plan`, `story-bible`, `creative-brief`, pass-specific `editorial-*` types, legacy `editorial`, etc.
+- `type` includes: `genre`, `niche`, `ending`, `ending-choice`, `characters`, `structure`, `chapter-outlines`, `chapter-scene-plan`, `story-bible`, `creative-brief`, pass-specific `editorial-*` types, legacy `editorial`, plus cover docs (`cover-brief`, `cover-image`, `back-cover-brief`, `cover-full-wrap`)
 - `chapterNumber` when type is chapter-scoped (e.g. scene plan)
 - `content`, `version`, `approved`
 
