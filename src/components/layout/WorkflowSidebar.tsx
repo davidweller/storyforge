@@ -234,8 +234,6 @@ export function WorkflowSidebar({
   const [isChaptersExpanded, setIsChaptersExpanded] = useState(false);
   const [isEditorialPassesExpanded, setIsEditorialPassesExpanded] = useState(false);
   const [isRevisionPassesExpanded, setIsRevisionPassesExpanded] = useState(false);
-  const [isAPlusExpanded, setIsAPlusExpanded] = useState(true);
-
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
 
@@ -458,6 +456,18 @@ export function WorkflowSidebar({
           <div>
             <div className="flex flex-col gap-1">
               {writingStages.map(renderStageItem)}
+              <Link
+                href={`/projects/${projectId}/stage/story-bible`}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                  pathname.includes('/stage/story-bible')
+                    ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                    : 'text-muted-foreground hover:bg-muted'
+                )}
+              >
+                <span className="shrink-0">{stageIcons['story-bible']}</span>
+                <span className="flex-1 font-medium truncate">Story Bible &amp; Canon</span>
+              </Link>
             </div>
 
             {/* Chapters list (nested under Writing) */}
@@ -607,104 +617,84 @@ export function WorkflowSidebar({
         )}
 
         {activeSection === 'cover' && (
-          <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
+          <div className="flex flex-col gap-1">
             <Link
               href={`/projects/${projectId}/cover/front/archetype`}
               className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
-                pathname.includes('/cover/front/archetype')
-                  ? 'bg-muted text-foreground'
-                  : 'text-muted-foreground hover:bg-muted/50'
+                'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                ['/cover/front/archetype', '/cover/front/brief', '/cover/front/generate', '/cover/front/refine'].some(
+                  (p) => pathname.includes(p)
+                )
+                  ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                  : 'text-muted-foreground hover:bg-muted/60'
               )}
             >
-              <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                {stageIcons['cover-brief']}
-              </span>
+              <span className="shrink-0">{stageIcons['cover-brief']}</span>
               <span className="flex-1 truncate">Design</span>
             </Link>
             <Link
-              href={`/projects/${projectId}/cover/front/archetype`}
-              className="flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+              href={`/projects/${projectId}/cover/front/export`}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                pathname.includes('/cover/front/export') || pathname.includes('/cover/paperback/back-export')
+                  ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                  : 'text-muted-foreground hover:bg-muted/60'
+              )}
             >
-              <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                {stageIcons['cover-brief']}
-              </span>
-              <span className="flex-1 truncate">Review & Export</span>
+              <span className="shrink-0">{stageIcons['export-draft']}</span>
+              <span className="flex-1 truncate">Review &amp; Export</span>
             </Link>
             <Link
               href={`/projects/${projectId}/cover/paperback/full-wrap`}
               className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
+                'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
                 pathname.includes('/cover/paperback/full-wrap')
-                  ? 'bg-muted text-foreground'
-                  : 'text-muted-foreground hover:bg-muted/50'
+                  ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                  : 'text-muted-foreground hover:bg-muted/60'
               )}
             >
-              <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                {stageIcons['back-cover-brief']}
-              </span>
+              <span className="shrink-0">{stageIcons['back-cover-brief']}</span>
               <span className="flex-1 truncate">Advanced Wrap</span>
             </Link>
           </div>
         )}
 
         {activeSection === 'aplus' && (
-          <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
-            <div className="text-xs">
-              <button
-                type="button"
-                aria-expanded={isAPlusExpanded}
-                onClick={() => setIsAPlusExpanded(!isAPlusExpanded)}
-                className="w-full flex items-center gap-1.5 px-2 mb-0.5 bg-transparent border-none cursor-pointer text-muted-foreground/70 font-medium"
-                title={isAPlusExpanded ? 'Collapse A+ content' : 'Expand A+ content'}
-              >
-                <span className="flex-1 text-left">A+ modules</span>
-                <svg
-                  className={cn('w-3.5 h-3.5 transition-transform duration-200', !isAPlusExpanded && '-rotate-90')}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <div className="flex flex-col gap-1">
+            {(
+              [
+                ['setup', 'Setup'],
+                ['brief', 'Prompt brief'],
+                ['generate', 'Generate'],
+                ['refine', 'Refine'],
+                ['export', 'Export'],
+              ] as const
+            ).map(([slug, label]) => {
+              const href = aPlusUnlocked ? `/projects/${projectId}/aplus/${slug}` : '#';
+              const active = pathname.includes(`/aplus/${slug}`);
+              const exportDone = slug === 'export' && !!approvedAPlusModuleId;
+              return (
+                <Link
+                  key={slug}
+                  href={href}
+                  title={!aPlusUnlocked ? 'Approve front and back cover first' : undefined}
+                  onClick={(e) => !aPlusUnlocked && e.preventDefault()}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                    !aPlusUnlocked && 'opacity-50 cursor-not-allowed',
+                    exportDone
+                      ? marketingApprovedClass
+                      : active
+                        ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                        : 'text-muted-foreground hover:bg-muted/60'
+                  )}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {isAPlusExpanded && (
-                <div className="pl-1 flex flex-col gap-1">
-                  {(
-                    [
-                      ['setup', 'Setup'],
-                      ['brief', 'Prompt brief'],
-                      ['generate', 'Generate'],
-                      ['refine', 'Refine'],
-                      ['export', 'Export'],
-                    ] as const
-                  ).map(([slug, label]) => {
-                    const href = aPlusUnlocked ? `/projects/${projectId}/aplus/${slug}` : '#';
-                    const active = pathname.includes(`/aplus/${slug}`);
-                    return (
-                      <Link
-                        key={slug}
-                        href={href}
-                        title={!aPlusUnlocked ? 'Approve front and back cover first' : undefined}
-                        onClick={(e) => !aPlusUnlocked && e.preventDefault()}
-                        className={cn(
-                          'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
-                          !aPlusUnlocked && 'opacity-50 cursor-not-allowed',
-                          active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50',
-                          slug === 'export' && approvedAPlusModuleId && 'text-[var(--status-approved)]'
-                        )}
-                      >
-                        <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                          {stageIcons['a-plus-brief']}
-                        </span>
-                        <span className="flex-1 truncate">{label}</span>
-                        {slug === 'export' && approvedAPlusModuleId && marketingCheck}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                  <span className="shrink-0">{stageIcons['a-plus-brief']}</span>
+                  <span className="flex-1 truncate">{label}</span>
+                  {exportDone && marketingCheck}
+                </Link>
+              );
+            })}
           </div>
         )}
       </nav>

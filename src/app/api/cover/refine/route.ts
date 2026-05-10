@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { buildCoverStandalonePromptAnchor } from '@/lib/cover/enrichStandaloneImagePrompt';
 import { generateOpenAICoverImages } from '@/lib/cover/openaiCoverImages';
 import * as dbq from '@/lib/db/queries';
 import type { CoverImagePayload } from '@/types';
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
     }
     const { projectId, coverSide, parentImageId, originalPrompt, refinementRequest, n, quality } = parsed.data;
 
+    const proj = await dbq.getProject(projectId);
+    if (!proj) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
     const parentDoc = await dbq.getDocument(parentImageId);
     if (!parentDoc || parentDoc.projectId !== projectId || parentDoc.type !== 'cover-image') {
       return NextResponse.json({ error: 'Parent cover image not found' }, { status: 404 });
@@ -58,7 +64,10 @@ export async function POST(request: NextRequest) {
     const baseVersion = maxCoverSurfaceVersion(allDocs, coverSide);
     const version = Math.max(baseVersion, parentPayload.version ?? 1) + 1;
 
-    const refinedPrompt = `${originalPrompt.trim()}\n\nRefinement: ${refinementRequest.trim()}. Keep all other elements consistent with the above.`;
+    const promptAnchor = await buildCoverStandalonePromptAnchor(allDocs, proj);
+    const refinedPrompt =
+      `${originalPrompt.trim()}\n\nRefinement: ${refinementRequest.trim()}. Keep all other elements consistent with the above.` +
+      (promptAnchor.trim() ? promptAnchor : '');
 
     try {
       const { b64List } = await generateOpenAICoverImages({ prompt: refinedPrompt, n, quality });

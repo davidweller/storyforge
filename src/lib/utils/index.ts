@@ -198,6 +198,8 @@ export const STAGE_NAMES: Record<string, string> = {
   'editorial': 'Editorial Analysis',
   'revision': 'Apply Revisions',
   'export-final': 'Export Final',
+  'story-bible': 'Story Bible & Canon',
+  'creative-brief': 'Creative Brief',
 };
 
 // Stage descriptions
@@ -216,6 +218,8 @@ export const STAGE_DESCRIPTIONS: Record<string, string> = {
   'editorial': 'AI performs a comprehensive editorial review, identifying issues with continuity, pacing, character consistency, and prose.',
   'revision': 'Work through editorial suggestions chapter by chapter. AI helps you implement fixes while maintaining your voice.',
   'export-final': 'Export your final manuscript after revisions. Download the polished version ready for publication or submission.',
+  'story-bible': 'Lock durable canon after chapter outlines — characters, promises, tone, and rules for drafting and downstream marketing.',
+  'creative-brief': 'Compact generation-ready summary derived from the approved Story Bible.',
 };
 
 // Model used per stage - re-exported from models.ts for backwards compatibility

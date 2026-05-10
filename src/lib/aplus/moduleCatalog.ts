@@ -53,4 +53,18 @@ export const APLUS_MODULES: APlusModuleMeta[] = [
   },
 ];
 
+const VALID_APLUS_MODULE_ID = new Set<string>(APLUS_MODULES.map((m) => m.id));
+
+/** Parse `selectedModules` from sessionStorage JSON without trusting the shape. */
+export function parseStoredAPlusModuleIds(raw: unknown): APlusModuleType[] {
+  if (!Array.isArray(raw)) return [];
+  const out: APlusModuleType[] = [];
+  for (const x of raw) {
+    if (typeof x === 'string' && VALID_APLUS_MODULE_ID.has(x)) {
+      out.push(x as APlusModuleType);
+    }
+  }
+  return out;
+}
+
 export const APLUS_SETUP_STORAGE_PREFIX = 'storyforge.aplus.setup.';

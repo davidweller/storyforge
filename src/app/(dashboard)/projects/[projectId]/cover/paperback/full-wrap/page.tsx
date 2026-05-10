@@ -11,6 +11,23 @@ import { defaultThirdZones } from '@/lib/cover/fullWrapZones';
 
 type Rect = { x: number; y: number; width: number; height: number };
 
+/** Decode pixel size from raw base64 (PNG or JPEG) for rehydrating canvas when `kdpTemplateImageData` exists. */
+function readImageDimsFromBase64(b64: string): Promise<{ w: number; h: number } | null> {
+  const tryMime = (mime: string) =>
+    new Promise<{ w: number; h: number } | null>((resolve) => {
+      const img = new Image();
+      img.onload = () =>
+        resolve(
+          img.naturalWidth > 0 && img.naturalHeight > 0
+            ? { w: img.naturalWidth, h: img.naturalHeight }
+            : null
+        );
+      img.onerror = () => resolve(null);
+      img.src = `data:${mime};base64,${b64}`;
+    });
+  return (async () => (await tryMime('image/png')) ?? (await tryMime('image/jpeg')))();
+}
+
 function parseCov(doc: string | undefined): CoverImagePayload | null {
   if (!doc) return null;
   try {
@@ -30,8 +47,6 @@ export default function FullWrapPage() {
   const [backZ, setBackZ] = useState<Rect>({ x: 0, y: 0, width: 1000, height: 2000 });
   const [spineZ, setSpineZ] = useState<Rect>({ x: 1000, y: 0, width: 200, height: 2000 });
   const [frontZ, setFrontZ] = useState<Rect>({ x: 1200, y: 0, width: 1800, height: 2000 });
-  const [bleed, setBleed] = useState(0);
-
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [series, setSeries] = useState('');
@@ -43,21 +58,31 @@ export default function FullWrapPage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (project?.title) setTitle((t) => t || project.title || '');
-    if (project?.authorName) setAuthor((a) => a || project.authorName || '');
-  }, [project?.title, project?.authorName]);
+    if (!project) return;
+    setTitle(project.title ?? '');
+    setAuthor(project.authorName ?? '');
+  }, [project?.title, project?.authorName, project]);
+
+  useEffect(() => {
+    const b64 = project?.kdpTemplateImageData?.trim();
+    if (!b64 || typeof window === 'undefined') return;
+    let cancelled = false;
+    void readImageDimsFromBase64(b64).then((d) => {
+      if (!cancelled && d) {
+        setCw(d.w);
+        setCh(d.h);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.kdpTemplateImageData]);
 
   const frontPayload = useMemo(() => {
     const id = project?.approvedCoverImageId;
     const d = id ? documents.find((x) => x.id === id) : undefined;
     return parseCov(d?.content);
   }, [project?.approvedCoverImageId, documents]);
-
-  const backPayload = useMemo(() => {
-    const id = project?.approvedBackCoverImageId;
-    const d = id ? documents.find((x) => x.id === id) : undefined;
-    return parseCov(d?.content);
-  }, [project?.approvedBackCoverImageId, documents]);
 
   const applyThirdsFromCanvas = useCallback(() => {
     const z = defaultThirdZones(cw, ch);
@@ -94,7 +119,13 @@ export default function FullWrapPage() {
   };
 
   const downloadBlob = async (fmt: 'pdf' | 'png') => {
-    if (!projectId || !project?.approvedCoverImageId || !project?.approvedBackCoverImageId) return;
+    if (
+      !projectId ||
+      !project?.approvedCoverImageId ||
+      !project?.approvedBackCoverImageId ||
+      !project.kdpTemplateImageData?.trim()
+    )
+      return;
     setErr(null);
     setBusy(true);
     try {
@@ -119,7 +150,7 @@ export default function FullWrapPage() {
             frontZone: frontZ,
             backZone: backZ,
             spineZone: spineZ,
-            bleedPx: bleed,
+            bleedPx: 0,
           },
           outputFormat: fmt,
         }),
@@ -161,6 +192,8 @@ export default function FullWrapPage() {
   if (error) return <div className="p-8 text-red-600">{error}</div>;
 
   const unlocked = !!(project.approvedCoverImageId && project.approvedBackCoverImageId);
+  const hasTemplate = !!project.kdpTemplateImageData?.trim();
+  const canExport = unlocked && hasTemplate;
 
   return (
     <CoverLayout
@@ -173,15 +206,21 @@ export default function FullWrapPage() {
       revisionTasks={revisionTasks ?? []}
     >
       <p className="text-sm text-muted-foreground mb-4">
-        Upload your Amazon KDP cover template (PNG or JPEG). Set canvas dimensions and panel rectangles to match printed
-        zones — defaults split the template into equal horizontal thirds (back · spine · front). Export composites your
-        approved front and rear art with an auto spine strip.
+        Upload your Amazon KDP cover template (PNG or JPEG only). Dimensions and back · spine · front zones come from an
+        automatic equal-thirds split matching the uploaded image pixel size — no manual coordinate entry needed.         Export composites
+        your approved front and rear art with an auto spine strip using the title and author below (defaults pull from project metadata).
+        Export requires a template image saved on this project below (dimensions are detected server-side — same rule as automated generate-all wrap).
       </p>
 
       {!unlocked ? (
         <p className="text-amber-600 dark:text-amber-400">Approve front and back covers first.</p>
       ) : (
         <>
+          {!hasTemplate ? (
+            <p className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+              Upload and save your KDP template PNG or JPEG below before exporting — the composite uses the dimensions from that stored file.
+            </p>
+          ) : null}
           {frontPayload && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -190,7 +229,7 @@ export default function FullWrapPage() {
               src={`data:image/png;base64,${frontPayload.imageData}`}
             />
           )}
-          <label className="block text-xs font-medium mb-2">Template image</label>
+          <label className="block text-xs font-medium mb-2">Template image (PNG or JPEG)</label>
           <input
             type="file"
             accept="image/png,image/jpeg"
@@ -203,43 +242,9 @@ export default function FullWrapPage() {
             </a>
           </p>
 
-          <div className="grid sm:grid-cols-3 gap-3 mb-4">
-            <label className="text-xs flex flex-col gap-1">
-              Canvas width (px)
-              <input type="number" value={cw} className="border rounded px-2 py-1 bg-background text-sm" onChange={(e) => setCw(+e.target.value)} />
-            </label>
-            <label className="text-xs flex flex-col gap-1">
-              Canvas height (px)
-              <input type="number" value={ch} className="border rounded px-2 py-1 bg-background text-sm" onChange={(e) => setCh(+e.target.value)} />
-            </label>
-            <label className="text-xs flex flex-col gap-1">
-              Bleed px (info)
-              <input type="number" value={bleed} className="border rounded px-2 py-1 bg-background text-sm" onChange={(e) => setBleed(+e.target.value)} />
-            </label>
-          </div>
-
-          <Button type="button" variant="secondary" className="h-8 text-xs mb-4" onClick={applyThirdsFromCanvas}>
-            Reset zones to equal thirds
-          </Button>
-
-          <div className="grid lg:grid-cols-3 gap-4 mb-6 text-xs">
-            {(['Back', 'Spine', 'Front'] as const).map((kind) => (
-              <div key={kind} className="border border-border rounded-md p-3 space-y-1">
-                <p className="font-semibold">{kind} zone</p>
-                {(kind === 'Back' ? backZ : kind === 'Spine' ? spineZ : frontZ).x !== undefined && (
-                  <RectFields
-                    rect={kind === 'Back' ? backZ : kind === 'Spine' ? spineZ : frontZ}
-                    onChange={(r) =>
-                      kind === 'Back'
-                        ? setBackZ(r)
-                        : kind === 'Spine'
-                          ? setSpineZ(r)
-                          : setFrontZ(r)
-                    }
-                  />
-                )}
-              </div>
-            ))}
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground mb-6 font-mono">
+            Canvas {cw}×{ch}px · thirds: Back x={Math.round(backZ.x)} · Spine x={Math.round(spineZ.x)} w=
+            {Math.round(spineZ.width)} · Front x={Math.round(frontZ.x)}
           </div>
 
           <h3 className="text-sm font-semibold mb-2">Spine text</h3>
@@ -265,10 +270,10 @@ export default function FullWrapPage() {
 
           {err && <p className="text-red-600 text-sm mb-2">{err}</p>}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={busy} onClick={() => void downloadBlob('pdf')}>
+            <Button type="button" disabled={busy || !canExport} onClick={() => void downloadBlob('pdf')}>
               {busy ? 'Exporting…' : 'Download PDF'}
             </Button>
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => void downloadBlob('png')}>
+            <Button type="button" variant="secondary" disabled={busy || !canExport} onClick={() => void downloadBlob('png')}>
               Download composite PNG
             </Button>
           </div>
@@ -285,24 +290,5 @@ export default function FullWrapPage() {
         Back exports
       </Link>
     </CoverLayout>
-  );
-}
-
-function RectFields({ rect, onChange }: { rect: Rect; onChange: (r: Rect) => void }) {
-  const set = (k: keyof Rect, v: number) => onChange({ ...rect, [k]: v });
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {(['x', 'y', 'width', 'height'] as const).map((k) => (
-        <label key={k} className="flex flex-col gap-0.5">
-          {k}
-          <input
-            type="number"
-            value={Math.round(rect[k])}
-            className="border rounded px-1 py-0.5 bg-background"
-            onChange={(e) => set(k, +e.target.value)}
-          />
-        </label>
-      ))}
-    </div>
   );
 }

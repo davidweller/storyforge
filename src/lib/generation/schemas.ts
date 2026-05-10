@@ -45,8 +45,19 @@ export const ChapterSummaryOutputSchema = z.object({
   summary: z.string().min(1),
 });
 
+/** Aligns with SOURCE_DOCUMENT_TYPES in assembler (story-bible provenance). */
+const StoryBibleSourceDocumentTypeSchema = z.enum([
+  'genre',
+  'niche',
+  'ending',
+  'ending-choice',
+  'characters',
+  'structure',
+  'chapter-outlines',
+]);
+
 export const StoryBibleSourceRefSchema = z.object({
-  documentType: z.string().min(1),
+  documentType: StoryBibleSourceDocumentTypeSchema,
   documentId: z.string().min(1),
   version: z.number().int().positive(),
   updatedAt: z.string().min(1),

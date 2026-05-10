@@ -38,6 +38,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (!project.blurb?.trim()) {
+      return NextResponse.json(
+        { error: 'Back-cover blurb is missing. Finish Marketing > Blurb for back of book first (exact text appears on the back cover).' },
+        { status: 400 }
+      );
+    }
 
     const archetype = COVER_ARCHETYPES.find((a) => a.id === archetypeId);
     if (!archetype) return NextResponse.json({ error: 'Unknown archetype selected.' }, { status: 400 });

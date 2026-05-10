@@ -6,6 +6,9 @@ import { compositeFullWrapToPng, dominantHexFromCoverB64, rasterPngTopdfSheet, r
 import { defaultThirdZones } from '@/lib/cover/fullWrapZones';
 import { estimateWrapDimensionsFromTrimSize, getKdpTrimSizeById } from '@/lib/cover/kdpTrimSizes';
 import { generateOpenAICoverImages } from '@/lib/cover/openaiCoverImages';
+import { formatCanonSummaryForCoverPrompt } from '@/lib/marketing/canonicalContext';
+import { summarizeStyleReferencesForPrompt } from '@/lib/cover/describeStyleReferences';
+import { parseProjectStyleReferences } from '@/lib/cover/styleReferences';
 import { BACK_COVER_EXACT_TEXT_LINE, COVER_ARCHETYPES, COVER_GENERATION_SYSTEM } from '@/lib/prompts/covers';
 import type { CoverFullWrapDocument, CoverGenerationJobInput, CoverGenerationJobResult, CoverImagePayload } from '@/types';
 
@@ -33,20 +36,38 @@ export async function processCoverGenerationJob(jobId: string): Promise<void> {
     await dbq.updateProject(project.id, { coverGenerationStatus: 'in-progress', paperbackGenerationStatus: 'in-progress' });
 
     const runId = randomUUID();
+    const documents = await dbq.getProjectDocuments(project.id);
+    const canonSummary = formatCanonSummaryForCoverPrompt(documents).trim();
+
+    const authorDisplay = job.input.authorName.trim() || project.authorName?.trim() || 'Author';
+
+    const coverRefs = parseProjectStyleReferences(project.coverStyleReferencesJson);
+    let styleReferenceSummary = '';
+    if (coverRefs.length > 0) {
+      styleReferenceSummary = await summarizeStyleReferencesForPrompt(coverRefs, 'cover').catch(() => '');
+    }
+
     const frontPrompt = buildFrontPrompt({
       archetypeId: archetype.id,
       archetypeName: archetype.name,
       genre: project.genre,
       title: project.title ?? 'Untitled',
-      authorName: job.input.authorName,
+      subtitle: project.subtitle,
+      tagline: project.tagline,
+      authorName: authorDisplay,
       amazonDescription: project.amazonDescription ?? '',
+      canonSummary: canonSummary || undefined,
+      styleReferenceSummary: styleReferenceSummary.trim() || undefined,
     });
     const backPrompt = buildBackPrompt({
       archetypeName: archetype.name,
       genre: project.genre,
       title: project.title ?? 'Untitled',
-      authorName: job.input.authorName,
-      amazonDescription: project.amazonDescription ?? '',
+      authorName: authorDisplay,
+      blurbExact: (project.blurb ?? '').trim(),
+      amazonTone: project.amazonDescription ?? '',
+      canonSummary: canonSummary || undefined,
+      styleReferenceSummary: styleReferenceSummary.trim() || undefined,
     });
 
     // Front and back are independent OpenAI calls — run them in parallel to
@@ -99,7 +120,7 @@ export async function processCoverGenerationJob(jobId: string): Promise<void> {
       backDocId,
       input: job.input,
       title: project.title ?? 'Untitled',
-      authorName: job.input.authorName,
+      authorName: authorDisplay,
     });
 
     const result: CoverGenerationJobResult = {
@@ -177,6 +198,7 @@ export async function retryWrapForJob(jobId: string): Promise<void> {
   });
 }
 
+/** Manual POST /api/cover/full-wrap uses the same thirds-from-template-metadata approach (see route). */
 async function generateWrapForJob(
   projectId: string,
   args: {
@@ -304,20 +326,37 @@ function buildFrontPrompt(input: {
   archetypeName: string;
   genre: string;
   title: string;
+  subtitle?: string;
+  tagline?: string;
   authorName: string;
   amazonDescription: string;
+  canonSummary?: string;
+  styleReferenceSummary?: string;
 }): string {
   const description = trimForPrompt(input.amazonDescription);
-  return [
+  const lines = [
     COVER_GENERATION_SYSTEM,
     '',
     `Design a commercial ${input.genre} front cover using archetype ${input.archetypeId} (${input.archetypeName}).`,
     `Book title (exact text): "${input.title}".`,
+    input.subtitle?.trim()
+      ? `Subtitle — include on cover only if readable at thumbnail size (exact text): "${input.subtitle.trim()}".`
+      : null,
+    input.tagline?.trim()
+      ? `Tagline — small type only if legible (exact text): "${input.tagline.trim()}".`
+      : null,
     `Author name (exact text): "${input.authorName}".`,
-    'Use only the story context below as source material:',
+    'Retail / discovery context (tone and promise — use with canon below):',
     description,
+    input.canonSummary?.trim()
+      ? `\nApproved canon (characters, symbolism, promises — align imagery; do not contradict):\n${input.canonSummary.trim()}`
+      : null,
+    input.styleReferenceSummary?.trim()
+      ? `\nUser reference covers (palette, layout mood — synthesise originals; never copy titles/trademarks/likenesses):\n${input.styleReferenceSummary.trim()}`
+      : null,
     'Prioritize thumbnail readability, clear focal hierarchy, and typographic legibility.',
-  ].join('\n');
+  ].filter((x): x is string => x != null && x !== '');
+  return lines.join('\n');
 }
 
 function buildBackPrompt(input: {
@@ -325,19 +364,34 @@ function buildBackPrompt(input: {
   genre: string;
   title: string;
   authorName: string;
-  amazonDescription: string;
+  blurbExact: string;
+  amazonTone: string;
+  canonSummary?: string;
+  styleReferenceSummary?: string;
 }): string {
-  const description = trimForPrompt(input.amazonDescription);
-  return [
+  const tone = trimForPrompt(input.amazonTone);
+  const lines = [
     COVER_GENERATION_SYSTEM,
     '',
     `Design a full-bleed ${input.genre} BACK COVER panel that visually matches the ${input.archetypeName} front cover style.`,
     `Book title (exact text): "${input.title}".`,
     `Author name (exact text): "${input.authorName}".`,
-    'Use this Amazon description as the back-cover copy context and visual source:',
-    description,
+    '',
+    'BACK-COVER BODY TYPOGRAPHY — use this approved back-of-book blurb verbatim (exact wording; line breaks allowed for fit):',
+    input.blurbExact.trim(),
+    '',
+    tone.length
+      ? `Amazon product description (retail tone reference only — do not replace blurb):\n${tone}`
+      : null,
+    input.canonSummary?.trim()
+      ? `\nApproved canon for visual cohesion:\n${input.canonSummary.trim()}`
+      : null,
+    input.styleReferenceSummary?.trim()
+      ? `\nFront-cover neighbourhood style cues from user references — keep spine-to-spine cohesion:\n${input.styleReferenceSummary.trim()}`
+      : null,
     BACK_COVER_EXACT_TEXT_LINE,
-  ].join('\n');
+  ].filter((x): x is string => x != null && x !== '');
+  return lines.join('\n');
 }
 
 function trimForPrompt(text: string): string {

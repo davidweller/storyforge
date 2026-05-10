@@ -4,18 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
 import { WorkflowNav } from './WorkflowNav';
+import { WorkflowSectionNav } from './WorkflowSectionNav';
 import { ModelSelector } from '@/components/stages';
 import type { WorkflowStage, Chapter, RevisionTask, Project, ProjectDocument } from '@/types';
-
-type CoverSlug =
-  | 'archetype'
-  | 'review'
-  | 'advanced-wrap'
-  | 'back-brief'
-  | 'back-generate'
-  | 'back-refine'
-  | 'back-export'
-  | 'full-wrap';
 
 interface CoverLayoutProps {
   projectId: string;
@@ -30,19 +21,7 @@ interface CoverLayoutProps {
   children: ReactNode;
 }
 
-const FRONT_NAV: {
-  slug: Extract<CoverSlug, 'archetype' | 'review' | 'advanced-wrap'>;
-  label: string;
-}[] = [
-  { slug: 'archetype', label: 'Design' },
-  { slug: 'review', label: 'Review & Export' },
-  { slug: 'advanced-wrap', label: 'Advanced Wrap' },
-];
-
-const PB_NAV: {
-  slug: Extract<CoverSlug, 'full-wrap'>;
-  label: string;
-}[] = [{ slug: 'full-wrap', label: 'Full wrap (legacy)' }];
+const PB_NAV = [{ slug: 'full-wrap' as const, label: 'Full wrap (legacy)' }];
 
 export function CoverLayout({
   projectId,
@@ -91,55 +70,49 @@ export function CoverLayout({
               <span>/</span>
               <span className="text-foreground font-medium">{title}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-3 mb-6">
-              {section === 'front'
-                ? FRONT_NAV.map((n) => {
-                    const href =
-                      n.slug === 'advanced-wrap'
-                        ? `/projects/${projectId}/cover/paperback/full-wrap`
-                        : `/projects/${projectId}/cover/front/archetype`;
-                    const active =
-                      n.slug === 'advanced-wrap'
-                        ? pathname.includes('/cover/paperback/full-wrap')
-                        : pathname.includes('/cover/front/archetype');
-                    return (
-                      <Link
-                        key={n.slug}
-                        href={href}
-                        className={
-                          active
-                            ? 'text-sm font-semibold text-foreground border-b-2 border-accent pb-0.5 no-underline'
-                            : 'text-sm text-muted-foreground hover:text-foreground no-underline pb-0.5'
-                        }
-                      >
-                        {n.label}
-                      </Link>
-                    );
-                  })
-                : PB_NAV.map((n) => {
-                    const href =
-                      n.slug === 'full-wrap'
-                        ? `/projects/${projectId}/cover/paperback/full-wrap`
-                        : `/projects/${projectId}/cover/paperback/${n.slug}`;
-                    const active =
-                      n.slug === 'full-wrap'
-                        ? pathname.includes('/cover/paperback/full-wrap')
-                        : pathname.includes(`/cover/paperback/${n.slug}`);
-                    return (
-                      <Link
-                        key={n.slug}
-                        href={href}
-                        className={
-                          active
-                            ? 'text-sm font-semibold text-foreground border-b-2 border-accent pb-0.5 no-underline'
-                            : 'text-sm text-muted-foreground hover:text-foreground no-underline pb-0.5'
-                        }
-                      >
-                        {n.label}
-                      </Link>
-                    );
-                  })}
-            </div>
+            <WorkflowSectionNav
+              className="mb-6"
+              items={
+                section === 'front'
+                  ? (() => {
+                      const designActive = ['/cover/front/archetype', '/cover/front/brief', '/cover/front/generate', '/cover/front/refine'].some(
+                        (p) => pathname.includes(p)
+                      );
+                      const reviewActive =
+                        pathname.includes('/cover/front/export') ||
+                        pathname.includes('/cover/paperback/back-export');
+                      const wrapActive = pathname.includes('/cover/paperback/full-wrap');
+                      return [
+                        {
+                          href: `/projects/${projectId}/cover/front/archetype`,
+                          label: 'Design',
+                          isActive: designActive,
+                        },
+                        {
+                          href: `/projects/${projectId}/cover/front/export`,
+                          label: 'Review & Export',
+                          isActive: reviewActive,
+                        },
+                        {
+                          href: `/projects/${projectId}/cover/paperback/full-wrap`,
+                          label: 'Advanced Wrap',
+                          isActive: wrapActive,
+                        },
+                      ];
+                    })()
+                  : PB_NAV.map((n) => {
+                      const href =
+                        n.slug === 'full-wrap'
+                          ? `/projects/${projectId}/cover/paperback/full-wrap`
+                          : `/projects/${projectId}/cover/paperback/${n.slug}`;
+                      const active =
+                        n.slug === 'full-wrap'
+                          ? pathname.includes('/cover/paperback/full-wrap')
+                          : pathname.includes(`/cover/paperback/${n.slug}`);
+                      return { href, label: n.label, isActive: active };
+                    })
+              }
+            />
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
               {modelStage && <ModelSelector stage={modelStage} />}

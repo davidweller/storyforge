@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { APlusLayout } from '@/components/layout';
 import { Button } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
-import { APLUS_MODULES, APLUS_SETUP_STORAGE_PREFIX } from '@/lib/aplus/moduleCatalog';
+import { APLUS_MODULES, APLUS_SETUP_STORAGE_PREFIX, parseStoredAPlusModuleIds } from '@/lib/aplus/moduleCatalog';
 import type { APlusImagePayload, APlusModuleType, APlusTextMode } from '@/types';
 
 type SetupState = { selectedModules: APlusModuleType[] };
@@ -25,8 +25,8 @@ function readSetup(projectId: string): SetupState {
   try {
     const raw = sessionStorage.getItem(`${APLUS_SETUP_STORAGE_PREFIX}${projectId}`);
     if (!raw) return { selectedModules: [] };
-    const parsed = JSON.parse(raw) as SetupState;
-    return Array.isArray(parsed.selectedModules) ? parsed : { selectedModules: [] };
+    const parsed = JSON.parse(raw) as { selectedModules?: unknown };
+    return { selectedModules: parseStoredAPlusModuleIds(parsed.selectedModules) };
   } catch {
     return { selectedModules: [] };
   }
@@ -80,10 +80,11 @@ export default function APlusGeneratePage() {
   const [err, setErr] = useState<string | null>(null);
   const [lastErrors, setLastErrors] = useState<Record<string, string>>({});
 
-  const selectedModules = useMemo(() => {
-    if (!projectId) return [] as APlusModuleType[];
+  const selectedModules = useMemo((): APlusModuleType[] => {
+    if (!projectId) return [];
     const setup = readSetup(projectId).selectedModules;
-    return setup.length ? setup : ['hero-banner'];
+    const DEFAULT: APlusModuleType[] = ['hero-banner'];
+    return setup.length ? setup : DEFAULT;
   }, [projectId]);
 
   const editors = useMemo(() => {

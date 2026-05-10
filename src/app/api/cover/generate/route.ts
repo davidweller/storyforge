@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { appendHighClickToStoredPrompt } from '@/lib/prompts/covers';
+import { buildCoverStandalonePromptAnchor } from '@/lib/cover/enrichStandaloneImagePrompt';
 import { generateOpenAICoverImages } from '@/lib/cover/openaiCoverImages';
 import * as dbq from '@/lib/db/queries';
 import type { CoverImagePayload } from '@/types';
@@ -36,6 +37,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    const documents = await dbq.getProjectDocuments(projectId);
+    const promptAnchor = await buildCoverStandalonePromptAnchor(documents, project);
+
     const results: Array<{
       archetypeId: string;
       documentIds: string[];
@@ -51,6 +55,9 @@ export async function POST(request: NextRequest) {
         }
         if (editRequest?.trim()) {
           prompt = `${prompt}\n\nUser requested edits:\n${editRequest.trim()}`;
+        }
+        if (promptAnchor.trim()) {
+          prompt = `${prompt}${promptAnchor}`;
         }
         try {
           const { b64List, model } = await generateOpenAICoverImages({ prompt, n, quality });

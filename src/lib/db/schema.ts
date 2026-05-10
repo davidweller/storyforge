@@ -84,6 +84,21 @@ export function runMigrations(db: Database.Database): void {
   if (!pr3.has('coverTrimSizeId')) {
     db.exec(`ALTER TABLE projects ADD COLUMN coverTrimSizeId TEXT`);
   }
+  const pr4 = columnNames(db, 'projects');
+  if (!pr4.has('subtitle')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN subtitle TEXT`);
+  }
+  if (!pr4.has('tagline')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN tagline TEXT`);
+  }
+  const pr5 = columnNames(db, 'projects');
+  if (!pr5.has('coverStyleReferencesJson')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN coverStyleReferencesJson TEXT`);
+  }
+  const pr6 = columnNames(db, 'projects');
+  if (!pr6.has('aPlusStyleReferencesJson')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN aPlusStyleReferencesJson TEXT`);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS cover_generation_jobs (

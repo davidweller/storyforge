@@ -8,7 +8,13 @@ import { Button } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
 import { archetypesForGenreRows, type CoverArchetypeId } from '@/lib/prompts/covers';
 import { DEFAULT_KDP_TRIM_SIZE_ID, KDP_TRIM_SIZES, getKdpTrimSizeById } from '@/lib/cover/kdpTrimSizes';
+import {
+  MAX_STYLE_REFERENCE_SLOTS,
+  parseProjectStyleReferences,
+  serializeProjectStyleReferences,
+} from '@/lib/cover/styleReferences';
 import { cn } from '@/lib/utils';
+import type { ProjectStyleReference } from '@/types';
 
 type CoverJobStatus =
   | 'queued'
@@ -39,7 +45,7 @@ type CoverJobResponse = {
 export default function CoverArchetypePage() {
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
-  const { project, documents, chapters, revisionTasks, loading, error, refresh } = useProject(projectId ?? null);
+  const { project, documents, chapters, revisionTasks, loading, error, refresh, updateProject } = useProject(projectId ?? null);
 
   const { recommended, rest } = useMemo(
     () => archetypesForGenreRows(project?.genre ?? 'general', project?.niche),
@@ -57,9 +63,18 @@ export default function CoverArchetypePage() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const refreshRef = useRef(refresh);
+  type CoverRefDraft = { mimeType: 'image/png' | 'image/jpeg'; base64Data: string; note: string };
+  const [coverRefDrafts, setCoverRefDrafts] = useState<CoverRefDraft[]>([]);
 
   const hasAmazonDescription = !!project?.amazonDescription?.trim();
-  const canGenerate = !!selectedId && !!authorName.trim() && hasAmazonDescription && !!project?.title?.trim() && !!trimSizeId;
+  const hasBlurb = !!project?.blurb?.trim();
+  const canGenerate =
+    !!selectedId &&
+    !!authorName.trim() &&
+    hasAmazonDescription &&
+    hasBlurb &&
+    !!project?.title?.trim() &&
+    !!trimSizeId;
   const rows = [...recommended, ...rest];
   const uniqueRows = rows.filter((row, idx) => rows.findIndex((x) => x.id === row.id) === idx);
   const trim = getKdpTrimSizeById(trimSizeId);
@@ -69,6 +84,13 @@ export default function CoverArchetypePage() {
     if (project.authorName?.trim()) setAuthorName(project.authorName);
     if (project.coverTrimSizeId?.trim()) setTrimSizeId(project.coverTrimSizeId);
   }, [project]);
+
+  useEffect(() => {
+    const parsed = parseProjectStyleReferences(project?.coverStyleReferencesJson);
+    setCoverRefDrafts(
+      parsed.map((r) => ({ mimeType: r.mimeType, base64Data: r.base64Data, note: r.note ?? '' }))
+    );
+  }, [project?.coverStyleReferencesJson]);
 
   useEffect(() => {
     refreshRef.current = refresh;
@@ -90,7 +112,8 @@ export default function CoverArchetypePage() {
   useEffect(() => {
     if (!jobId) return;
     let stop = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    /** Browser timer id (avoid conflicting Node `Timer` typings from global `setTimeout`). */
+    let timer: number | null = null;
     const startedAt = Date.now();
     const MAX_MS = 6 * 60 * 1000;
     const nextDelayMs = (sinceStartMs: number): number => {
@@ -119,13 +142,15 @@ export default function CoverArchetypePage() {
         setStep('inputs');
         return;
       }
-      timer = window.setTimeout(poll, nextDelayMs(sinceStart));
+      timer = window.setTimeout(() => {
+        void poll();
+      }, nextDelayMs(sinceStart));
     };
     void poll();
     return () => {
       stop = true;
       if (timer) {
-        clearTimeout(timer);
+        window.clearTimeout(timer);
       }
     };
   }, [jobId]);
@@ -152,6 +177,38 @@ export default function CoverArchetypePage() {
       base64Data: b64,
       filename: file.name,
     });
+  }
+
+  async function saveCoverStyleReferences() {
+    try {
+      const payload: ProjectStyleReference[] = coverRefDrafts.map((r) => ({
+        mimeType: r.mimeType,
+        base64Data: r.base64Data.trim(),
+        ...(r.note.trim() ? { note: r.note.trim().slice(0, 600) } : {}),
+      }));
+      const json = serializeProjectStyleReferences(payload);
+      await updateProject({ coverStyleReferencesJson: json });
+      setErrorText(null);
+      await refresh();
+    } catch (e) {
+      setErrorText(e instanceof Error ? e.message : 'Could not save style references.');
+    }
+  }
+
+  async function addCoverReferenceFile(file: File | null) {
+    if (!file || coverRefDrafts.length >= MAX_STYLE_REFERENCE_SLOTS) return;
+    const okType = file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/jpg';
+    if (!okType) {
+      setErrorText('Reference covers must be PNG or JPEG.');
+      return;
+    }
+    const mime: 'image/png' | 'image/jpeg' =
+      file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const data = await readFileAsDataUrl(file);
+    const comma = data.indexOf(',');
+    const b64 = comma >= 0 ? data.slice(comma + 1) : data;
+    setCoverRefDrafts((prev) => [...prev, { mimeType: mime, base64Data: b64, note: '' }]);
+    setErrorText(null);
   }
 
   async function createJob() {
@@ -232,6 +289,79 @@ export default function CoverArchetypePage() {
               </div>
             </div>
           )}
+          {!hasBlurb && (
+            <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              Back-cover blurb is missing. Its exact wording is rendered on the generated back panel — finish it in Marketing first.
+              <div className="mt-2">
+                <Link className="underline text-accent" href={`/projects/${projectId}/marketing/blurb`}>
+                  Go to Blurb for back of book
+                </Link>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-6 rounded-lg border border-border p-4 space-y-3">
+            <p className="text-sm font-medium">
+              Competitor / mood references (optional, up to {MAX_STYLE_REFERENCE_SLOTS})
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Upload screenshots of covers you admire. We summarise palette and composition for the image prompt (never copy titles,
+              logos, or characters).
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {coverRefDrafts.map((r, i) => (
+                <div key={`${r.base64Data.slice(0, 12)}-${i}`} className="w-44 space-y-2 border border-border rounded-md p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt=""
+                    className="w-full h-28 object-cover rounded"
+                    src={`data:${r.mimeType};base64,${r.base64Data}`}
+                  />
+                  <input
+                    className="text-xs border border-border rounded px-2 py-1 w-full bg-background"
+                    value={r.note}
+                    placeholder="Note (palette, vibe…)"
+                    onChange={(e) =>
+                      setCoverRefDrafts((rows) =>
+                        rows.map((row, j) => (j === i ? { ...row, note: e.target.value } : row))
+                      )
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs w-full"
+                    onClick={() => setCoverRefDrafts((rows) => rows.filter((_, j) => j !== i))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {coverRefDrafts.length < MAX_STYLE_REFERENCE_SLOTS ? (
+                <label className="text-sm cursor-pointer text-accent underline">
+                  Add reference
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => void addCoverReferenceFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={coverRefDrafts.length === 0}
+                onClick={() => void saveCoverStyleReferences()}
+              >
+                Save references on project
+              </Button>
+            </div>
+          </div>
 
           <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {uniqueRows.map((a) => {

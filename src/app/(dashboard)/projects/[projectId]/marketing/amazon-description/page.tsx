@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { MarketingLayout } from '@/components/layout';
@@ -9,6 +9,7 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import { formatCoverToneForPrompt, resolveApprovedCoverTone } from '@/lib/cover/marketingCoverTone';
+import { approvedCanonMarkdownBlock } from '@/lib/marketing/canonicalContext';
 
 const DEBOUNCE_MS = 500;
 
@@ -28,6 +29,8 @@ export default function AmazonDescriptionPage() {
   const { generate, isGenerating, error: generateError, clearError } = useGenerate();
   const [value, setValue] = useState(project?.amazonDescription ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const approvedCanonContext = useMemo(() => approvedCanonMarkdownBlock(documents ?? []), [documents]);
 
   useEffect(() => {
     if (project?.amazonDescription !== undefined) {
@@ -67,6 +70,7 @@ export default function AmazonDescriptionPage() {
       const tone = resolveApprovedCoverTone(documents ?? [], project.approvedCoverImageId);
       const coverToneBlock =
         project.marketingAlignCoverToneAmazon && tone ? formatCoverToneForPrompt(tone) : undefined;
+      const canonBlock = approvedCanonContext.trim();
       const result = await generate(
         'amazon-description',
         {
@@ -79,6 +83,7 @@ export default function AmazonDescriptionPage() {
           plotBlueprint: structureDoc?.content,
           charactersReference: charactersDoc?.content,
           blurb: project.blurb,
+          ...(canonBlock ? { approvedCanonContext: canonBlock } : {}),
           ...(coverToneBlock ? { coverToneBlock } : {}),
         },
         { model: selectedModel.id, projectId, usageSource: 'manual-stage' }
@@ -88,7 +93,7 @@ export default function AmazonDescriptionPage() {
     } catch {
       // Error surfaced by useGenerate
     }
-  }, [project, documents, getDocumentByType, generate, save, clearError, projectId]);
+  }, [project, documents, approvedCanonContext, getDocumentByType, generate, save, clearError, projectId]);
 
   if (!projectId) {
     return (

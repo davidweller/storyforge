@@ -14,7 +14,8 @@ export type StructuredOutputKindForCountWarnings =
   | 'chapter-scene-eval'
   | 'revision-verify'
   | 'cover-brief'
-  | 'back-cover-brief';
+  | 'back-cover-brief'
+  | 'a-plus-brief';
 
 type D = Record<string, unknown>;
 

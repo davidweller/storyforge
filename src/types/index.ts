@@ -69,11 +69,23 @@ export type EditorialCategory =
 
 export type RevisionTaskStatus = 'queued' | 'in_progress' | 'done';
 
+/** User-uploaded competitor / mood reference (stored as JSON array on `Project`). */
+export interface ProjectStyleReference {
+  mimeType: 'image/png' | 'image/jpeg';
+  base64Data: string;
+  /** Optional author cue — combined with vision summary for prompts. */
+  note?: string;
+}
+
 // Firebase Document Types
 export interface Project {
   id: string;
   userId: string;
   title?: string;  // Optional until selected in the dedicated title stage
+  /** Kindle / print subtitle (often after colon on cover). */
+  subtitle?: string;
+  /** Very short hook for cover or ads. */
+  tagline?: string;
   genre: string;
   niche?: string;  // Selected niche/subgenre
   microniche?: string;  // Selected microniche (optional)
@@ -106,6 +118,10 @@ export interface Project {
   marketingAlignCoverToneBlurb?: boolean;
   /** When true, Amazon description appends approved cover tone context. */
   marketingAlignCoverToneAmazon?: boolean;
+  /** JSON array of ProjectStyleReference (max 5) for cover generation mood. */
+  coverStyleReferencesJson?: string | null;
+  /** JSON array of ProjectStyleReference (max 5) for A+ setup / generation. */
+  aPlusStyleReferencesJson?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -67,8 +67,12 @@ function rowToProject(row: Record<string, unknown>): Project {
     authorName: (row.authorName as string) ?? undefined,
     kdpTemplateImageData: (row.kdpTemplateImageData as string | null) ?? undefined,
     coverTrimSizeId: (row.coverTrimSizeId as string | null) ?? undefined,
+    subtitle: (row.subtitle as string) ?? undefined,
+    tagline: (row.tagline as string) ?? undefined,
     marketingAlignCoverToneBlurb: Boolean(row.marketingAlignCoverToneBlurb),
     marketingAlignCoverToneAmazon: Boolean(row.marketingAlignCoverToneAmazon),
+    coverStyleReferencesJson: (row.coverStyleReferencesJson as string | null) ?? undefined,
+    aPlusStyleReferencesJson: (row.aPlusStyleReferencesJson as string | null) ?? undefined,
     approvedCoverImageId: (row.approvedCoverImageId as string | null) ?? undefined,
     approvedBackCoverImageId: (row.approvedBackCoverImageId as string | null) ?? undefined,
     coverGenerationStatus:
@@ -246,6 +250,8 @@ export async function updateProject(
   const values: unknown[] = [];
 
   if (data.title !== undefined) { fields.push('title = ?'); values.push(data.title ?? null); }
+  if (data.subtitle !== undefined) { fields.push('subtitle = ?'); values.push(data.subtitle ?? null); }
+  if (data.tagline !== undefined) { fields.push('tagline = ?'); values.push(data.tagline ?? null); }
   if (data.genre !== undefined) { fields.push('genre = ?'); values.push(data.genre); }
   if (data.niche !== undefined) { fields.push('niche = ?'); values.push(data.niche ?? null); }
   if (data.microniche !== undefined) { fields.push('microniche = ?'); values.push(data.microniche ?? null); }
@@ -298,6 +304,14 @@ export async function updateProject(
   if (data.approvedAPlusModuleId !== undefined) {
     fields.push('approvedAPlusModuleId = ?');
     values.push(data.approvedAPlusModuleId ?? null);
+  }
+  if (data.coverStyleReferencesJson !== undefined) {
+    fields.push('coverStyleReferencesJson = ?');
+    values.push(data.coverStyleReferencesJson ?? null);
+  }
+  if (data.aPlusStyleReferencesJson !== undefined) {
+    fields.push('aPlusStyleReferencesJson = ?');
+    values.push(data.aPlusStyleReferencesJson ?? null);
   }
 
   if (fields.length === 0) return;

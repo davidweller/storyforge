@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { summarizeStyleReferencesForPrompt } from '@/lib/cover/describeStyleReferences';
+import { mergeTrustedAPlusImagePrompt } from '@/lib/aplus/serverTrustedPrompt';
+import { parseProjectStyleReferences } from '@/lib/cover/styleReferences';
 import { generateOpenAICoverImages } from '@/lib/cover/openaiCoverImages';
 import * as dbq from '@/lib/db/queries';
 import type { APlusImagePayload, APlusModuleType, APlusTextMode } from '@/types';
@@ -64,15 +67,28 @@ export async function POST(request: NextRequest) {
     const project = await dbq.getProject(projectId);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
+    const documents = await dbq.getProjectDocuments(projectId);
+    const aplusRefs = parseProjectStyleReferences(project.aPlusStyleReferencesJson);
+    let referenceSummary = '';
+    if (aplusRefs.length > 0) {
+      referenceSummary = await summarizeStyleReferencesForPrompt(aplusRefs, 'aplus').catch(() => '');
+    }
+
     const results: ResultRow[] = [];
     await Promise.all(
       modules.map(async (entry) => {
-        const promptUsed = enrichPromptWithTextDirective(
+        const drafted = enrichPromptWithTextDirective(
           entry.prompt,
           entry.textMode,
           entry.customText,
           entry.suggestedText
         );
+        const promptUsed = mergeTrustedAPlusImagePrompt({
+          clientPrompt: drafted,
+          project,
+          documents,
+          referenceSummary: referenceSummary.trim() || null,
+        });
         try {
           const { b64List } = await generateOpenAICoverImages({ prompt: promptUsed, n, quality });
           const documentIds: string[] = [];

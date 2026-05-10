@@ -11,6 +11,10 @@ import {
   type SpineConfig,
   type WrapRect,
 } from '@/lib/cover/fullWrapComposite';
+import { defaultThirdZones } from '@/lib/cover/fullWrapZones';
+
+// Parity with generateWrapForJob in generateAllJob.ts: canvas + zones derive from stored KDP template
+// via sharp metadata and equal-thirds layout — do not trust client-supplied geometry.
 
 export const maxDuration = 120;
 
@@ -61,11 +65,38 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { projectId, frontCoverImageId, backCoverImageId, spineConfig, templateDimensions, outputFormat } =
-      parsed.data;
+    const { projectId, frontCoverImageId, backCoverImageId, spineConfig, outputFormat } = parsed.data;
 
     const project = await q.getProject(projectId);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+
+    const templateB64 = project.kdpTemplateImageData?.trim();
+    if (!templateB64) {
+      return NextResponse.json(
+        { error: 'Upload a KDP template image first (stored on the project under Cover > Advanced Wrap).' },
+        { status: 400 }
+      );
+    }
+
+    let cw: number;
+    let ch: number;
+    let bz: WrapRect;
+    let sz: WrapRect;
+    let fz: WrapRect;
+    try {
+      const meta = await sharp(Buffer.from(templateB64, 'base64')).metadata();
+      if (!meta.width || !meta.height) {
+        return NextResponse.json({ error: 'Could not read template image dimensions.' }, { status: 400 });
+      }
+      cw = Math.round(meta.width);
+      ch = Math.round(meta.height);
+      const thirds = defaultThirdZones(cw, ch);
+      bz = roundRect(thirds.backZone);
+      sz = roundRect(thirds.spineZone);
+      fz = roundRect(thirds.frontZone);
+    } catch {
+      return NextResponse.json({ error: 'Invalid or corrupted template image on project.' }, { status: 400 });
+    }
 
     const spineCfg: SpineConfig = {
       titleText: spineConfig.titleText,
@@ -80,12 +111,6 @@ export async function POST(request: NextRequest) {
     if (!front?.imageData || !back?.imageData) {
       return NextResponse.json({ error: 'Missing front or back cover document' }, { status: 404 });
     }
-
-    const cw = Math.round(templateDimensions.canvasWidth);
-    const ch = Math.round(templateDimensions.canvasHeight);
-    const bz = roundRect(templateDimensions.backZone);
-    const sz = roundRect(templateDimensions.spineZone);
-    const fz = roundRect(templateDimensions.frontZone);
 
     const spineBuf = await renderSpinePng(sz.width, sz.height, spineCfg);
 
@@ -157,9 +182,9 @@ export async function POST(request: NextRequest) {
           frontZone: fz,
           backZone: bz,
           spineZone: sz,
-          bleedPx: templateDimensions.bleedPx ?? 0,
+          bleedPx: 0,
         },
-        dimensionsUserConfirmed: true,
+        dimensionsUserConfirmed: false,
       },
       exportedAt: new Date().toISOString(),
       exportFilename: filename,

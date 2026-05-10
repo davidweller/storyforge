@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { summarizeStyleReferencesForPrompt } from '@/lib/cover/describeStyleReferences';
+import { mergeTrustedAPlusImagePrompt } from '@/lib/aplus/serverTrustedPrompt';
+import { parseProjectStyleReferences } from '@/lib/cover/styleReferences';
 import { generateOpenAICoverImages } from '@/lib/cover/openaiCoverImages';
 import * as dbq from '@/lib/db/queries';
 import type { APlusImagePayload } from '@/types';
@@ -58,7 +61,25 @@ export async function POST(request: NextRequest) {
     const allDocs = await dbq.getProjectDocuments(projectId);
     const baseVersion = maxAPlusVersionForModule(allDocs, parentPayload.moduleType);
     const version = Math.max(baseVersion, parentPayload.version ?? 1) + 1;
-    const refinedPrompt = `${originalPrompt.trim()}\n\nRefinement: ${refinementRequest.trim()}. Keep brand style consistent with prior approved/front-cover-informed direction.`;
+
+    const proj = await dbq.getProject(projectId);
+    if (!proj) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    const aplusRefs = parseProjectStyleReferences(proj.aPlusStyleReferencesJson);
+    let referenceSummary = '';
+    if (aplusRefs.length > 0) {
+      referenceSummary = await summarizeStyleReferencesForPrompt(aplusRefs, 'aplus').catch(() => '');
+    }
+
+    const drafted = `${originalPrompt.trim()}\n\nRefinement: ${refinementRequest.trim()}. Keep brand style consistent with prior approved/front-cover-informed direction.`;
+    const refinedPrompt = mergeTrustedAPlusImagePrompt({
+      clientPrompt: drafted,
+      project: proj,
+      documents: allDocs,
+      referenceSummary: referenceSummary.trim() || null,
+    });
 
     try {
       const { b64List } = await generateOpenAICoverImages({ prompt: refinedPrompt, n, quality });

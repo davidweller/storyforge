@@ -9,8 +9,9 @@ import { useGenerate } from '@/hooks/useGenerate';
 import { useProject } from '@/hooks/useProject';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import { parseAPlusBrief } from '@/lib/generation/aplusSchemas';
+import { formatCoverCampaignPack } from '@/lib/aplus/coverStylePack';
 import { formatCoverToneForPrompt, resolveApprovedCoverTone } from '@/lib/cover/marketingCoverTone';
-import { APLUS_MODULES, APLUS_SETUP_STORAGE_PREFIX } from '@/lib/aplus/moduleCatalog';
+import { APLUS_MODULES, APLUS_SETUP_STORAGE_PREFIX, parseStoredAPlusModuleIds } from '@/lib/aplus/moduleCatalog';
 import type { APlusModuleType, APlusTextMode } from '@/types';
 
 type SetupState = { selectedModules: APlusModuleType[] };
@@ -30,8 +31,8 @@ function readSetup(projectId: string): SetupState {
   try {
     const raw = sessionStorage.getItem(`${APLUS_SETUP_STORAGE_PREFIX}${projectId}`);
     if (!raw) return { selectedModules: [] };
-    const parsed = JSON.parse(raw) as SetupState;
-    return Array.isArray(parsed.selectedModules) ? parsed : { selectedModules: [] };
+    const parsed = JSON.parse(raw) as { selectedModules?: unknown };
+    return { selectedModules: parseStoredAPlusModuleIds(parsed.selectedModules) };
   } catch {
     return { selectedModules: [] };
   }
@@ -72,10 +73,11 @@ export default function APlusBriefPage() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Partial<DraftMap>>({});
 
-  const selectedModules = useMemo(() => {
-    if (!projectId) return [] as APlusModuleType[];
+  const selectedModules = useMemo((): APlusModuleType[] => {
+    if (!projectId) return [];
     const setup = readSetup(projectId).selectedModules;
-    return setup.length ? setup : ['hero-banner'];
+    const fallback: APlusModuleType[] = ['hero-banner'];
+    return setup.length ? setup : fallback;
   }, [projectId]);
 
   if (!projectId) return null;
@@ -94,6 +96,7 @@ export default function APlusBriefPage() {
       return;
     }
     const coverToneBlock = formatCoverToneForPrompt(tone);
+    const coverCampaignPack = formatCoverCampaignPack(project, documents ?? []);
     const canonContext = buildCanonContext(project, documents ?? []);
     const selectedModel = getEffectiveModelForStage('a-plus-brief');
     const nextDrafts: Partial<DraftMap> = {};
@@ -110,6 +113,7 @@ export default function APlusBriefPage() {
             niche: project.niche,
             canonContext,
             coverToneBlock,
+            ...(coverCampaignPack.trim() ? { coverCampaignPack } : {}),
           },
           { model: selectedModel.id, projectId, usageSource: 'manual-stage' }
         );

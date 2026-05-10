@@ -40,6 +40,8 @@ export function buildAPlusBriefPrompt(input: {
   niche?: string;
   canonContext: string;
   coverToneBlock: string;
+  /** Subtitle/tagline + approved front tone — parallels server A+ merge. */
+  coverCampaignPack?: string;
   moduleType: APlusModuleType;
   textMode: APlusTextMode;
   customText?: string;
@@ -65,6 +67,9 @@ Module intent: ${MODULE_BRIEFS[input.moduleType]}
 Approved front cover style reference:
 ${input.coverToneBlock}
 
+${input.coverCampaignPack?.trim()
+  ? `Cover packaging & campaign cues:\n${input.coverCampaignPack.trim().slice(0, 2800)}\n`
+  : ''}
 Project canon context:
 ${input.canonContext.slice(0, 6000)}
 

@@ -44,6 +44,7 @@ import {
   parseChapterScenePlan,
 } from '@/lib/generation/schemas';
 import { runMergedChapterSceneEvaluation } from '@/lib/chapter/runMergedChapterSceneEvaluation';
+import { approvedCanonMarkdownBlock } from '@/lib/marketing/canonicalContext';
 import {
   assembleContext,
   buildStoryBibleSourceRefs,
@@ -1588,6 +1589,8 @@ export default function FullAutoPage({
         const genreDoc = getDocumentByType('genre');
         const nicheDoc = getDocumentByType('niche');
         const structureDoc = getDocumentByType('structure');
+        const charactersDoc = getDocumentByType('characters');
+        const marketingCanon = approvedCanonMarkdownBlock(useProjectStore.getState().documents).trim();
         const blurbResult = await generateTracked('blurb', {
           genre: projForMarketing.genre,
           niche: projForMarketing.niche,
@@ -1596,6 +1599,8 @@ export default function FullAutoPage({
           marketAnalysis: genreDoc?.content,
           readerTargeting: nicheDoc?.content,
           plotBlueprint: structureDoc?.content,
+          charactersReference: charactersDoc?.content,
+          ...(marketingCanon ? { approvedCanonContext: marketingCanon } : {}),
         });
         await updateProject(projectId, { blurb: blurbResult.content });
         stepIdx++;
@@ -1610,7 +1615,9 @@ export default function FullAutoPage({
           marketAnalysis: genreDoc?.content,
           readerTargeting: nicheDoc?.content,
           plotBlueprint: structureDoc?.content,
+          charactersReference: charactersDoc?.content,
           blurb: blurbResult.content,
+          ...(marketingCanon ? { approvedCanonContext: marketingCanon } : {}),
         });
         await updateProject(projectId, { amazonDescription: amazonResult.content });
         await updateProject(projectId, { fullAutoMode: false });

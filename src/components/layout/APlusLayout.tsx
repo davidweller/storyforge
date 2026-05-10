@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+
+import { WorkflowSectionNav } from './WorkflowSectionNav';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
 import { WorkflowNav } from './WorkflowNav';
@@ -70,25 +72,14 @@ export function APlusLayout({
               <span>/</span>
               <span className="text-foreground font-medium">{title}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-3 mb-6">
-              {NAV.map((n) => {
-                const href = `/projects/${projectId}/aplus/${n.slug}`;
-                const active = pathname.includes(`/aplus/${n.slug}`);
-                return (
-                  <Link
-                    key={n.slug}
-                    href={href}
-                    className={
-                      active
-                        ? 'text-sm font-semibold text-foreground border-b-2 border-accent pb-0.5 no-underline'
-                        : 'text-sm text-muted-foreground hover:text-foreground no-underline pb-0.5'
-                    }
-                  >
-                    {n.label}
-                  </Link>
-                );
-              })}
-            </div>
+            <WorkflowSectionNav
+              className="mb-6"
+              items={NAV.map((n) => ({
+                href: `/projects/${projectId}/aplus/${n.slug}`,
+                label: n.label,
+                isActive: pathname.includes(`/aplus/${n.slug}`),
+              }))}
+            />
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
               {modelStage && <ModelSelector stage={modelStage} />}

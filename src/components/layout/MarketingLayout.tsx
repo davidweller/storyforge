@@ -2,7 +2,9 @@
 
 import { ReactNode } from 'react';
 import Link from 'next/link';
-import { WorkflowNav } from '@/components/layout';
+import { usePathname } from 'next/navigation';
+import { WorkflowNav } from './WorkflowNav';
+import { WorkflowSectionNav } from './WorkflowSectionNav';
 import { ModelSelector } from '@/components/stages';
 import type { WorkflowStage, Chapter, RevisionTask, Project, ProjectDocument } from '@/types';
 
@@ -27,6 +29,7 @@ export function MarketingLayout({
   revisionTasks = [],
   children,
 }: MarketingLayoutProps) {
+  const pathname = usePathname();
   const approvedChapterIds = new Set<string>();
 
   return (
@@ -61,6 +64,21 @@ export function MarketingLayout({
               <span className="text-muted-foreground">/</span>
               <span className="text-sm font-medium text-foreground">{title}</span>
             </div>
+            <WorkflowSectionNav
+              className="mb-6"
+              items={[
+                {
+                  href: `/projects/${projectId}/marketing/amazon-description`,
+                  label: 'Amazon Description',
+                  isActive: pathname.includes('/marketing/amazon-description'),
+                },
+                {
+                  href: `/projects/${projectId}/marketing/blurb`,
+                  label: 'Blurb',
+                  isActive: pathname.includes('/marketing/blurb'),
+                },
+              ]}
+            />
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {title}

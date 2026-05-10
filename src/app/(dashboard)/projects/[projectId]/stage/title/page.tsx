@@ -6,7 +6,7 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, LoadingContent, EmptyContent } from '@/components/stages';
-import { Button, Card, CardContent } from '@/components/ui';
+import { Button, Card, CardContent, Input } from '@/components/ui';
 import { ReviewChecklist } from '@/components/review/ReviewChecklist';
 import { checklistItemsForKey } from '@/lib/review/checklists';
 import { getNextStage, isStageAccessible } from '@/lib/utils';
@@ -45,12 +45,20 @@ export default function TitlePage({ params }: TitlePageProps) {
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [contextWarnings, setContextWarnings] = useState<string[]>([]);
+  const [subtitleDraft, setSubtitleDraft] = useState('');
+  const [taglineDraft, setTaglineDraft] = useState('');
 
   useEffect(() => {
     if (project && !projectLoading && !isStageAccessible(project.currentStage, 'title')) {
       router.push(`/projects/${projectId}`);
     }
   }, [project, projectLoading, projectId, router]);
+
+  useEffect(() => {
+    if (!project) return;
+    setSubtitleDraft(project.subtitle ?? '');
+    setTaglineDraft(project.tagline ?? '');
+  }, [project?.subtitle, project?.tagline, project]);
 
   const handleGenerate = async () => {
     if (!project) return;
@@ -88,7 +96,11 @@ export default function TitlePage({ params }: TitlePageProps) {
     if (!selectedTitle?.trim() || !project) return;
     setIsConfirming(true);
     try {
-      await updateProject({ title: selectedTitle.trim() });
+      await updateProject({
+        title: selectedTitle.trim(),
+        subtitle: subtitleDraft.trim() || undefined,
+        tagline: taglineDraft.trim() || undefined,
+      });
       const nextStage = getNextStage('title') as WorkflowStage;
       if (nextStage && project.currentStage === 'title') {
         await advanceStage(projectId, nextStage);
@@ -193,6 +205,37 @@ export default function TitlePage({ params }: TitlePageProps) {
                 </CardContent>
               </Card>
             ))}
+          </div>
+
+          <div className="mb-6 space-y-4 rounded-lg border border-border bg-card p-4">
+            <p className="text-sm font-medium text-foreground">Cover & listing metadata</p>
+            <p className="text-xs text-muted-foreground">
+              Optional subtitle and tagline feed print cover typography and Ads. Saved with your title choice.
+            </p>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="subtitle-draft">
+                Subtitle
+              </label>
+              <Input
+                id="subtitle-draft"
+                value={subtitleDraft}
+                onChange={(e) => setSubtitleDraft(e.target.value)}
+                placeholder="Subtitle (e.g., A Novel)"
+                maxLength={200}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="tagline-draft">
+                Tagline
+              </label>
+              <Input
+                id="tagline-draft"
+                value={taglineDraft}
+                onChange={(e) => setTaglineDraft(e.target.value)}
+                placeholder="Short hook for cover — a few words"
+                maxLength={160}
+              />
+            </div>
           </div>
 
           <ReviewChecklist items={checklistItemsForKey('title')} className="mb-4" />

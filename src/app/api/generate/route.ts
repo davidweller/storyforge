@@ -403,6 +403,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     readerTargeting: optionalString,
     plotBlueprint: optionalString,
     charactersReference: optionalString,
+    approvedCanonContext: optionalString,
     coverToneBlock: optionalString,
   }).passthrough(),
   'amazon-description': z.object({
@@ -415,6 +416,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     plotBlueprint: optionalString,
     charactersReference: optionalString,
     blurb: optionalString,
+    approvedCanonContext: optionalString,
     coverToneBlock: optionalString,
   }).passthrough(),
   'cover-brief': z
@@ -450,6 +452,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
       niche: optionalString,
       canonContext: requiredString,
       coverToneBlock: requiredString,
+      coverCampaignPack: optionalString,
       customText: optionalString,
     })
     .passthrough(),
@@ -600,6 +603,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       readerTargeting: d.readerTargeting as string | undefined,
       plotBlueprint: d.plotBlueprint as string | undefined,
       charactersReference: d.charactersReference as string | undefined,
+      approvedCanonContext: typeof d.approvedCanonContext === 'string' ? d.approvedCanonContext : undefined,
       coverToneBlock: typeof d.coverToneBlock === 'string' ? d.coverToneBlock : undefined,
     }),
   }),
@@ -615,6 +619,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       plotBlueprint: d.plotBlueprint as string | undefined,
       charactersReference: d.charactersReference as string | undefined,
       blurb: d.blurb as string | undefined,
+      approvedCanonContext: typeof d.approvedCanonContext === 'string' ? d.approvedCanonContext : undefined,
       coverToneBlock: typeof d.coverToneBlock === 'string' ? d.coverToneBlock : undefined,
     }),
   }),
@@ -640,6 +645,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       niche: d.niche as string | undefined,
       canonContext: d.canonContext as string,
       coverToneBlock: d.coverToneBlock as string,
+      coverCampaignPack: typeof d.coverCampaignPack === 'string' ? d.coverCampaignPack : undefined,
       customText: d.customText as string | undefined,
     }),
   }),
