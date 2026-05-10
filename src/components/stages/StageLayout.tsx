@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, Suspense } from 'react';
-import { WorkflowSidebar } from '@/components/layout';
+import { WorkflowNav } from '@/components/layout';
 import { ModelSelector } from './ModelSelector';
 import { STAGE_NAMES, STAGE_DESCRIPTIONS } from '@/lib/utils';
 import type { WorkflowStage, Chapter, RevisionTask, ProjectDocument } from '@/types';
@@ -45,7 +45,7 @@ export function StageLayout({
   const showModelSelector = activeStage !== 'setup';
 
   const sidebar = (
-    <WorkflowSidebar
+    <WorkflowNav
       projectId={projectId}
       projectTitle={projectTitle}
       genre={genre}

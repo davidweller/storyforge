@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { Button, Badge, Textarea, useToast } from '@/components/ui';
-import { WorkflowSidebar } from '@/components/layout';
+import { WorkflowNav } from '@/components/layout';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, formatDate, formatRelativeTime, getStageRouteForDocument } from '@/lib/utils';
 import { buildStoryBibleSourceRefs, getValidatedApprovedChapterOutlines, isCreativeBriefStale, isStoryBibleStale } from '@/lib/context/assembler';
 import { parseStoryBible } from '@/lib/generation/schemas';
@@ -330,7 +330,7 @@ export default function ProjectDashboard({ params }: ProjectDashboardProps) {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
       {/* Sidebar */}
-      <WorkflowSidebar
+      <WorkflowNav
         projectId={project.id}
         projectTitle={project.title}
         genre={project.genre}

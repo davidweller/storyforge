@@ -47,6 +47,7 @@ import {
   REVISION_VERIFY_SYSTEM, buildRevisionVerificationPrompt,
   BLURB_SYSTEM, buildBlurbPrompt,
   AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt,
+  APLUS_BRIEF_SYSTEM, buildAPlusBriefPrompt,
   STORY_BIBLE_SYSTEM, buildStoryBiblePrompt, buildCreativeBriefPrompt,
   COVER_BRIEF_SYSTEM,
   BACK_COVER_BRIEF_SYSTEM,
@@ -77,6 +78,7 @@ import {
   SceneCardSchema,
 } from '@/lib/generation/schemas';
 import { parseCoverBrief, parseBackCoverBrief } from '@/lib/generation/coverSchemas';
+import { parseAPlusBrief } from '@/lib/generation/aplusSchemas';
 import { isCoverBriefV2, isBackCoverBriefV2 } from '@/types';
 import { structuredOutputCountWarnings } from '@/lib/generation/outputCountWarnings';
 import { strictCardinalityViolation } from '@/lib/generation/cardinalityGate';
@@ -142,6 +144,7 @@ const WORKFLOW_STAGES = [
   'story-bible', 'creative-brief', 'chapters', 'compilation', 'export-draft',
   'editorial', 'editorial-issues', 'revision', 'revision-verify', 'export-final', 'blurb', 'amazon-description',
   'cover-brief', 'back-cover-brief',
+  'a-plus-brief',
 ] as const;
 
 const USAGE_SOURCE_VALUES = [
@@ -180,7 +183,8 @@ type StructuredOutputKind =
   | 'chapter-scene-eval'
   | 'revision-verify'
   | 'cover-brief'
-  | 'back-cover-brief';
+  | 'back-cover-brief'
+  | 'a-plus-brief';
 
 const EditorialPassSchema = z.enum(['structural', 'line', 'copy', 'proofread', 'final_report']);
 const optionalString = z.string().optional();
@@ -430,6 +434,25 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
       blurb: z.string().optional(),
     })
     .passthrough(),
+  'a-plus-brief': z
+    .object({
+      moduleType: z.enum([
+        'hero-banner',
+        'character-spotlight',
+        'world-spotlight',
+        'trope-promise',
+        'series-author-brand',
+        'quote-review',
+      ]),
+      textMode: z.enum(['none', 'suggested', 'custom']),
+      genre: requiredString,
+      title: optionalString,
+      niche: optionalString,
+      canonContext: requiredString,
+      coverToneBlock: requiredString,
+      customText: optionalString,
+    })
+    .passthrough(),
 };
 
 function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutputKind | null {
@@ -445,6 +468,7 @@ function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutpu
   if (stage === 'creative-brief') return 'creative-brief';
   if (stage === 'cover-brief') return 'cover-brief';
   if (stage === 'back-cover-brief') return 'back-cover-brief';
+  if (stage === 'a-plus-brief') return 'a-plus-brief';
   if (stage === 'editorial' && data.createQueue) return 'revision-queue';
   if (stage === 'editorial-issues') return 'revision-queue';
   if (stage === 'chapter-scene-plan') return 'chapter-scene-plan';
@@ -494,6 +518,10 @@ function normalizeStructuredOutput(kind: StructuredOutputKind, content: string, 
     if (isBackCoverBriefV2(brief) && ctx?.backCover?.paletteDirection.trim()) {
       return JSON.stringify(syncBackCoverResolvedFromLayers(brief, ctx.backCover), null, 2);
     }
+    return JSON.stringify(brief, null, 2);
+  }
+  if (kind === 'a-plus-brief') {
+    const brief = parseAPlusBrief(content);
     return JSON.stringify(brief, null, 2);
   }
   if (kind === 'chapter-scene-plan') {
@@ -601,6 +629,19 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
   'back-cover-brief': (d) => ({
     system: BACK_COVER_BRIEF_SYSTEM,
     prompt: buildBackCoverBriefPromptV2(d.assembledContext as string),
+  }),
+  'a-plus-brief': (d) => ({
+    system: APLUS_BRIEF_SYSTEM,
+    prompt: buildAPlusBriefPrompt({
+      moduleType: d.moduleType as import('@/types').APlusModuleType,
+      textMode: d.textMode as import('@/types').APlusTextMode,
+      genre: d.genre as string,
+      title: d.title as string | undefined,
+      niche: d.niche as string | undefined,
+      canonContext: d.canonContext as string,
+      coverToneBlock: d.coverToneBlock as string,
+      customText: d.customText as string | undefined,
+    }),
   }),
   'chapter-scene-plan': (d) => {
     let outlineChapter: import('@/lib/generation/schemas').ChapterOutline | undefined;
@@ -1007,7 +1048,7 @@ export async function POST(request: NextRequest) {
       console.warn('[API] Structured output count warnings:', { stage, messages: structuredWarnings });
     }
 
-    let responseWarnings = [...structuredWarnings];
+    const responseWarnings = [...structuredWarnings];
 
     const pid = typeof bodyProjectId === 'string' ? bodyProjectId.trim() : '';
     if (pid) {

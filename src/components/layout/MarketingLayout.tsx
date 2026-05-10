@@ -2,7 +2,7 @@
 
 import { ReactNode } from 'react';
 import Link from 'next/link';
-import { WorkflowSidebar } from '@/components/layout';
+import { WorkflowNav } from '@/components/layout';
 import { ModelSelector } from '@/components/stages';
 import type { WorkflowStage, Chapter, RevisionTask, Project, ProjectDocument } from '@/types';
 
@@ -31,7 +31,7 @@ export function MarketingLayout({
 
   return (
     <div className="flex h-[calc(100vh-var(--header-height))]">
-      <WorkflowSidebar
+      <WorkflowNav
         projectId={projectId}
         projectTitle={project.title}
         genre={project.genre}
@@ -45,6 +45,8 @@ export function MarketingLayout({
         blurbFilled={!!project.blurb?.trim()}
         amazonDescriptionFilled={!!project.amazonDescription?.trim()}
         approvedCoverImageId={project.approvedCoverImageId ?? null}
+        approvedBackCoverImageId={project.approvedBackCoverImageId ?? null}
+        approvedAPlusModuleId={project.approvedAPlusModuleId ?? null}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="border-b border-border bg-card px-12 py-8">

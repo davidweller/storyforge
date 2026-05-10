@@ -25,6 +25,7 @@ export type WorkflowStage =
   | 'creative-brief'  // Internal compact canon brief generation stage
   | 'blurb'           // Marketing: back-cover blurb
   | 'amazon-description'  // Marketing: Amazon product description
+  | 'a-plus-brief'    // A+ content prompt brief (JSON)
   | 'revision-verify' // Post-revision checklist (structured JSON)
   | 'cover-brief'     // Structured cover direction (JSON)
   | 'back-cover-brief'; // Back-panel visual brief (JSON)
@@ -51,7 +52,10 @@ export type DocumentType =
   | 'cover-brief'
   | 'cover-image'
   | 'back-cover-brief'
-  | 'cover-full-wrap';
+  | 'cover-full-wrap'
+  | 'a-plus-brief'
+  | 'a-plus-module'
+  | 'a-plus-export';
 
 /** Ordered editorial pipeline passes (structural → line → copy → proofread → final_report). */
 export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread' | 'final_report';
@@ -91,8 +95,13 @@ export interface Project {
   approvedBackCoverImageId?: string | null;
   coverGenerationStatus?: CoverTrackStatus;
   paperbackGenerationStatus?: CoverTrackStatus;
+  aPlusGenerationStatus?: CoverTrackStatus;
   /** Base64 KDP template (PNG/JPEG) for full-wrap compositing. */
   kdpTemplateImageData?: string | null;
+  /** Last selected KDP trim size id for cover flow. */
+  coverTrimSizeId?: string | null;
+  /** Approved A+ module image document id (`a-plus-module`). */
+  approvedAPlusModuleId?: string | null;
   /** When true, blurb generation appends approved cover tone context. */
   marketingAlignCoverToneBlurb?: boolean;
   /** When true, Amazon description appends approved cover tone context. */
@@ -102,6 +111,18 @@ export interface Project {
 }
 
 export type CoverTrackStatus = 'not-started' | 'in-progress' | 'complete';
+
+export type CoverJobStatus =
+  | 'queued'
+  | 'running_front'
+  | 'running_back'
+  | 'running_wrap'
+  | 'finalizing'
+  | 'succeeded'
+  | 'partially_succeeded'
+  | 'failed';
+
+export type CoverSizingSource = 'uploaded-template' | 'trim-size-estimate' | 'fallback-default';
 
 export type {
   CoverBriefDocument,
@@ -114,6 +135,13 @@ export type {
   CoverFullWrapDocument,
 } from './coverBrief';
 export { isCoverBriefV2, isBackCoverBriefV2 } from './coverBrief';
+export type {
+  APlusModuleType,
+  APlusTextMode,
+  APlusBriefDocument,
+  APlusImagePayload,
+  APlusExportDocument,
+} from './aplus';
 
 /** JSON stored in document `cover-image` rows (`content`). */
 export interface CoverImagePayload {
@@ -132,6 +160,40 @@ export interface CoverImagePayload {
   generatedAt: string;
   /** Accumulated refinement lines appended to prompt (restart clears). */
   refinementHistory?: string[];
+}
+
+export interface CoverGenerationJobInput {
+  archetypeId: string;
+  authorName: string;
+  trimSizeId: string;
+  trimWidthIn: number;
+  trimHeightIn: number;
+  templateUpload?: {
+    mimeType: string;
+    base64Data: string;
+  };
+}
+
+export interface CoverGenerationJobResult {
+  frontDocumentId?: string;
+  backDocumentId?: string;
+  wrapDocumentId?: string;
+  resolvedCanvasWidth?: number;
+  resolvedCanvasHeight?: number;
+  resolvedSizingSource?: CoverSizingSource;
+  error?: string;
+}
+
+export interface CoverGenerationJob {
+  id: string;
+  projectId: string;
+  status: CoverJobStatus;
+  progressStage: string;
+  error?: string | null;
+  input: CoverGenerationJobInput;
+  result?: CoverGenerationJobResult;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 

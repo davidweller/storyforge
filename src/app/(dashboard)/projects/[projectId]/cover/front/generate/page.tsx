@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CoverLayout } from '@/components/layout/CoverLayout';
-import { Button } from '@/components/ui';
+import { Button, Textarea } from '@/components/ui';
 import { useProject } from '@/hooks/useProject';
 import type { CoverArchetypeId } from '@/lib/prompts/covers';
 import type { CoverImagePayload } from '@/types';
 import { isCoverBriefV2 } from '@/types';
 import { safeParseCoverBrief } from '@/lib/cover/assembleCanonForCover';
+import type { ProjectDocument } from '@/types';
 
 const storageKey = (pid: string) => `storyforge.cover.selection.${pid}`;
 
@@ -19,12 +20,14 @@ interface SelectionPersist {
   prompts?: Partial<Record<CoverArchetypeId, string>>;
 }
 
-function approvedBriefPromptFor(documents: { type: string; approved: boolean; content: string }[], arch: string): string | null {
-  const hit = documents.find((d) => {
-    if (d.type !== 'cover-brief' || !d.approved) return false;
-    const b = safeParseCoverBrief(d.content);
-    return !!(b && isCoverBriefV2(b) && b.archetypeId === arch && b.resolvedPrompt?.trim());
-  });
+function latestBriefPromptFor(documents: ProjectDocument[], arch: string): string | null {
+  const hit = [...documents]
+    .filter((d) => d.type === 'cover-brief')
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .find((d) => {
+      const b = safeParseCoverBrief(d.content);
+      return !!(b && isCoverBriefV2(b) && b.archetypeId === arch && b.resolvedPrompt?.trim());
+    });
   if (!hit?.content) return null;
   const b = safeParseCoverBrief(hit.content);
   return b && isCoverBriefV2(b) ? b.resolvedPrompt : null;
@@ -40,6 +43,20 @@ export default function CoverGeneratePage() {
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [lastErrors, setLastErrors] = useState<Record<string, string>>({});
+  const [editRequest, setEditRequest] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!busy) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [busy]);
 
   const fronts = useMemo(() => {
     return documents
@@ -85,12 +102,12 @@ export default function CoverGeneratePage() {
       const archetypesPayload: Array<{ archetypeId: string; prompt: string; highClickEnabled: boolean }> = [];
       for (const arch of sel.ids) {
         let prompt =
-          approvedBriefPromptFor(documents, arch)?.trim()
+          latestBriefPromptFor(documents, arch)?.trim()
           ?? sel.prompts?.[arch]?.trim()
           ?? null;
         if (!prompt?.trim()) {
           throw new Error(
-            `No approved layered brief found for ${arch}. Approve a cover brief first, or return to archetype flow for legacy prompts.`
+            `No layered brief found for ${arch}. Generate/save a cover brief first, or return to archetype flow for legacy prompts.`
           );
         }
         archetypesPayload.push({
@@ -101,11 +118,11 @@ export default function CoverGeneratePage() {
       }
 
       const estimatedCalls = archetypesPayload.length;
-      const n = 4;
+      const n = 1;
       if (
         typeof window !== 'undefined' &&
         !window.confirm(
-          `This will run about ${estimatedCalls} cover image generation call(s), ${n} images each (~${estimatedCalls * n} PNGs total). Uses OpenAI gpt-image-2 billed to your configured key. Continue?`
+          `This will run about ${estimatedCalls} cover image generation call(s), ${n} image each (~${estimatedCalls * n} PNGs total). Uses OpenAI gpt-image-2 billed to your configured key. Continue?`
         )
       ) {
         setBusy(false);
@@ -129,11 +146,26 @@ export default function CoverGeneratePage() {
           archetypes: archetypesPayload,
           n,
           quality: 'high',
+          editRequest: editRequest.trim() || undefined,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Image API failed');
+      if (!res.ok) {
+        let message = typeof data.error === 'string' ? data.error : 'Image API failed';
+        if (data?.details?.fieldErrors && typeof data.details.fieldErrors === 'object') {
+          const entries = Object.entries(data.details.fieldErrors as Record<string, unknown>)
+            .map(([field, msgs]) => {
+              if (!Array.isArray(msgs) || msgs.length === 0) return null;
+              return `${field}: ${msgs.filter((m): m is string => typeof m === 'string').join(', ')}`;
+            })
+            .filter((x): x is string => !!x);
+          if (entries.length > 0) {
+            message = `${message} (${entries.join(' | ')})`;
+          }
+        }
+        throw new Error(message);
+      }
 
       const errs: Record<string, string> = {};
       const results = data.results as Array<{ archetypeId: string; error?: string }>;
@@ -184,8 +216,31 @@ export default function CoverGeneratePage() {
     >
       <p className="text-sm text-muted-foreground mb-4">
         Parallel <code className="text-xs">gpt-image-2</code> calls via{' '}
-        <code className="text-xs">POST /api/cover/generate</code> (1024×1536 portrait, four variants per archetype).
+        <code className="text-xs">POST /api/cover/generate</code> (1024×1536 portrait, one variant per archetype).
       </p>
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-muted-foreground mb-2">
+          Optional image edit request
+        </label>
+        <Textarea
+          rows={3}
+          className="text-sm"
+          placeholder="Describe the changes you want (e.g. make title area cleaner, stronger warm backlight, heroine facing camera, etc.)"
+          value={editRequest}
+          onChange={(e) => setEditRequest(e.target.value)}
+        />
+      </div>
+      {busy && (
+        <div className="mb-4 rounded-md border border-accent/40 bg-accent/5 p-3">
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="text-accent font-medium">Generation in progress</span>
+            <span className="text-muted-foreground">Elapsed: {elapsedSeconds}s</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded bg-muted">
+            <div className="h-full w-1/3 animate-pulse rounded bg-accent" />
+          </div>
+        </div>
+      )}
       {Object.keys(lastErrors).length > 0 && (
         <ul className="mb-4 text-sm text-amber-700 dark:text-amber-400 list-disc pl-6">
           {Object.entries(lastErrors).map(([k, v]) => (

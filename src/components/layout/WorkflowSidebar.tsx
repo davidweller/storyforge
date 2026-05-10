@@ -13,6 +13,7 @@ import {
   canStartEditorialPass,
 } from '@/lib/editorial/passes';
 import type { WorkflowStage, StageStatus, Chapter, RevisionTask, ProjectDocument } from '@/types';
+import type { SectionId } from './WorkflowRail';
 
 interface WorkflowSidebarProps {
   projectId: string;
@@ -29,6 +30,10 @@ interface WorkflowSidebarProps {
   blurbFilled?: boolean;  // When true, show Blurb tab as green (generated)
   amazonDescriptionFilled?: boolean;  // When true, show Amazon Description tab as green (generated)
   approvedCoverImageId?: string | null;
+  approvedBackCoverImageId?: string | null;
+  approvedAPlusModuleId?: string | null;
+  /** Which section's items to render. When omitted, falls back to 'planning'. */
+  activeSection?: SectionId;
 }
 
 const stageIcons: Record<WorkflowStage, React.ReactNode> = {
@@ -167,6 +172,11 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12M8 12h8m-8 5h12M4 5h2v14H4V5z" />
     </svg>
   ),
+  'a-plus-brief': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h12M4 17h16" />
+    </svg>
+  ),
 };
 
 const statusColors: Record<StageStatus, string> = {
@@ -215,22 +225,21 @@ export function WorkflowSidebar({
   blurbFilled = false,
   amazonDescriptionFilled = false,
   approvedCoverImageId,
+  approvedBackCoverImageId,
+  approvedAPlusModuleId,
+  activeSection = 'planning',
 }: WorkflowSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isChaptersExpanded, setIsChaptersExpanded] = useState(false);
   const [isEditorialPassesExpanded, setIsEditorialPassesExpanded] = useState(false);
   const [isRevisionPassesExpanded, setIsRevisionPassesExpanded] = useState(false);
-  const [isFrontCoverExpanded, setIsFrontCoverExpanded] = useState(true);
-  const [isBackCoverExpanded, setIsBackCoverExpanded] = useState(true);
+  const [isAPlusExpanded, setIsAPlusExpanded] = useState(true);
 
   // Display title or fallback to genre-based name
   const displayTitle = projectTitle || (genre ? `${genre} Project` : 'Untitled Project');
 
-  const coverCanonUnlocked = documents.some(
-    (d) => (d.type === 'story-bible' || d.type === 'creative-brief') && d.approved
-  );
-  const paperbackUnlocked = Boolean(approvedCoverImageId);
+  const aPlusUnlocked = Boolean(approvedCoverImageId) && Boolean(approvedBackCoverImageId);
 
   // Group stages: planning (0-6), writing (7-8), editing (9+)
   const planningStages = STAGE_ORDER.slice(0, 7); // setup through title
@@ -415,7 +424,7 @@ export function WorkflowSidebar({
   };
   
   return (
-    <aside className="w-[var(--sidebar-width)] h-full bg-card border-r border-border flex flex-col overflow-hidden">
+    <aside className="w-[var(--workflow-sidebar-inner-width)] h-full bg-card border-r border-border flex flex-col overflow-hidden shrink-0">
       {/* Header */}
       <div className="p-5 border-b border-border">
         <Link
@@ -438,60 +447,50 @@ export function WorkflowSidebar({
       </div>
 
       {/* Stages */}
-      <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-6">
-        {/* Planning */}
-        <div>
-          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
-            Planning
-          </p>
+      <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+        {activeSection === 'planning' && (
           <div className="flex flex-col gap-1">
             {planningStages.map(renderStageItem)}
           </div>
-        </div>
+        )}
 
-        {/* Writing */}
-        <div>
-          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
-            Writing
-          </p>
-          <div className="flex flex-col gap-1">
-            {writingStages.map(renderStageItem)}
-          </div>
-
-          {/* Chapters list (nested under Writing) */}
-          {chapters.length > 0 && getStageIndex(currentStage) >= getStageIndex('chapters') && isChaptersExpanded && (
-            <div className="mt-2 ml-4 pl-3 border-l border-border">
-              {chapters.map((chapter) => {
-                const isApproved = approvedChapterIds.has(chapter.id);
-                const isActive = pathname.includes(`/chapter/${chapter.id}`);
-
-                return (
-                  <Link
-                    key={chapter.id}
-                    href={`/projects/${projectId}/chapter/${chapter.id}`}
-                    className={cn(
-                      'flex items-center gap-2 px-2 py-1.5 rounded text-sm no-underline transition-colors',
-                      isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50'
-                    )}
-                  >
-                    <span className="truncate">Ch. {chapter.chapterNumber}</span>
-                    {isApproved && (
-                      <svg className="w-3 h-3 text-[var(--status-approved)] shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </Link>
-                );
-              })}
+        {activeSection === 'writing' && (
+          <div>
+            <div className="flex flex-col gap-1">
+              {writingStages.map(renderStageItem)}
             </div>
-          )}
-        </div>
 
-        {/* Editing */}
-        <div>
-          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
-            Editing
-          </p>
+            {/* Chapters list (nested under Writing) */}
+            {chapters.length > 0 && getStageIndex(currentStage) >= getStageIndex('chapters') && isChaptersExpanded && (
+              <div className="mt-2 ml-4 pl-3 border-l border-border">
+                {chapters.map((chapter) => {
+                  const isApproved = approvedChapterIds.has(chapter.id);
+                  const isActive = pathname.includes(`/chapter/${chapter.id}`);
+
+                  return (
+                    <Link
+                      key={chapter.id}
+                      href={`/projects/${projectId}/chapter/${chapter.id}`}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 rounded text-sm no-underline transition-colors',
+                        isActive ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50'
+                      )}
+                    >
+                      <span className="truncate">Ch. {chapter.chapterNumber}</span>
+                      {isApproved && (
+                        <svg className="w-3 h-3 text-[var(--status-approved)] shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeSection === 'editing' && (
           <div className="flex flex-col gap-1">
             {editingStages.map((stage) => (
               <Fragment key={stage}>
@@ -570,13 +569,9 @@ export function WorkflowSidebar({
               </Fragment>
             ))}
           </div>
-        </div>
+        )}
 
-        {/* Marketing */}
-        <div>
-          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
-            Marketing
-          </p>
+        {activeSection === 'marketing' && (
           <div className="flex flex-col gap-1">
             {(['amazon-description', 'blurb'] as const).map((mktStage) => {
               const isFilled = mktStage === 'blurb' ? blurbFilled : amazonDescriptionFilled;
@@ -609,84 +604,63 @@ export function WorkflowSidebar({
               );
             })}
           </div>
-        </div>
+        )}
 
-        {/* Cover */}
-        <div>
-          <p className="text-[0.6875rem] font-medium text-muted-foreground/70 tracking-wide mb-2 px-3">
-            Cover
-          </p>
-          <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1 mb-3">
-            <div className="text-xs">
-              <button
-                type="button"
-                aria-expanded={isFrontCoverExpanded}
-                onClick={() => setIsFrontCoverExpanded(!isFrontCoverExpanded)}
-                className="w-full flex items-center gap-1.5 px-2 mb-0.5 bg-transparent border-none cursor-pointer text-muted-foreground/70 font-medium"
-                title={isFrontCoverExpanded ? 'Collapse front cover' : 'Expand front cover'}
-              >
-                <span className="flex-1 text-left">Front cover</span>
-                <svg
-                  className={cn('w-3.5 h-3.5 transition-transform duration-200', !isFrontCoverExpanded && '-rotate-90')}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {isFrontCoverExpanded && (
-                <div className="pl-1 flex flex-col gap-1">
-                  {(
-                    [
-                      ['archetype', 'Archetype Selection'],
-                      ['brief', 'Cover Brief'],
-                      ['generate', 'Generation'],
-                      ['refine', 'Refinement'],
-                      ['export', 'Export'],
-                    ] as const
-                  ).map(([slug, label]) => {
-                    const href = coverCanonUnlocked ? `/projects/${projectId}/cover/front/${slug}` : '#';
-                    const active = pathname.includes(`/cover/front/${slug}`);
-                    return (
-                      <Link
-                        key={slug}
-                        href={href}
-                        title={
-                          !coverCanonUnlocked ? 'Complete your Story Bible first to unlock Cover Generation.' : undefined
-                        }
-                        onClick={(e) => !coverCanonUnlocked && e.preventDefault()}
-                        className={cn(
-                          'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
-                          !coverCanonUnlocked && 'opacity-50 cursor-not-allowed',
-                          active
-                            ? 'bg-muted text-foreground'
-                            : 'text-muted-foreground hover:bg-muted/50'
-                        )}
-                      >
-                        <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                          {stageIcons['cover-brief']}
-                        </span>
-                        <span className="flex-1 truncate">{label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
+        {activeSection === 'cover' && (
+          <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
+            <Link
+              href={`/projects/${projectId}/cover/front/archetype`}
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
+                pathname.includes('/cover/front/archetype')
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:bg-muted/50'
               )}
-            </div>
+            >
+              <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
+                {stageIcons['cover-brief']}
+              </span>
+              <span className="flex-1 truncate">Design</span>
+            </Link>
+            <Link
+              href={`/projects/${projectId}/cover/front/archetype`}
+              className="flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+            >
+              <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
+                {stageIcons['cover-brief']}
+              </span>
+              <span className="flex-1 truncate">Review & Export</span>
+            </Link>
+            <Link
+              href={`/projects/${projectId}/cover/paperback/full-wrap`}
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
+                pathname.includes('/cover/paperback/full-wrap')
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:bg-muted/50'
+              )}
+            >
+              <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
+                {stageIcons['back-cover-brief']}
+              </span>
+              <span className="flex-1 truncate">Advanced Wrap</span>
+            </Link>
           </div>
+        )}
+
+        {activeSection === 'aplus' && (
           <div className="ml-4 pl-3 border-l border-border space-y-2 pb-1">
             <div className="text-xs">
               <button
                 type="button"
-                aria-expanded={isBackCoverExpanded}
-                onClick={() => setIsBackCoverExpanded(!isBackCoverExpanded)}
+                aria-expanded={isAPlusExpanded}
+                onClick={() => setIsAPlusExpanded(!isAPlusExpanded)}
                 className="w-full flex items-center gap-1.5 px-2 mb-0.5 bg-transparent border-none cursor-pointer text-muted-foreground/70 font-medium"
-                title={isBackCoverExpanded ? 'Collapse back cover' : 'Expand back cover'}
+                title={isAPlusExpanded ? 'Collapse A+ content' : 'Expand A+ content'}
               >
-                <span className="flex-1 text-left">Back cover</span>
+                <span className="flex-1 text-left">A+ modules</span>
                 <svg
-                  className={cn('w-3.5 h-3.5 transition-transform duration-200', !isBackCoverExpanded && '-rotate-90')}
+                  className={cn('w-3.5 h-3.5 transition-transform duration-200', !isAPlusExpanded && '-rotate-90')}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -694,51 +668,37 @@ export function WorkflowSidebar({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              {isBackCoverExpanded && (
+              {isAPlusExpanded && (
                 <div className="pl-1 flex flex-col gap-1">
                   {(
                     [
-                      ['back-brief', 'Back cover brief'],
-                      ['back-generate', 'Back cover generation'],
-                      ['back-refine', 'Back cover refinement'],
-                      ['back-export', 'Back cover export'],
-                      ['/cover/paperback/full-wrap', 'Full wrap'],
+                      ['setup', 'Setup'],
+                      ['brief', 'Prompt brief'],
+                      ['generate', 'Generate'],
+                      ['refine', 'Refine'],
+                      ['export', 'Export'],
                     ] as const
                   ).map(([slug, label]) => {
-                    const unlocked = coverCanonUnlocked && paperbackUnlocked;
-                    const hrefPath =
-                      slug === '/cover/paperback/full-wrap'
-                        ? `/projects/${projectId}/cover/paperback/full-wrap`
-                        : `/projects/${projectId}/cover/paperback/${slug}`;
-                    const href = unlocked ? hrefPath : '#';
-                    const active =
-                      slug === '/cover/paperback/full-wrap'
-                        ? pathname.includes('/cover/paperback/full-wrap')
-                        : pathname.includes(`/cover/paperback/${slug}`);
+                    const href = aPlusUnlocked ? `/projects/${projectId}/aplus/${slug}` : '#';
+                    const active = pathname.includes(`/aplus/${slug}`);
                     return (
                       <Link
                         key={slug}
                         href={href}
-                        title={
-                          !paperbackUnlocked
-                            ? 'Approve the front cover first'
-                            : !coverCanonUnlocked
-                              ? 'Complete your Story Bible first'
-                              : undefined
-                        }
-                        onClick={(e) => !unlocked && e.preventDefault()}
+                        title={!aPlusUnlocked ? 'Approve front and back cover first' : undefined}
+                        onClick={(e) => !aPlusUnlocked && e.preventDefault()}
                         className={cn(
                           'flex items-center gap-1.5 px-2 py-1 rounded no-underline text-sm transition-colors',
-                          !unlocked && 'opacity-50 cursor-not-allowed',
-                          active
-                            ? 'bg-muted text-foreground'
-                            : 'text-muted-foreground hover:bg-muted/50'
+                          !aPlusUnlocked && 'opacity-50 cursor-not-allowed',
+                          active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+                          slug === 'export' && approvedAPlusModuleId && 'text-[var(--status-approved)]'
                         )}
                       >
                         <span className="shrink-0 w-4 h-4 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5">
-                          {stageIcons['back-cover-brief']}
+                          {stageIcons['a-plus-brief']}
                         </span>
                         <span className="flex-1 truncate">{label}</span>
+                        {slug === 'export' && approvedAPlusModuleId && marketingCheck}
                       </Link>
                     );
                   })}
@@ -746,7 +706,7 @@ export function WorkflowSidebar({
               )}
             </div>
           </div>
-        </div>
+        )}
       </nav>
 
       {/* Footer with project link */}

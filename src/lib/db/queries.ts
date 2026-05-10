@@ -14,6 +14,10 @@ import type {
   GenerationUsageSource,
   WorkflowStage,
   GenerationUsageTotals,
+  CoverGenerationJob,
+  CoverGenerationJobInput,
+  CoverGenerationJobResult,
+  CoverJobStatus,
 } from '@/types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -62,6 +66,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     amazonDescription: (row.amazonDescription as string) ?? undefined,
     authorName: (row.authorName as string) ?? undefined,
     kdpTemplateImageData: (row.kdpTemplateImageData as string | null) ?? undefined,
+    coverTrimSizeId: (row.coverTrimSizeId as string | null) ?? undefined,
     marketingAlignCoverToneBlurb: Boolean(row.marketingAlignCoverToneBlurb),
     marketingAlignCoverToneAmazon: Boolean(row.marketingAlignCoverToneAmazon),
     approvedCoverImageId: (row.approvedCoverImageId as string | null) ?? undefined,
@@ -74,6 +79,11 @@ function rowToProject(row: Record<string, unknown>): Project {
       typeof row.paperbackGenerationStatus === 'string'
         ? (row.paperbackGenerationStatus as import('@/types').CoverTrackStatus)
         : 'not-started',
+    aPlusGenerationStatus:
+      typeof row.aPlusGenerationStatus === 'string'
+        ? (row.aPlusGenerationStatus as import('@/types').CoverTrackStatus)
+        : 'not-started',
+    approvedAPlusModuleId: (row.approvedAPlusModuleId as string | null) ?? undefined,
     createdAt: toDate(row.createdAt as string),
     updatedAt: toDate(row.updatedAt as string),
   };
@@ -189,9 +199,9 @@ export async function createProject(
   db.prepare(`
     INSERT INTO projects
       (id, title, genre, niche, microniche, premise, research, status, currentStage,
-       fullAutoMode, fourPassEditorial, finalExportedAt, blurb, amazonDescription, createdAt, updatedAt)
+       fullAutoMode, fourPassEditorial, finalExportedAt, blurb, amazonDescription, coverTrimSizeId, createdAt, updatedAt)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.title ?? null,
@@ -207,6 +217,7 @@ export async function createProject(
     optionalDateToIso(data.finalExportedAt ?? null),
     data.blurb ?? null,
     data.amazonDescription ?? null,
+    data.coverTrimSizeId ?? null,
     ts,
     ts,
   );
@@ -220,6 +231,7 @@ export async function getProject(projectId: string): Promise<Project | null> {
 }
 
 export async function getUserProjects(_userId: string): Promise<Project[]> {
+  void _userId;
   const db = getDb();
   const rows = db.prepare('SELECT * FROM projects ORDER BY updatedAt DESC').all() as Record<string, unknown>[];
   return rows.map(rowToProject);
@@ -249,6 +261,7 @@ export async function updateProject(
   }
   if (data.blurb !== undefined) { fields.push('blurb = ?'); values.push(data.blurb ?? null); }
   if (data.amazonDescription !== undefined) { fields.push('amazonDescription = ?'); values.push(data.amazonDescription ?? null); }
+  if (data.coverTrimSizeId !== undefined) { fields.push('coverTrimSizeId = ?'); values.push(data.coverTrimSizeId ?? null); }
   if (data.authorName !== undefined) { fields.push('authorName = ?'); values.push(data.authorName ?? null); }
   if (data.kdpTemplateImageData !== undefined) {
     fields.push('kdpTemplateImageData = ?');
@@ -277,6 +290,14 @@ export async function updateProject(
   if (data.paperbackGenerationStatus !== undefined) {
     fields.push('paperbackGenerationStatus = ?');
     values.push(data.paperbackGenerationStatus);
+  }
+  if (data.aPlusGenerationStatus !== undefined) {
+    fields.push('aPlusGenerationStatus = ?');
+    values.push(data.aPlusGenerationStatus);
+  }
+  if (data.approvedAPlusModuleId !== undefined) {
+    fields.push('approvedAPlusModuleId = ?');
+    values.push(data.approvedAPlusModuleId ?? null);
   }
 
   if (fields.length === 0) return;
@@ -749,11 +770,138 @@ export async function getProjectGenerationUsageTotals(projectId: string): Promis
   }
 }
 
+// ── Cover generation jobs ─────────────────────────────────────────────────────
+
+function rowToCoverGenerationJob(row: Record<string, unknown>): CoverGenerationJob {
+  let input: CoverGenerationJobInput = {
+    archetypeId: '',
+    authorName: '',
+    trimSizeId: '6x9',
+    trimWidthIn: 6,
+    trimHeightIn: 9,
+  };
+  let result: CoverGenerationJobResult | undefined;
+  try {
+    input = JSON.parse((row.inputJson as string) ?? '{}') as CoverGenerationJobInput;
+  } catch {
+    // noop
+  }
+  try {
+    const raw = row.resultJson as string | null | undefined;
+    result = raw ? (JSON.parse(raw) as CoverGenerationJobResult) : undefined;
+  } catch {
+    result = undefined;
+  }
+  return {
+    id: row.id as string,
+    projectId: row.projectId as string,
+    status: row.status as CoverJobStatus,
+    progressStage: (row.progressStage as string) ?? 'queued',
+    error: (row.error as string | null) ?? null,
+    input,
+    result,
+    createdAt: toDate(row.createdAt as string),
+    updatedAt: toDate(row.updatedAt as string),
+  };
+}
+
+function ensureCoverGenerationJobsTable(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cover_generation_jobs (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      status TEXT NOT NULL,
+      progressStage TEXT NOT NULL,
+      error TEXT,
+      inputJson TEXT NOT NULL,
+      resultJson TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cover_generation_jobs_project_created
+    ON cover_generation_jobs (projectId, createdAt DESC)
+  `);
+}
+
+export async function createCoverGenerationJob(data: {
+  projectId: string;
+  status: CoverJobStatus;
+  progressStage: string;
+  input: CoverGenerationJobInput;
+  error?: string | null;
+  result?: CoverGenerationJobResult;
+}): Promise<string> {
+  ensureCoverGenerationJobsTable();
+  const db = getDb();
+  const id = randomUUID();
+  const ts = now();
+  db.prepare(
+    `INSERT INTO cover_generation_jobs (id, projectId, status, progressStage, error, inputJson, resultJson, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    data.projectId,
+    data.status,
+    data.progressStage,
+    data.error ?? null,
+    JSON.stringify(data.input),
+    data.result ? JSON.stringify(data.result) : null,
+    ts,
+    ts
+  );
+  return id;
+}
+
+export async function getCoverGenerationJob(jobId: string): Promise<CoverGenerationJob | null> {
+  ensureCoverGenerationJobsTable();
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM cover_generation_jobs WHERE id = ?').get(jobId) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? rowToCoverGenerationJob(row) : null;
+}
+
+export async function getLatestCoverGenerationJobForProject(projectId: string): Promise<CoverGenerationJob | null> {
+  ensureCoverGenerationJobsTable();
+  const db = getDb();
+  const row = db
+    .prepare('SELECT * FROM cover_generation_jobs WHERE projectId = ? ORDER BY createdAt DESC LIMIT 1')
+    .get(projectId) as Record<string, unknown> | undefined;
+  return row ? rowToCoverGenerationJob(row) : null;
+}
+
+export async function updateCoverGenerationJob(
+  jobId: string,
+  data: {
+    status?: CoverJobStatus;
+    progressStage?: string;
+    error?: string | null;
+    result?: CoverGenerationJobResult;
+  }
+): Promise<void> {
+  ensureCoverGenerationJobsTable();
+  const db = getDb();
+  const fields: string[] = [];
+  const values: unknown[] = [];
+  if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
+  if (data.progressStage !== undefined) { fields.push('progressStage = ?'); values.push(data.progressStage); }
+  if (data.error !== undefined) { fields.push('error = ?'); values.push(data.error ?? null); }
+  if (data.result !== undefined) { fields.push('resultJson = ?'); values.push(JSON.stringify(data.result)); }
+  if (fields.length === 0) return;
+  fields.push('updatedAt = ?');
+  values.push(now());
+  values.push(jobId);
+  db.prepare(`UPDATE cover_generation_jobs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+}
+
 // ── Batch delete ──────────────────────────────────────────────────────────────
 
 export async function deleteProjectData(projectId: string): Promise<void> {
   const db = getDb();
   const deleteAll = db.transaction(() => {
+    db.prepare('DELETE FROM cover_generation_jobs WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM generation_usage WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM revision_tasks WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM editorial_issues WHERE projectId = ?').run(projectId);

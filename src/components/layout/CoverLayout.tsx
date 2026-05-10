@@ -3,16 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
-import { WorkflowSidebar } from './WorkflowSidebar';
+import { WorkflowNav } from './WorkflowNav';
 import { ModelSelector } from '@/components/stages';
 import type { WorkflowStage, Chapter, RevisionTask, Project, ProjectDocument } from '@/types';
 
 type CoverSlug =
-  | 'brief'
   | 'archetype'
-  | 'generate'
-  | 'refine'
-  | 'export'
+  | 'review'
+  | 'advanced-wrap'
   | 'back-brief'
   | 'back-generate'
   | 'back-refine'
@@ -33,33 +31,18 @@ interface CoverLayoutProps {
 }
 
 const FRONT_NAV: {
-  slug: Exclude<
-    CoverSlug,
-    | 'back-brief'
-    | 'back-generate'
-    | 'back-refine'
-    | 'back-export'
-    | 'full-wrap'
-  >;
+  slug: Extract<CoverSlug, 'archetype' | 'review' | 'advanced-wrap'>;
   label: string;
 }[] = [
-  { slug: 'archetype', label: 'Archetype Selection' },
-  { slug: 'brief', label: 'Cover Brief' },
-  { slug: 'generate', label: 'Generation' },
-  { slug: 'refine', label: 'Refinement' },
-  { slug: 'export', label: 'Export' },
+  { slug: 'archetype', label: 'Design' },
+  { slug: 'review', label: 'Review & Export' },
+  { slug: 'advanced-wrap', label: 'Advanced Wrap' },
 ];
 
 const PB_NAV: {
-  slug: Extract<CoverSlug, 'back-brief' | 'back-generate' | 'back-refine' | 'back-export' | 'full-wrap'>;
+  slug: Extract<CoverSlug, 'full-wrap'>;
   label: string;
-}[] = [
-  { slug: 'back-brief', label: 'Back cover brief' },
-  { slug: 'back-generate', label: 'Back cover generation' },
-  { slug: 'back-refine', label: 'Back cover refinement' },
-  { slug: 'back-export', label: 'Back cover export' },
-  { slug: 'full-wrap', label: 'Full wrap' },
-];
+}[] = [{ slug: 'full-wrap', label: 'Full wrap (legacy)' }];
 
 export function CoverLayout({
   projectId,
@@ -79,7 +62,7 @@ export function CoverLayout({
 
   return (
     <div className="flex h-[calc(100vh-var(--header-height))]">
-      <WorkflowSidebar
+      <WorkflowNav
         projectId={projectId}
         projectTitle={project.title}
         genre={project.genre}
@@ -93,6 +76,8 @@ export function CoverLayout({
         blurbFilled={!!project.blurb?.trim()}
         amazonDescriptionFilled={!!project.amazonDescription?.trim()}
         approvedCoverImageId={project.approvedCoverImageId ?? null}
+        approvedBackCoverImageId={project.approvedBackCoverImageId ?? null}
+        approvedAPlusModuleId={project.approvedAPlusModuleId ?? null}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="border-b border-border bg-card px-12 py-8">
@@ -109,8 +94,14 @@ export function CoverLayout({
             <div className="flex flex-wrap items-center gap-3 mb-6">
               {section === 'front'
                 ? FRONT_NAV.map((n) => {
-                    const href = `/projects/${projectId}/cover/front/${n.slug}`;
-                    const active = pathname.includes(`/cover/front/${n.slug}`);
+                    const href =
+                      n.slug === 'advanced-wrap'
+                        ? `/projects/${projectId}/cover/paperback/full-wrap`
+                        : `/projects/${projectId}/cover/front/archetype`;
+                    const active =
+                      n.slug === 'advanced-wrap'
+                        ? pathname.includes('/cover/paperback/full-wrap')
+                        : pathname.includes('/cover/front/archetype');
                     return (
                       <Link
                         key={n.slug}

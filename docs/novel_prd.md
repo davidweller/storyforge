@@ -290,6 +290,25 @@ Cover is presented in its own sidebar group and runs outside `STAGE_ORDER`, simi
 
 ---
 
+### A+ Content (parallel) — Cover-aligned marketing images
+
+A+ Content is presented as its own sidebar section after Cover and remains outside `STAGE_ORDER`.
+
+**Unlock rules (implemented target):**
+- A+ subpages unlock once both front and back covers are approved (`approvedCoverImageId` and `approvedBackCoverImageId`).
+- Approved front cover tone is reused as style reference for all A+ prompt generation.
+
+**MVP flow:**
+- `a-plus-setup` (choose module styles)
+- `a-plus-brief` (structured prompt brief JSON via `/api/generate`)
+- `a-plus-generate` (image generation via dedicated A+ image API)
+- `a-plus-refine` (iterative refinement from a parent candidate)
+- `a-plus-export` (PNG download of approved module image)
+
+**Status field:** `aPlusGenerationStatus` (`not-started` / `in-progress` / `complete`).
+
+---
+
 ### Canon tooling (Project Dashboard — not numbered in `STAGE_ORDER`)
 - **`story-bible`** — consolidated canon document (voice, themes, continuity) generated from approved planning docs
 - **`creative-brief`** — compact brief derived from an approved story bible
@@ -329,6 +348,11 @@ Including but not limited to:
 - `GET /api/cover/digital-export` — approved front export (`kdp-ebook`, `kindle-thumb`, `social-square`)
 - `GET /api/cover/back-digital-export` — approved back export (`kdp-back`, `social-square`)
 - `POST /api/cover/full-wrap` — composite full wrap export (`pdf` or `png`) from front/back assets + template zones + spine config
+
+### Dedicated A+ routes (not `/api/generate`)
+- `POST /api/aplus/generate` — gpt-image-2 generation for one or more A+ modules
+- `POST /api/aplus/refine` — gpt-image-2 refinement from a parent A+ module image
+- `GET /api/aplus/export` — approved A+ module PNG download
 
 ### Stages that do not use `/api/generate` for LLM
 `setup`, `compilation`, `export-draft`, `export-final`, cover export/composite routes

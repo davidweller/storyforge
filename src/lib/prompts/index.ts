@@ -24,6 +24,7 @@ export {
   buildRevisionVerificationPrompt,
 } from './editorial';
 export { BLURB_SYSTEM, buildBlurbPrompt, AMAZON_DESCRIPTION_SYSTEM, buildAmazonDescriptionPrompt } from './marketing';
+export { APLUS_BRIEF_SYSTEM, buildAPlusBriefPrompt } from './aplus';
 export { STORY_BIBLE_SYSTEM, buildStoryBiblePrompt, buildCreativeBriefPrompt } from './storyBible';
 export {
   COVER_GENERATION_SYSTEM,

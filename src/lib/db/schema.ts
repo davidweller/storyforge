@@ -75,6 +75,32 @@ export function runMigrations(db: Database.Database): void {
   if (!pr3.has('marketingAlignCoverToneAmazon')) {
     db.exec(`ALTER TABLE projects ADD COLUMN marketingAlignCoverToneAmazon INTEGER NOT NULL DEFAULT 0`);
   }
+  if (!pr3.has('aPlusGenerationStatus')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN aPlusGenerationStatus TEXT NOT NULL DEFAULT 'not-started'`);
+  }
+  if (!pr3.has('approvedAPlusModuleId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN approvedAPlusModuleId TEXT`);
+  }
+  if (!pr3.has('coverTrimSizeId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN coverTrimSizeId TEXT`);
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cover_generation_jobs (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      status TEXT NOT NULL,
+      progressStage TEXT NOT NULL,
+      error TEXT,
+      inputJson TEXT NOT NULL,
+      resultJson TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cover_generation_jobs_project_created
+    ON cover_generation_jobs (projectId, createdAt DESC)
+  `);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS generation_usage (
@@ -112,6 +138,7 @@ export function initSchema(db: Database.Database): void {
       finalExportedAt TEXT,
       blurb TEXT,
       amazonDescription TEXT,
+      coverTrimSizeId TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -196,10 +223,25 @@ export function initSchema(db: Database.Database): void {
       source TEXT NOT NULL,
       FOREIGN KEY (projectId) REFERENCES projects(id)
     );
+
+    CREATE TABLE IF NOT EXISTS cover_generation_jobs (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      status TEXT NOT NULL,
+      progressStage TEXT NOT NULL,
+      error TEXT,
+      inputJson TEXT NOT NULL,
+      resultJson TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id)
+    );
   `);
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_generation_usage_project_created
-    ON generation_usage (projectId, createdAt)
+    ON generation_usage (projectId, createdAt);
+    CREATE INDEX IF NOT EXISTS idx_cover_generation_jobs_project_created
+    ON cover_generation_jobs (projectId, createdAt DESC)
   `);
   runMigrations(db);
 }

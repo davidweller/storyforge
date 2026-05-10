@@ -7,7 +7,7 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { TipTapEditor } from '@/components/editor';
-import { WorkflowSidebar } from '@/components/layout';
+import { WorkflowNav } from '@/components/layout';
 import { Button, Badge } from '@/components/ui';
 import { ReviewChecklist } from '@/components/review/ReviewChecklist';
 import { checklistItemsForKey } from '@/lib/review/checklists';
@@ -744,7 +744,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
       {/* Sidebar */}
-      <WorkflowSidebar
+      <WorkflowNav
         projectId={projectId}
         projectTitle={project.title}
         currentStage={project.currentStage}

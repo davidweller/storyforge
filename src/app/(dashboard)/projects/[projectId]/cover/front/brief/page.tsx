@@ -184,10 +184,8 @@ export default function CoverBriefPage() {
       ) {
         let brief = parsed as CoverBriefDocumentV2;
         const author = project.authorName?.trim() || 'Author';
-        brief.layers.text.authorText =
-          brief.layers.text.authorText?.trim() && brief.layers.text.authorText !== '(set in project metadata if needed)'
-            ? brief.layers.text.authorText
-            : author;
+        // Keep regenerated briefs in sync with the latest project author name.
+        brief.layers.text.authorText = author;
         brief.layers.text.titleText = brief.layers.text.titleText || project.title || brief.layers.text.titleText;
         brief = syncResolvedPromptFromLayers(brief, project.genre, false);
         setLocalBrief(brief);

@@ -9,17 +9,18 @@ export const maxDuration = 300;
 
 const ArchetypeSchema = z.object({
   archetypeId: z.string().min(1),
-  prompt: z.string().min(16).max(32_000),
+  prompt: z.string().trim().min(1).max(32_000),
   highClickEnabled: z.boolean(),
 });
 
 const BodySchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.string().trim().min(1),
   runId: z.string().min(8),
   coverSide: z.enum(['front', 'back']),
   archetypes: z.array(ArchetypeSchema).min(1).max(6),
   n: z.number().int().min(1).max(10).optional().default(4),
   quality: z.enum(['standard', 'high']).optional().default('high'),
+  editRequest: z.string().trim().max(2000).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { projectId, runId, coverSide, archetypes, n, quality } = parsed.data;
+    const { projectId, runId, coverSide, archetypes, n, quality, editRequest } = parsed.data;
 
     const project = await dbq.getProject(projectId);
     if (!project) {
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
         let prompt = entry.prompt.trim();
         if (entry.highClickEnabled) {
           prompt = appendHighClickToStoredPrompt(prompt);
+        }
+        if (editRequest?.trim()) {
+          prompt = `${prompt}\n\nUser requested edits:\n${editRequest.trim()}`;
         }
         try {
           const { b64List, model } = await generateOpenAICoverImages({ prompt, n, quality });
