@@ -8,6 +8,8 @@ import {
   ALL_MODELS,
   ENDING_CONCEPTS_DEFAULT_MODEL_ID,
   ENDING_EXPANSION_DEFAULT_MODEL_ID,
+  CHAPTER_SCENE_EVAL_DEEP_DEFAULT_MODEL_ID,
+  EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID,
   EDITORIAL_REPORT_DEFAULT_MODEL_ID,
   EDITORIAL_QUEUE_DEFAULT_MODEL_ID,
 } from '@/lib/data/models';
@@ -771,6 +773,10 @@ export async function POST(request: NextRequest) {
       model = isExpansion ? ENDING_EXPANSION_DEFAULT_MODEL_ID : ENDING_CONCEPTS_DEFAULT_MODEL_ID;
     }
 
+    if (!model && stage === 'chapter-scene-eval' && data.evaluationMode === 'deep') {
+      model = CHAPTER_SCENE_EVAL_DEEP_DEFAULT_MODEL_ID;
+    }
+
     let prompt: string;
     let systemPrompt: string;
 
@@ -815,71 +821,77 @@ export async function POST(request: NextRequest) {
         
       case 'editorial':
         systemPrompt = EDITORIAL_SYSTEM;
-        
-        // Report: Opus 4.7 High; createQueue: Sonnet Medium (docs/model_recommendations.md)
-        let selectedModel =
-          model ||
-          (data.createQueue ? EDITORIAL_QUEUE_DEFAULT_MODEL_ID : EDITORIAL_REPORT_DEFAULT_MODEL_ID);
-        // modelSwitched and switchMessage are already declared at function scope
-        
-        if (data.createQueue) {
-          prompt = buildRevisionQueuePrompt({
-            editorialReport: data.editorialReport as string,
-            chapterCount: data.chapterCount as number,
-            editorialPass: parseEditorialPass(data.editorialPass),
-          });
-        } else {
-          const manuscript = data.manuscript as string;
-          const gate = gateEditorialManuscriptContext({
-            requestedModelId: selectedModel,
-            defaultStageModelId: EDITORIAL_REPORT_DEFAULT_MODEL_ID,
-            manuscript,
-            nicheReference: data.nicheReference,
-            charactersReference: data.charactersReference,
-            endingReference: data.endingReference,
-            structureReference: data.structureReference,
-          });
-          if (!gate.ok) {
-            return NextResponse.json({ error: gate.error }, { status: gate.status });
+        {
+          const editorialPass = parseEditorialPass(data.editorialPass);
+          const defaultEditorialModel = data.createQueue
+            ? EDITORIAL_QUEUE_DEFAULT_MODEL_ID
+            : editorialPass === 'final_report'
+              ? EDITORIAL_REPORT_DEFAULT_MODEL_ID
+              : EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID;
+
+          // Working edit passes: Sonnet 4.6 thinking; final report: Opus 4.6; createQueue: Sonnet 4.6 thinking.
+          let selectedModel = model || defaultEditorialModel;
+          // modelSwitched and switchMessage are already declared at function scope
+
+          if (data.createQueue) {
+            prompt = buildRevisionQueuePrompt({
+              editorialReport: data.editorialReport as string,
+              chapterCount: data.chapterCount as number,
+              editorialPass,
+            });
+          } else {
+            const manuscript = data.manuscript as string;
+            const gate = gateEditorialManuscriptContext({
+              requestedModelId: selectedModel,
+              defaultStageModelId: defaultEditorialModel,
+              manuscript,
+              nicheReference: data.nicheReference,
+              charactersReference: data.charactersReference,
+              endingReference: data.endingReference,
+              structureReference: data.structureReference,
+            });
+            if (!gate.ok) {
+              return NextResponse.json({ error: gate.error }, { status: gate.status });
+            }
+            selectedModel = gate.modelId;
+            modelSwitched = gate.modelSwitched;
+            switchMessage = gate.switchMessage;
+
+            console.log('[API] Building editorial prompt:', {
+              model: selectedModel,
+              modelSwitched,
+              manuscriptLength: manuscript.length,
+              genre: data.genre,
+              hasNiche: !!data.nicheReference,
+              hasCharacters: !!data.charactersReference,
+              hasEnding: !!data.endingReference,
+              hasStructure: !!data.structureReference,
+            });
+
+            prompt = buildEditorialPrompt({
+              manuscript,
+              genre: data.genre as string,
+              assembledContext: data.assembledContext as string | undefined,
+              nicheReference: data.nicheReference as string | undefined,
+              charactersReference: data.charactersReference as string | undefined,
+              endingReference: data.endingReference as string | undefined,
+              structureReference: data.structureReference as string | undefined,
+              editorialPass,
+              intendedAudience:
+                typeof data.intendedAudience === 'string' ? data.intendedAudience : undefined,
+              premise: typeof data.premise === 'string' ? data.premise : undefined,
+              research: typeof data.research === 'string' ? data.research : undefined,
+            });
+
+            console.log('[API] Editorial prompt built:', {
+              promptLength: prompt.length,
+              estimatedPromptTokens: Math.ceil(prompt.length / 4),
+              manuscriptIncluded: prompt.includes(manuscript.substring(0, 100)),
+              model: selectedModel,
+            });
           }
-          selectedModel = gate.modelId;
-          modelSwitched = gate.modelSwitched;
-          switchMessage = gate.switchMessage;
-
-          console.log('[API] Building editorial prompt:', {
-            model: selectedModel,
-            modelSwitched,
-            manuscriptLength: manuscript.length,
-            genre: data.genre,
-            hasNiche: !!data.nicheReference,
-            hasCharacters: !!data.charactersReference,
-            hasEnding: !!data.endingReference,
-            hasStructure: !!data.structureReference,
-          });
-
-          prompt = buildEditorialPrompt({
-            manuscript,
-            genre: data.genre as string,
-            assembledContext: data.assembledContext as string | undefined,
-            nicheReference: data.nicheReference as string | undefined,
-            charactersReference: data.charactersReference as string | undefined,
-            endingReference: data.endingReference as string | undefined,
-            structureReference: data.structureReference as string | undefined,
-            editorialPass: parseEditorialPass(data.editorialPass),
-            intendedAudience:
-              typeof data.intendedAudience === 'string' ? data.intendedAudience : undefined,
-            premise: typeof data.premise === 'string' ? data.premise : undefined,
-            research: typeof data.research === 'string' ? data.research : undefined,
-          });
-
-          console.log('[API] Editorial prompt built:', {
-            promptLength: prompt.length,
-            estimatedPromptTokens: Math.ceil(prompt.length / 4),
-            manuscriptIncluded: prompt.includes(manuscript.substring(0, 100)),
-            model: selectedModel,
-          });
+          model = selectedModel;
         }
-        model = selectedModel;
         break;
         
       case 'editorial-issues':

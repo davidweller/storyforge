@@ -58,16 +58,18 @@ export const OPENAI_MODELS: LLMModel[] = [
 ];
 
 /** Default models when `ending` stage branches (concepts vs expansion); see docs/model_recommendations.md */
-export const ENDING_CONCEPTS_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
-export const ENDING_EXPANSION_DEFAULT_MODEL_ID = 'claude-opus-4-7-medium';
+export const ENDING_CONCEPTS_DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
+export const ENDING_EXPANSION_DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
 
-/** Default models when `editorial` stage branches (full report vs revision queue from report) */
-export const EDITORIAL_REPORT_DEFAULT_MODEL_ID = 'claude-opus-4-7-high';
+/** Default models when `editorial` branches by pass/workflow. */
+export const EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
+export const EDITORIAL_REPORT_DEFAULT_MODEL_ID = 'claude-opus-4-6';
 export const EDITORIAL_QUEUE_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
+export const CHAPTER_SCENE_EVAL_DEEP_DEFAULT_MODEL_ID = 'claude-opus-4-6';
 
 /**
- * Anthropic catalog: Haiku 4.5, Sonnet 4.6, Opus 4.7 (API IDs per docs/model_recommendations.md).
- * Thinking presets use extended thinking budgets; “Low effort” Sonnet/Haiku rows omit thinking.
+ * Anthropic catalog: Haiku 4.5 plus Sonnet/Opus presets (API IDs per docs/model_recommendations.md).
+ * Thinking presets use extended thinking budgets; low-effort rows omit thinking.
  */
 export const ANTHROPIC_MODELS: LLMModel[] = [
   {
@@ -113,12 +115,11 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
     id: 'claude-sonnet-4-6-thinking-medium',
     name: 'Claude Sonnet 4.6 (Medium thinking)',
     provider: 'anthropic',
-    description: 'Default Anthropic preset — structured planning and extraction',
+    description: 'Structured reasoning preset for editorial and canon synthesis',
     apiModelId: 'claude-sonnet-4-6',
     thinkingBudgetTokens: 20_000,
     maxTokens: 32_768,
     maxContextTokens: 1_000_000,
-    isDefault: true,
   },
   {
     id: 'claude-sonnet-4-6-thinking-high',
@@ -138,6 +139,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
     apiModelId: 'claude-sonnet-4-6',
     maxTokens: 64_000,
     maxContextTokens: 1_000_000,
+    isDefault: true,
   },
   // Legacy / alternate ids (same API models; kept for saved UI preferences)
   {
@@ -226,7 +228,8 @@ export function getModelsByProvider(provider: LLMProvider): LLMModel[] {
 
 /**
  * Canonical default model registry id per workflow stage (docs/model_recommendations.md quick reference).
- * Branch-specific stages (`ending`, `editorial`) also use {@link ENDING_*_DEFAULT_MODEL_ID} / {@link EDITORIAL_*_DEFAULT_MODEL_ID} in `/api/generate` when the client does not pass `model`.
+ * Branch-specific stages (`ending`, `editorial`, deep `chapter-scene-eval`) also use
+ * the exported `*_DEFAULT_MODEL_ID` constants in `/api/generate` when the client does not pass `model`.
  */
 export const STAGE_DEFAULT_MODEL_IDS = {
   setup: 'claude-sonnet-4-6',
@@ -234,24 +237,24 @@ export const STAGE_DEFAULT_MODEL_IDS = {
   niche: 'claude-sonnet-4-6',
   /** Concepts default; expansion uses {@link ENDING_EXPANSION_DEFAULT_MODEL_ID}. */
   ending: ENDING_CONCEPTS_DEFAULT_MODEL_ID,
-  characters: 'claude-sonnet-4-6-thinking-medium',
-  structure: 'claude-sonnet-4-6-thinking-medium',
-  title: 'claude-haiku-4-5-20251001',
-  'chapter-outlines': 'claude-sonnet-4-6-thinking-medium',
-  'chapter-summary': 'claude-haiku-4-5-20251001',
-  'chapter-scene-plan': 'claude-sonnet-4-6-thinking-medium',
-  'chapter-scenes-prose': 'claude-opus-4-7-high',
-  'chapter-polish': 'claude-opus-4-7-medium',
-  'chapter-scene-eval': 'claude-sonnet-4-6-thinking-medium',
+  characters: 'claude-sonnet-4-6',
+  structure: 'claude-sonnet-4-6',
+  title: 'claude-sonnet-4-6',
+  'chapter-outlines': 'claude-sonnet-4-6',
+  'chapter-summary': 'claude-sonnet-4-6',
+  'chapter-scene-plan': 'claude-sonnet-4-6',
+  'chapter-scenes-prose': 'claude-sonnet-4-6',
+  'chapter-polish': 'claude-sonnet-4-6',
+  'chapter-scene-eval': 'claude-sonnet-4-6',
   'story-bible': 'claude-sonnet-4-6-thinking-medium',
   'creative-brief': 'claude-sonnet-4-6',
-  chapters: 'claude-opus-4-7-xhigh',
+  chapters: 'claude-sonnet-4-6',
   compilation: 'claude-sonnet-4-6',
   'export-draft': 'claude-sonnet-4-6',
-  /** Report default; queue-from-report uses {@link EDITORIAL_QUEUE_DEFAULT_MODEL_ID}. */
-  editorial: EDITORIAL_REPORT_DEFAULT_MODEL_ID,
+  /** Working edit passes default; final report uses {@link EDITORIAL_REPORT_DEFAULT_MODEL_ID}. */
+  editorial: EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID,
   'editorial-issues': 'claude-sonnet-4-6-thinking-medium',
-  revision: 'claude-opus-4-7-medium',
+  revision: 'claude-sonnet-4-6',
   'revision-verify': 'claude-sonnet-4-6',
   'export-final': 'claude-sonnet-4-6',
   blurb: 'claude-sonnet-4-6',
