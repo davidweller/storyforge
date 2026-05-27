@@ -7,10 +7,13 @@ import {
   formatSceneCanonBlock,
   formatEvalCanonBody,
 } from '@/lib/prompts/canonBlock';
+import { AI_TELLS_SYSTEM_BLOCK, formatGenreAiTellsAppend } from '@/lib/prompts/aiTells';
 
 export const CHAPTER_SCENE_PLAN_SYSTEM = `You are a fiction scene architect. You break one chapter into ordered scene cards that writers can review before prose is generated.
 
 Each scene card must be actionable for prose generation: clear purpose, conflict, turning point, POV, setting, emotional shift, and what story beats it covers.
+
+When planning: vary estimatedWords sharply across scenes; avoid mirror-appearance beats, exposition-lecture scenes, or beats where a character states the theme in dialogue.
 
 Output only valid JSON matching the requested schema. No markdown fences.`;
 
@@ -72,6 +75,7 @@ Return JSON exactly in this shape:
 
 Rules:
 - Use at least 2 scenes unless the chapter is intentionally a single beat; typical chapters use 3–6 scenes.
+- Vary estimatedWords across scenes (short + long beats); avoid uniform scene lengths.
 - Scene ids must be unique within the chapter (e.g. scene-1, scene-2).
 - Sum estimatedWords should approximate the outline word target when provided.
 - derivedFromChapterOutlines must match the JSON block above exactly for documentId, version, updatedAt.`;
@@ -103,6 +107,8 @@ export function buildChapterScenePlanPrompt(params: {
 
 export const CHAPTER_SCENE_PROSE_SYSTEM = `You are an expert fiction writer. Write one scene of immersive prose that fulfills the scene card while matching series voice and canon context.
 
+${AI_TELLS_SYSTEM_BLOCK}
+
 Output only valid JSON: {"sceneId":"<same as input>","prose":"<scene prose only>"}
 No markdown fences.`;
 
@@ -122,8 +128,12 @@ export function buildChapterSceneProsePromptParts(params: {
     : String(params.sceneCard.beatsCovered ?? '');
   const canon = normalizeCanonRaw(params.assembledContext);
   const tropeSummary = formatCompactTropeSummary(params.tropes);
+  const genreAiTells = formatGenreAiTellsAppend(params.genre);
 
   const userPrompt = `Write prose for a single scene in Chapter ${params.chapterNumber}: "${params.chapterTitle}" (${params.genre}).
+
+Apply Avoiding AI Tells rules in the system message.
+${genreAiTells ? `\n${genreAiTells}\n` : ''}
 
 Scene ID (must echo in JSON): ${params.sceneCard.id}
 
@@ -170,7 +180,9 @@ export function buildChapterSceneProsePrompt(params: {
   );
 }
 
-export const CHAPTER_POLISH_SYSTEM = `You are a fiction line editor. Smooth transitions between scenes in the same chapter, unify voice, and strengthen the closing hook — without changing plot facts or adding major new events.
+export const CHAPTER_POLISH_SYSTEM = `You are a fiction line editor. Smooth transitions between scenes in the same chapter, unify voice, and sharpen the closing beat when weak — without forcing a cliffhanger if the draft already lands on a quiet or mid-scene ending. Cut AI tells and stock phrasing; do not change plot facts or add major new events.
+
+${AI_TELLS_SYSTEM_BLOCK}
 
 Output only the full polished chapter body as plain text (no JSON). Preserve scene order implicitly; do not add "### Scene" markers.`;
 
@@ -180,10 +192,14 @@ export function buildChapterPolishPromptParts(params: {
   chapterTitle: string;
   concatenatedDraft: string;
   assembledContext: string | undefined;
+  niche?: string;
 }): PromptParts {
   const canon = normalizeCanonRaw(params.assembledContext);
+  const genreAiTells = formatGenreAiTellsAppend(params.genre, params.niche);
   const userPrompt = `Polish this draft for Chapter ${params.chapterNumber}: "${params.chapterTitle}" (${params.genre}).
 
+Apply Avoiding AI Tells rules in the system message; remove stock phrasing without adding plot.
+${genreAiTells ? `\n${genreAiTells}\n` : ''}
 ## Draft (concatenated scenes)
 ${params.concatenatedDraft}
 
@@ -197,6 +213,7 @@ export function buildChapterPolishPrompt(params: {
   chapterTitle: string;
   concatenatedDraft: string;
   assembledContext: string | undefined;
+  niche?: string;
 }): string {
   const parts = buildChapterPolishPromptParts(params);
   if (!parts.canon) return parts.userPrompt;
@@ -239,12 +256,14 @@ export function buildChapterSceneEvalPromptParts(params: {
   evaluationMode?: 'lite' | 'standard' | 'deep';
 }): PromptParts {
   const mode = params.evaluationMode ?? 'standard';
+  const aiTellsProbe =
+    'Flag when present: filtering verbs, named emotions in narration, breath-held/stock phrases, trailing -ing significance clauses, dialogue-tag overload, methodical five-senses inventory, stated themes.';
   const rubric =
     mode === 'lite'
-      ? 'Compact rubric: beat + canon + POV for this chunk only. Skip hook polish and word-range probes unless blocking.'
+      ? 'Compact rubric: beat + canon + POV for this chunk only. Skip closing-beat and word-range probes unless blocking.'
       : mode === 'deep'
-        ? 'Full rubric: beats, canon, POV, threads, hook into next scene, tell vs show, timeline pressure, and word-range plausibility vs scene-card estimates.'
-        : 'Return checks covering beat/scene fulfillment, continuity vs canon, POV/voice consistency (chapter-level checks may use any sceneId from the plan — prefer the scene where the issue appears), thread advancement, hook strength, and word-range plausibility.';
+        ? `Full rubric: beats, canon, POV, threads, closing beat fits chapter role (quiet endings OK), tell vs show, ${aiTellsProbe}, timeline pressure, and word-range plausibility vs scene-card estimates.`
+        : `Return checks covering beat/scene fulfillment, continuity vs canon, POV/voice consistency (chapter-level checks may use any sceneId from the plan — prefer the scene where the issue appears), thread advancement, closing beat fits chapter role, ${aiTellsProbe}, and word-range plausibility.`;
 
   const canon = normalizeCanonRaw(params.compactCanon);
 

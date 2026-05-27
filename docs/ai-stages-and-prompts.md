@@ -242,8 +242,8 @@ Summary tables list **`data`** fields and builders. **Default model** depends on
 
 | | |
 |---|---|
-| **System** | `CHAPTER_SCENE_PROSE_SYSTEM` — [`src/lib/prompts/scenes.ts`](../src/lib/prompts/scenes.ts) |
-| **User** | `buildChapterSceneProsePrompt` |
+| **System** | `CHAPTER_SCENE_PROSE_SYSTEM` — includes condensed **AI tells** block from [`aiTells.ts`](../src/lib/prompts/aiTells.ts) (full reference: [`StoryForge_AI_Tells_Instructions.md`](StoryForge_AI_Tells_Instructions.md)) |
+| **User** | `buildChapterSceneProsePrompt` — genre-specific AI-tells append when genre matches fantasy/historical heuristics |
 | **`data`** | `genre`, `chapterNumber`, `chapterTitle`, `sceneCard` (object matching scene-card schema), `assembledContext` (optional), `neighborSummaryBefore` / `neighborSummaryAfter` (optional), `wordTarget` (optional) |
 | **Output** | Structured JSON: `{ sceneId, prose }` per scene call; segments are concatenated for chapter plain text and stored as `sceneSegments` on the chapter version. |
 
@@ -251,9 +251,9 @@ Summary tables list **`data`** fields and builders. **Default model** depends on
 
 | | |
 |---|---|
-| **System** | `CHAPTER_POLISH_SYSTEM` — [`src/lib/prompts/scenes.ts`](../src/lib/prompts/scenes.ts) |
-| **User** | `buildChapterPolishPrompt` |
-| **`data`** | `genre`, `chapterNumber`, `chapterTitle`, `concatenatedDraft`, `assembledContext` (optional) |
+| **System** | `CHAPTER_POLISH_SYSTEM` — includes AI tells block; sharpens closing beat without forcing cliffhangers |
+| **User** | `buildChapterPolishPrompt` — optional `niche` for genre-specific append |
+| **`data`** | `genre`, `chapterNumber`, `chapterTitle`, `concatenatedDraft`, `assembledContext` (optional), `niche` (optional) |
 | **Output** | Plain improved prose (not JSON); gated in the UI by a feature flag and per-run toggle. |
 
 ### `chapter-scene-eval`
@@ -282,6 +282,7 @@ Summary tables list **`data`** fields and builders. **Default model** depends on
 - Requires non-empty `data.manuscript`. Route runs **`gateEditorialManuscriptContext`** before prompt build.
 - **User** | `buildEditorialPrompt`: `manuscript`, `genre`, optional **`assembledContext`**, `nicheReference`, `charactersReference`, `endingReference`, `structureReference`, `editorialPass`, `intendedAudience`, `premise`, `research`.
 - Pass-specific instructions come from `PASS_FOCUS` and requirement blocks in [`editorial.ts`](../src/lib/prompts/editorial.ts) (`structural`, `line`, `copy`, `proofread`, `final_report`).
+- **AI tells:** `line` and `final_report` append `AI_TELLS_EDITORIAL_CHECKLIST` from [`aiTells.ts`](../src/lib/prompts/aiTells.ts); `structural` appends macro-only `AI_TELLS_STRUCTURAL_MACRO`; `copy` / `proofread` omit. Optional genre append via `formatGenreAiTellsAppend`. **`revision`** already uses `CHAPTERS_SYSTEM` (full drafting block).
 - **Plain prose** output (not JSON) unless Branch A.
 
 ### `editorial-issues`
@@ -294,6 +295,7 @@ Direct **manuscript → revision-queue JSON** in one hop (no separate editorial 
 | **User** | `buildEditorialIssuesQueuePrompt` |
 | **`data`** | `manuscript`, `genre`, **`chapterCount`**, optional `assembledContext`, `nicheReference`, `charactersReference`, `endingReference`, `structureReference`, `editorialPass`, `intendedAudience`, `premise`, `research` |
 | **Output** | **JSON mode** (`revision-queue` kind). Route applies the same manuscript/canon **gate** as Branch B of `editorial`. |
+| **AI tells** | Same checklist rules as `editorial` for the given `editorialPass`; on `line` / `final_report`, flag AI tells as **`category: "prose"`** with verbatim `manuscriptQuote`. |
 
 ### `revision`
 
@@ -1124,20 +1126,7 @@ Return only valid JSON in this exact shape:
 
 ### `chapters` (single-chapter prose)
 
-**System**
-
-```
-You are a skilled fiction writer with a gift for immersive prose, compelling dialogue, and emotional resonance. Your writing:
-
-- Shows rather than tells
-- Uses sensory details to ground scenes
-- Creates distinctive character voices
-- Balances action, dialogue, and interiority
-- Maintains consistent tone and style
-- Ends chapters with hooks that compel reading
-
-Write prose that transports readers and makes them feel deeply.
-```
+**System** — `CHAPTERS_SYSTEM` in [`chapters.ts`](../src/lib/prompts/chapters.ts): role bullets (varied chapter endings, POV-filtered sensory detail) plus full `AI_TELLS_SYSTEM_BLOCK` from [`aiTells.ts`](../src/lib/prompts/aiTells.ts). See [`StoryForge_AI_Tells_Instructions.md`](StoryForge_AI_Tells_Instructions.md) for the long-form reference.
 
 **User** (`buildChapterPrompt`)
 
@@ -1169,32 +1158,17 @@ Write Chapter ⟨chapterNumber⟩: "⟨chapterTitle⟩" for this ⟨genre⟩ nov
 ⟨endingReference⟩
 ⟨When previousChapterSummaries: ## Story So Far (Continuity Summaries) sorted newest first, each "- Chapter n: \"title\"\nsummary"⟩
 
+⟨optional ## Genre-specific (historical/fantasy) from formatGenreAiTellsAppend⟩
+
 ## Writing Instructions
 
-1. **Opening Hook**: Start with an engaging opening that draws readers in immediately.
+Follow Avoiding AI Tells (system message); prefer concrete particulars over stock phrasing.
 
-2. **Scene Construction**: 
-   - Ground the reader in time and place quickly
-   - Use sensory details (sight, sound, smell, touch, taste)
-   - Balance action, dialogue, and interiority
-   - Show character emotions through behavior and body language
-
-3. **Dialogue**:
-   - Each character should have a distinctive voice
-   - Dialogue should reveal character and advance plot
-   - Use subtext - characters don't always say what they mean
-   - Include beats and action between dialogue
-
-4. **Pacing**:
-   - Vary sentence length for rhythm
-   - Use shorter paragraphs for tension
-   - Allow breathing room for emotional moments
-   - End scenes at moments of change or decision
-
-5. **Chapter Ending**:
-   - End with a hook or question that compels continued reading
-   - Create anticipation for what comes next
-   - Can end mid-scene for tension or at a natural break
+1. **Opening**: Engaging opening.
+2. **Scene Construction**: POV-filtered sensory particulars (not five-senses checklist); show emotion through behaviour.
+3. **Dialogue**: Distinct voices; subtext; selective dialogue beats (many lines stand alone).
+4. **Pacing**: Vary sentence length; end scenes at change or decision.
+5. **Chapter Ending**: Match the beat — hook, quiet landing, or mid-conversation; do not cliffhang every chapter.
 
 ## Constraints
 
@@ -1740,12 +1714,13 @@ Exports are listed in [`src/lib/prompts/index.ts`](../src/lib/prompts/index.ts):
 | `characters.ts` | `CHARACTERS_SYSTEM` | `buildCharactersPrompt` |
 | `structure.ts` | `STRUCTURE_SYSTEM` | `buildStructurePrompt` |
 | `title.ts` | `TITLE_IDEAS_SYSTEM` | `buildTitleIdeasPrompt` |
-| `chapters.ts` | `CHAPTERS_SYSTEM`, `CHAPTER_OUTLINES_SYSTEM` | `buildChapterPrompt`, `buildChapterOutlinesPrompt`, `buildChapterRevisionPrompt`, `buildChapterSummaryPrompt` |
-| `scenes.ts` | `CHAPTER_SCENE_PLAN_SYSTEM`, `CHAPTER_SCENE_PROSE_SYSTEM`, `CHAPTER_POLISH_SYSTEM`, `CHAPTER_SCENE_EVAL_SYSTEM` | `buildChapterScenePlanPrompt`, `buildChapterSceneProsePrompt`, `buildChapterPolishPrompt`, `buildChapterSceneEvalPrompt` |
+| `aiTells.ts` | `AI_TELLS_SYSTEM_BLOCK`, `AI_TELLS_EDITORIAL_CHECKLIST`, `AI_TELLS_STRUCTURAL_MACRO` | `formatGenreAiTellsAppend` — drafting + editorial checklists (sync with `docs/StoryForge_AI_Tells_Instructions.md`) |
+| `chapters.ts` | `CHAPTERS_SYSTEM`, `CHAPTER_OUTLINES_SYSTEM` | `buildChapterPrompt`, `buildChapterOutlinesPrompt`, `buildChapterRevisionPrompt`, `buildChapterSummaryPrompt` — `CHAPTERS_SYSTEM` embeds `AI_TELLS_SYSTEM_BLOCK` |
+| `scenes.ts` | `CHAPTER_SCENE_PLAN_SYSTEM`, `CHAPTER_SCENE_PROSE_SYSTEM`, `CHAPTER_POLISH_SYSTEM`, `CHAPTER_SCENE_EVAL_SYSTEM` | `buildChapterScenePlanPrompt`, `buildChapterSceneProsePrompt`, `buildChapterPolishPrompt`, `buildChapterSceneEvalPrompt` — prose/polish systems embed AI tells |
 | `storyBible.ts` | `STORY_BIBLE_SYSTEM` | `buildStoryBiblePrompt`, `buildCreativeBriefPrompt` |
-| `editorial.ts` | `EDITORIAL_SYSTEM`, `REVISION_VERIFY_SYSTEM` | `buildEditorialPrompt`, `buildEditorialIssuesQueuePrompt`, `buildRevisionQueuePrompt`, `buildRevisionVerificationPrompt` |
+| `editorial.ts` | `EDITORIAL_SYSTEM`, `REVISION_VERIFY_SYSTEM` | `buildEditorialPrompt`, `buildEditorialIssuesQueuePrompt`, `buildRevisionQueuePrompt`, `buildRevisionVerificationPrompt` — line/final_report/issues use `AI_TELLS_EDITORIAL_CHECKLIST` |
 | `marketing.ts` | `BLURB_SYSTEM`, `AMAZON_DESCRIPTION_SYSTEM` | `buildBlurbPrompt`, `buildAmazonDescriptionPrompt` |
 
 ## Editorial passes
 
-`editorialPass` values: `structural`, `line`, `copy`, `proofread`, `final_report`. **PASS_FOCUS** paragraphs and **requirement** appendices for `buildEditorialPrompt` are copied into the [appendix](#appendix-full-system-and-user-messages) (`editorial` / report branch). The same pass strings feed **`buildEditorialIssuesQueuePrompt`** and **`buildRevisionQueuePrompt`**. Source of truth: [`src/lib/prompts/editorial.ts`](../src/lib/prompts/editorial.ts).
+`editorialPass` values: `structural`, `line`, `copy`, `proofread`, `final_report`. **PASS_FOCUS** paragraphs and **requirement** appendices for `buildEditorialPrompt` are copied into the [appendix](#appendix-full-system-and-user-messages) (`editorial` / report branch). The same pass strings feed **`buildEditorialIssuesQueuePrompt`** and **`buildRevisionQueuePrompt`**. AI-tells injection is pass-scoped (see `editorial` / `editorial-issues` above). Source of truth: [`src/lib/prompts/editorial.ts`](../src/lib/prompts/editorial.ts), [`src/lib/prompts/aiTells.ts`](../src/lib/prompts/aiTells.ts).

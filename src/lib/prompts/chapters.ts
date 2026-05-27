@@ -1,15 +1,18 @@
+import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+import { AI_TELLS_SYSTEM_BLOCK, formatGenreAiTellsAppend } from '@/lib/prompts/aiTells';
+
 export const CHAPTERS_SYSTEM = `You are a skilled fiction writer with a gift for immersive prose, compelling dialogue, and emotional resonance. Your writing:
 
 - Shows rather than tells
-- Uses sensory details to ground scenes
+- Uses sharp sensory particulars filtered through POV intent (not a five-senses checklist)
 - Creates distinctive character voices
 - Balances action, dialogue, and interiority
 - Maintains consistent tone and style
-- Ends chapters with hooks that compel reading
+- Varies chapter endings: use a strong hook only when the beat warrants it; quiet, mundane, or mid-conversation endings are valid — not every chapter needs a cliffhanger
 
-Write prose that transports readers and makes them feel deeply.`;
+Write prose that transports readers and makes them feel deeply.
 
-import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
+${AI_TELLS_SYSTEM_BLOCK}`;
 import type { EditorialPass, NicheTropes } from '@/types';
 import { formatRequiredReaderTropes } from '@/lib/niche/tropes';
 import {
@@ -278,14 +281,23 @@ ${continuityContext}
 `;
   }
 
+  const genreAiTells = formatGenreAiTellsAppend(genre, nicheReference);
+  if (genreAiTells) {
+    userPrompt += `
+${genreAiTells}
+`;
+  }
+
   userPrompt += `
 ## Writing Instructions
 
-1. **Opening Hook**: Start with an engaging opening that draws readers in immediately.
+Follow Avoiding AI Tells rules in the system message; prefer concrete particulars over stock phrasing.
+
+1. **Opening**: Start with an engaging opening that draws readers in immediately.
 
 2. **Scene Construction**: 
    - Ground the reader in time and place quickly
-   - Use sensory details (sight, sound, smell, touch, taste)
+   - Use one or two sharp sensory particulars filtered through what the POV character cares about — not a methodical five-senses pass
    - Balance action, dialogue, and interiority
    - Show character emotions through behavior and body language
 
@@ -293,7 +305,7 @@ ${continuityContext}
    - Each character should have a distinctive voice
    - Dialogue should reveal character and advance plot
    - Use subtext - characters don't always say what they mean
-   - Include beats and action between dialogue
+   - Use dialogue beats selectively; many lines should stand alone without a tagged action
 
 4. **Pacing**:
    - Vary sentence length for rhythm
@@ -302,8 +314,8 @@ ${continuityContext}
    - End scenes at moments of change or decision
 
 5. **Chapter Ending**:
-   - End with a hook or question that compels continued reading
-   - Create anticipation for what comes next
+   - End on the beat this chapter needs — hook, quiet landing, mid-conversation, or small unresolved thread
+   - Do not force a cliffhanger on every chapter; vary endings across the manuscript
    - Can end mid-scene for tension or at a natural break
 
 ## Constraints

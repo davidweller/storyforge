@@ -1,5 +1,10 @@
 import type { EditorialPass } from '@/types';
 import { formatEditorialReferenceAppendix, type PromptParts } from '@/lib/prompts/canonBlock';
+import {
+  AI_TELLS_EDITORIAL_CHECKLIST,
+  AI_TELLS_STRUCTURAL_MACRO,
+  formatGenreAiTellsAppend,
+} from '@/lib/prompts/aiTells';
 
 /** Default Chicago; override with COPY_EDIT_STYLE_GUIDE in env. */
 export function getCopyEditStyleGuide(): string {
@@ -18,7 +23,7 @@ You are an experienced developmental editor with a background in commercial fict
 
   line: `**Pass: Line edit.**
 
-You are a professional line editor. Your job is to work at the paragraph and sentence level to strengthen the prose without erasing the author's voice. Focus on: rhythm and sentence variety; clarity of meaning; redundancy and over-writing; weak or passive constructions where they undercut the narrative energy; dialogue that feels unnatural or on-the-nose; filtering language that distances the reader from the POV character; and moments where showing would serve better than telling. Do not correct spelling or grammar unless an error affects meaning. Where you suggest a revision, show the original line, your suggested revision, and a brief explanation of your reasoning. Do not rewrite wholesale — your changes should feel like refinements, not replacements.`,
+You are a professional line editor. Your job is to work at the paragraph and sentence level to strengthen the prose without erasing the author's voice. Focus on: rhythm and sentence variety; clarity of meaning; redundancy and over-writing; weak or passive constructions where they undercut the narrative energy; dialogue that feels unnatural or on-the-nose; filtering language that distances the reader from the POV character; moments where showing would serve better than telling; and AI tells / stock phrasing per the checklist below. Do not correct spelling or grammar unless an error affects meaning. Where you suggest a revision, show the original line, your suggested revision, and a brief explanation of your reasoning. Do not rewrite wholesale — your changes should feel like refinements, not replacements.`,
 
   copy: `**Pass: Copy edit.**
 
@@ -32,6 +37,28 @@ You are a professional proofreader performing a final quality check on a manuscr
 
 You are acting as a senior fiction editor. This pass is an advisory report only — deliver analysis and recommendations, not rewritten prose unless explicitly asked.`,
 };
+
+function editorialGenreAiTellsBlock(genre: string, nicheReference?: string): string {
+  const block = formatGenreAiTellsAppend(genre, nicheReference);
+  return block ? `\n\n${block}` : '';
+}
+
+function aiTellsBlockForPass(editorialPass: EditorialPass): string {
+  if (editorialPass === 'line' || editorialPass === 'final_report') {
+    return `\n\n${AI_TELLS_EDITORIAL_CHECKLIST}`;
+  }
+  if (editorialPass === 'structural') {
+    return `\n\n${AI_TELLS_STRUCTURAL_MACRO}`;
+  }
+  return '';
+}
+
+function editorialAiTellsIssuesRules(editorialPass: EditorialPass): string {
+  if (editorialPass !== 'line' && editorialPass !== 'final_report') return '';
+  return `
+- Flag AI tells and stock phrasing as **category: "prose"** with verbatim manuscriptQuote.
+- **fix** must describe a concrete replacement (show through behaviour, thought, or sensation — do not name the emotion in narration).`;
+}
 
 function editorialRequirementsForPass(editorialPass: EditorialPass): string {
   if (editorialPass === 'structural') {
@@ -109,6 +136,7 @@ export function buildEditorialPromptParts(params: {
 
 **Specific concerns / author context:**
 ${authorConcernsBlock}
+${editorialGenreAiTellsBlock(genre, nicheReference)}${aiTellsBlockForPass(editorialPass)}
 
 ---
 
@@ -206,6 +234,9 @@ Line-level strengths and priorities (1–2 paragraphs).
 ### 2. Issues by category
 For each issue include **Chapter**, **Location**, **Issue**, and where you suggest a change: **Original line** (quoted) · **Suggested revision** · **Brief reasoning**. Do not rewrite whole paragraphs wholesale — refinements only.
 
+### AI tells and stock phrasing
+Apply the editor checklist above. Quote each offending line; suggest a targeted revision. Include a dedicated subsection here when patterns appear.
+
 ### 3. Dialogue and voice
 With quoted examples where helpful.
 
@@ -286,7 +317,8 @@ Provide a structured editorial report covering:
 4. Pacing problems
 5. Redundancy or overwriting
 6. Missed opportunities for resonance
-7. Any other issues that might affect the quality of the manuscript and the reader experience
+7. Repetitive AI signatures (stock phrases, uniform chapter hooks, stated themes, filtering/tell patterns) — cite chapters and quote examples
+8. Any other issues that might affect the quality of the manuscript and the reader experience
 
 For each issue:
 - **Location** — if specific, give the text immediately before the spot.
@@ -393,6 +425,7 @@ ${scopeNote}
 
 **Author concerns:**
 ${authorConcernsBlock}
+${editorialGenreAiTellsBlock(genre, nicheReference)}${aiTellsBlockForPass(editorialPass)}
 
 ## CRITICAL — ground every issue in the manuscript
 
@@ -414,7 +447,7 @@ Rules:
 - Exactly one revision task per chapter for chapters 1 … ${chapterCount}. If chapter headings in the manuscript imply a different count, still emit ${chapterCount} tasks keyed by ascending chapter numbers and match manuscript content to the closest chapter heading.
 - For chapters with issueCount 0, use summary: \"Verify continuity: confirm this chapter is consistent with established character voices, timeline, and the preceding/following chapters. No structural issues were flagged but token constraints may have limited coverage.\"
 - category must be one of: continuity, character, pacing, prose, logic.
-- Priority: high | medium | low | none — use \"none\" when issueCount is 0.
+- Priority: high | medium | low | none — use \"none\" when issueCount is 0.${editorialAiTellsIssuesRules(editorialPass)}
 
 Output only valid JSON.`;
 

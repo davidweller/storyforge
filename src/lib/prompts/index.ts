@@ -1,3 +1,9 @@
+export {
+  AI_TELLS_SYSTEM_BLOCK,
+  AI_TELLS_EDITORIAL_CHECKLIST,
+  AI_TELLS_STRUCTURAL_MACRO,
+  formatGenreAiTellsAppend,
+} from './aiTells';
 export { GENRE_RESEARCH_SYSTEM, buildGenreResearchPrompt } from './genre-research';
 export { NICHE_SYSTEM, buildNichePrompt } from './niche';
 export { ENDING_SYSTEM, buildEndingConceptsPrompt, buildEndingExpansionPrompt } from './ending';

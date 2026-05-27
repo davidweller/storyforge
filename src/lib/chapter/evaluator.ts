@@ -65,21 +65,23 @@ export function runDeterministicChapterEvaluation(params: {
 
   const paras = fullText.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const last = paras[paras.length - 1] ?? '';
-  const hookWeak = last.length > 0 && last.length < 50 && !/[?!…]/.test(last.slice(-3));
+  const closingBeatThin = last.length > 0 && last.length < 50 && !/[?!…]/.test(last.slice(-3));
   checks.push({
-    id: 'closing-hook-heuristic',
+    id: 'closing-beat-heuristic',
     sceneId: params.sceneCards[params.sceneCards.length - 1]?.id ?? params.sceneCards[0]?.id ?? 'scene-unknown',
-    pass: !hookWeak,
+    pass: !closingBeatThin,
     severity: 'info',
-    evidence: hookWeak
-      ? 'Final paragraph is very short and ends flat — optional hook pass.'
+    evidence: closingBeatThin
+      ? 'Final paragraph is very short and ends flat — quiet endings are fine; only sharpen if the beat needs more weight.'
       : 'Closing paragraph has moderate substance or punctuation tension.',
-    suggestion: hookWeak ? 'Consider sharpening the chapter-ending beat.' : '',
+    suggestion: closingBeatThin
+      ? 'If this chapter should land harder, sharpen the closing beat; otherwise a quiet ending may be correct.'
+      : '',
   });
 
   return {
     checks,
-    summary: 'Deterministic gates (word bands + hook heuristic). Model rubric adds deeper checks.',
+    summary: 'Deterministic gates (word bands + closing-beat heuristic). Model rubric adds deeper checks.',
   };
 }
 
