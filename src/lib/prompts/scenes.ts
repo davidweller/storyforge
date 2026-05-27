@@ -1,4 +1,6 @@
 import type { SceneCard, ChapterOutline } from '@/lib/generation/schemas';
+import type { NicheTropes } from '@/types';
+import { formatCompactTropeSummary, formatRequiredReaderTropes } from '@/lib/niche/tropes';
 import {
   type PromptParts,
   normalizeCanonRaw,
@@ -18,6 +20,7 @@ export function buildChapterScenePlanPromptParts(params: {
   outlineChapter: ChapterOutline | undefined;
   assembledContext: string | undefined;
   outlinesSourceJson: string;
+  tropes?: NicheTropes;
 }): PromptParts {
   const oc = params.outlineChapter;
   const outlineBlock = oc
@@ -30,12 +33,14 @@ Key plot points: ${(oc.keyPlotPoints ?? []).join('; ') || '(none)'}`
     : `No outline slice found for chapter ${params.chapterNumber}; infer scenes from genre and context only.`;
 
   const canon = normalizeCanonRaw(params.assembledContext);
+  const tropesSection = formatRequiredReaderTropes(params.tropes);
 
   const userPrompt = `Plan scenes for ${params.genre} fiction — Chapter ${params.chapterNumber}.
 
 ## Outline slice
 ${outlineBlock}
 
+${tropesSection ? `${tropesSection}\n\n` : ''}
 ## Approved chapter-outlines source (for JSON provenance — copy ids exactly into derivedFromChapterOutlines)
 ${params.outlinesSourceJson}
 
@@ -80,6 +85,7 @@ export function buildChapterScenePlanPrompt(params: {
   outlineChapter: ChapterOutline | undefined;
   assembledContext: string | undefined;
   outlinesSourceJson: string;
+  tropes?: NicheTropes;
 }): string {
   const parts = buildChapterScenePlanPromptParts(params);
   if (!parts.canon) return parts.userPrompt;
@@ -108,12 +114,14 @@ export function buildChapterSceneProsePromptParts(params: {
   neighborSummaryBefore?: string;
   neighborSummaryAfter?: string;
   assembledContext: string | undefined;
+  tropes?: NicheTropes;
   wordTarget?: number;
 }): PromptParts {
   const beats = Array.isArray(params.sceneCard.beatsCovered)
     ? params.sceneCard.beatsCovered.join('; ')
     : String(params.sceneCard.beatsCovered ?? '');
   const canon = normalizeCanonRaw(params.assembledContext);
+  const tropeSummary = formatCompactTropeSummary(params.tropes);
 
   const userPrompt = `Write prose for a single scene in Chapter ${params.chapterNumber}: "${params.chapterTitle}" (${params.genre}).
 
@@ -129,6 +137,7 @@ Setting: ${params.sceneCard.setting}
 Emotional shift: ${params.sceneCard.emotionalShift}
 Beats covered: ${beats || '(none)'}
 Must include: ${(params.sceneCard.mustInclude ?? []).join('; ') || '(none)'}
+${tropeSummary ? `${tropeSummary}\n` : ''}
 Target words (approximate): ${params.wordTarget ?? params.sceneCard.estimatedWords ?? 600}
 
 ${params.neighborSummaryBefore ? `## Previous scene (summary)\n${params.neighborSummaryBefore}\n` : ''}${params.neighborSummaryAfter ? `## Next scene (summary)\n${params.neighborSummaryAfter}\n` : ''}Write complete prose for this scene only (no chapter headings). Return JSON {"sceneId":"${params.sceneCard.id}","prose":"..."}.`;
@@ -144,6 +153,7 @@ export function buildChapterSceneProsePrompt(params: {
   neighborSummaryBefore?: string;
   neighborSummaryAfter?: string;
   assembledContext: string | undefined;
+  tropes?: NicheTropes;
   wordTarget?: number;
 }): string {
   const parts = buildChapterSceneProsePromptParts(params);

@@ -10,6 +10,7 @@ import { useGenerate } from '@/hooks/useGenerate';
 import { getEffectiveModelForStage } from '@/lib/data/models';
 import { formatCoverToneForPrompt, resolveApprovedCoverTone } from '@/lib/cover/marketingCoverTone';
 import { approvedCanonMarkdownBlock } from '@/lib/marketing/canonicalContext';
+import { resolveCanonicalTropes } from '@/lib/niche/tropes';
 
 const DEBOUNCE_MS = 500;
 
@@ -31,6 +32,7 @@ export default function BlurbPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const approvedCanonContext = useMemo(() => approvedCanonMarkdownBlock(documents ?? []), [documents]);
+  const canonicalTropes = useMemo(() => resolveCanonicalTropes(documents ?? []), [documents]);
 
   useEffect(() => {
     if (project?.blurb !== undefined) {
@@ -82,6 +84,7 @@ export default function BlurbPage() {
           readerTargeting: nicheDoc?.content,
           plotBlueprint: structureDoc?.content,
           charactersReference: charactersDoc?.content,
+          tropes: canonicalTropes,
           ...(canonBlock ? { approvedCanonContext: canonBlock } : {}),
           ...(coverToneBlock ? { coverToneBlock } : {}),
         },
@@ -92,7 +95,7 @@ export default function BlurbPage() {
     } catch {
       // Error surfaced by useGenerate
     }
-  }, [project, documents, approvedCanonContext, getDocumentByType, generate, save, clearError, projectId]);
+  }, [project, documents, approvedCanonContext, canonicalTropes, getDocumentByType, generate, save, clearError, projectId]);
 
   if (!projectId) {
     return (

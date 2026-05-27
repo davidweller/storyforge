@@ -10,8 +10,9 @@ export function buildNichePrompt(params: {
   premise?: string;
   genre: string;
   genreResearch: string;
+  existingNicheReference?: string;
 }): string {
-  const { premise, genre, genreResearch } = params;
+  const { premise, genre, genreResearch, existingNicheReference } = params;
   
   let prompt = `Based on the following novel concept and market research, develop a comprehensive niche positioning strategy:
 
@@ -28,7 +29,18 @@ export function buildNichePrompt(params: {
   prompt += `
 
 **Market Research Summary:**
-${genreResearch}
+${genreResearch}`;
+
+  if (existingNicheReference?.trim()) {
+    prompt += `
+
+**Existing Approved Niche Analysis To Structure:**
+${existingNicheReference.trim()}
+
+This is a migration/re-extraction request. Preserve the existing positioning strategy in the summary, and extract the clearest structured trope guidance from the existing analysis. Do not silently change the audience promise unless the JSON fields need concise normalization.`;
+  }
+
+  prompt += `
 
 Please provide:
 
@@ -66,7 +78,43 @@ Write a clear positioning statement in this format:
 ## 5. Marketing Hooks
 Provide 3-5 potential taglines or hooks that could be used in marketing.
 
-Be specific and actionable. This analysis will guide the entire creative process.`;
+Be specific and actionable. This analysis will guide the entire creative process.
+
+## Output Format
+
+Return only valid JSON. Do not include markdown fences or commentary outside the JSON.
+
+Use this exact top-level shape:
+
+{
+  "niche": {
+    "schemaVersion": 1,
+    "readerAvatar": "string (markdown allowed)",
+    "emotionalPromise": "string",
+    "positioningStatement": "string",
+    "marketingHooks": ["string"],
+    "tropes": {
+      "mustInclude": [
+        { "name": "string", "rationale": "string" }
+      ],
+      "considerIncluding": [
+        { "name": "string", "rationale": "string" }
+      ],
+      "avoid": [
+        { "name": "string", "reason": "string" }
+      ]
+    },
+    "summary": "string"
+  }
+}
+
+Trope constraints:
+- "mustInclude" must contain 5-7 entries.
+- "considerIncluding" must contain 3-5 entries.
+- "avoid" must contain 3-5 entries.
+- Each trope "name" must be a recognisable handle a reader would search for or recognise, such as "enemies to lovers", "fated mates", "found family", or "chosen one". Do not use vague themes.
+- Each "rationale" or "reason" must be one short sentence.
+- "summary" must be the full markdown-style analysis that would previously have been returned as the entire output, including reader avatar, emotional promise, tropes and conventions, positioning statement, and marketing hooks.`;
 
   return prompt;
 }

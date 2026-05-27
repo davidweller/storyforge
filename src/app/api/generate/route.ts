@@ -69,8 +69,9 @@ import {
   parseChapterSummary,
   parseCreativeBrief,
   parseEndingConcepts,
+  parseGeneratedStoryBible,
+  parseNicheOutput,
   parseRevisionQueue,
-  parseStoryBible,
   parseTitleOptions,
   parseChapterScenePlan,
   parseChapterSceneProseOutput,
@@ -173,6 +174,7 @@ const GenerateBodySchema = z.object({
 type D = Record<string, unknown>;
 
 type StructuredOutputKind =
+  | 'niche'
   | 'ending-concepts'
   | 'title'
   | 'chapter-outlines'
@@ -212,6 +214,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
   'genre-research': ProjectContextSchema,
   niche: ProjectContextSchema.extend({
     genreResearch: z.string(),
+    existingNicheReference: optionalString,
   }).passthrough(),
   ending: ProjectContextSchema.extend({
     nicheReference: z.string(),
@@ -241,6 +244,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     endingReference: z.string(),
     genreResearch: optionalString,
     nicheReference: optionalString,
+    tropes: z.unknown().optional(),
   }).passthrough(),
   'chapter-summary': z.object({
     genre: requiredString,
@@ -290,6 +294,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     outlinesSourceJson: requiredString,
     outlineSliceJson: optionalString,
     assembledContext: optionalString,
+    tropes: z.unknown().optional(),
   }).passthrough(),
   'chapter-scenes-prose': z.object({
     genre: requiredString,
@@ -297,6 +302,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     chapterTitle: requiredString,
     sceneCard: z.record(z.string(), z.unknown()),
     assembledContext: optionalString,
+    tropes: z.unknown().optional(),
     neighborSummaryBefore: optionalString,
     neighborSummaryAfter: optionalString,
     wordTarget: z.number().optional(),
@@ -332,6 +338,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     structureContext: z.string(),
     genreResearch: optionalString,
     nicheReference: optionalString,
+    tropes: z.unknown().optional(),
     wordTarget: z.number().optional(),
   }).passthrough().superRefine((value, ctx) => {
     if ('previousChapterSummary' in value) {
@@ -386,6 +393,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     endingReference: z.string().optional(),
     structureReference: optionalString,
     nicheReference: optionalString,
+    tropes: z.unknown().optional(),
     previousChapterContext: optionalString,
     nextChapterContext: optionalString,
     editorialPass: EditorialPassSchema.optional(),
@@ -406,6 +414,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     plotBlueprint: optionalString,
     charactersReference: optionalString,
     approvedCanonContext: optionalString,
+    tropes: z.unknown().optional(),
     coverToneBlock: optionalString,
   }).passthrough(),
   'amazon-description': z.object({
@@ -419,6 +428,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     charactersReference: optionalString,
     blurb: optionalString,
     approvedCanonContext: optionalString,
+    tropes: z.unknown().optional(),
     coverToneBlock: optionalString,
   }).passthrough(),
   'cover-brief': z
@@ -461,6 +471,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
 };
 
 function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutputKind | null {
+  if (stage === 'niche') return 'niche';
   if (stage === 'ending') {
     const hasEndingExpansion =
       typeof data.selectedEnding === 'string' && data.selectedEnding.trim().length > 0;
@@ -484,6 +495,9 @@ function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutpu
 }
 
 function normalizeStructuredOutput(kind: StructuredOutputKind, content: string, ctx?: NormalizeCtx): string {
+  if (kind === 'niche') {
+    return JSON.stringify(parseNicheOutput(content), null, 2);
+  }
   if (kind === 'ending-concepts') {
     const endings = parseEndingConcepts(content);
     if (endings.length === 0) throw new Error('No ending concepts found in structured output.');
@@ -505,7 +519,7 @@ function normalizeStructuredOutput(kind: StructuredOutputKind, content: string, 
     return summary;
   }
   if (kind === 'story-bible') {
-    return JSON.stringify(parseStoryBible(content), null, 2);
+    return JSON.stringify(parseGeneratedStoryBible(content), null, 2);
   }
   if (kind === 'creative-brief') {
     return JSON.stringify(parseCreativeBrief(content), null, 2);
@@ -564,7 +578,7 @@ Return only the corrected JSON object. Do not include markdown fences or comment
  *  Stages with conditional data (ending, editorial, revision) stay in the switch. */
 const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: string; prompt: string }>> = {
   'genre-research': (d) => ({ system: GENRE_RESEARCH_SYSTEM, prompt: buildGenreResearchPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, research: d.research as string | undefined }) }),
-  'niche': (d) => ({ system: NICHE_SYSTEM, prompt: buildNichePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, genreResearch: d.genreResearch as string }) }),
+  'niche': (d) => ({ system: NICHE_SYSTEM, prompt: buildNichePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, genreResearch: d.genreResearch as string, existingNicheReference: d.existingNicheReference as string | undefined }) }),
   'characters': (d) => ({ system: CHARACTERS_SYSTEM, prompt: buildCharactersPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string }) }),
   'structure': (d) => ({ system: STRUCTURE_SYSTEM, prompt: buildStructurePrompt({ premise: d.premise as string | undefined, genre: d.genre as string, nicheReference: d.nicheReference as string, endingReference: d.endingReference as string, charactersReference: d.charactersReference as string, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
   'title': (d) => ({
@@ -581,7 +595,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
         typeof d.titleCount === 'number' && d.titleCount > 0 ? (d.titleCount as number) : undefined,
     }),
   }),
-  'chapter-outlines': (d) => ({ system: CHAPTER_OUTLINES_SYSTEM, prompt: buildChapterOutlinesPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, structureReference: d.structureReference as string, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
+  'chapter-outlines': (d) => ({ system: CHAPTER_OUTLINES_SYSTEM, prompt: buildChapterOutlinesPrompt({ premise: d.premise as string | undefined, genre: d.genre as string, structureReference: d.structureReference as string, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, tropes: d.tropes as import('@/types').NicheTropes | undefined, maxTotalWords: TARGET_MANUSCRIPT_WORDS }) }),
   'chapter-summary': (d) => ({
     system: CHAPTERS_SYSTEM,
     prompt: buildChapterSummaryPrompt({
@@ -593,7 +607,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
   }),
   'story-bible': (d) => ({ system: STORY_BIBLE_SYSTEM, prompt: buildStoryBiblePrompt({ title: d.title as string | undefined, premise: d.premise as string | undefined, genre: d.genre as string, niche: d.niche as string | undefined, research: d.research as string | undefined, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, endingReference: d.endingReference as string | undefined, endingChoice: d.endingChoice as string | undefined, charactersReference: d.charactersReference as string | undefined, structureReference: d.structureReference as string | undefined, chapterOutlinesReference: d.chapterOutlinesReference as string | undefined, derivedFrom: d.derivedFrom as import('@/types').StoryBibleSourceRef[] }) }),
   'creative-brief': (d) => ({ system: STORY_BIBLE_SYSTEM, prompt: buildCreativeBriefPrompt({ storyBibleContent: d.storyBibleContent as string, storyBibleDocumentId: d.storyBibleDocumentId as string, storyBibleVersion: d.storyBibleVersion as number, storyBibleUpdatedAt: d.storyBibleUpdatedAt as string }) }),
-  'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, assembledContext: d.assembledContext as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummaries: d.previousChapterSummaries as Array<{ chapterNumber: number; title: string; summary: string }> | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, wordTarget: d.wordTarget as number | undefined }) }),
+  'chapters': (d) => ({ system: CHAPTERS_SYSTEM, prompt: buildChapterPrompt({ genre: d.genre as string, chapterNumber: d.chapterNumber as number, chapterTitle: d.chapterTitle as string, beatReference: d.beatReference as string, sceneGoal: d.sceneGoal as string, pov: d.pov as string | undefined, assembledContext: d.assembledContext as string | undefined, charactersReference: d.charactersReference as string, endingReference: d.endingReference as string, previousChapterSummaries: d.previousChapterSummaries as Array<{ chapterNumber: number; title: string; summary: string }> | undefined, structureContext: d.structureContext as string, genreResearch: d.genreResearch as string | undefined, nicheReference: d.nicheReference as string | undefined, tropes: d.tropes as import('@/types').NicheTropes | undefined, wordTarget: d.wordTarget as number | undefined }) }),
   'blurb': (d) => ({
     system: BLURB_SYSTEM,
     prompt: buildBlurbPrompt({
@@ -606,6 +620,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       plotBlueprint: d.plotBlueprint as string | undefined,
       charactersReference: d.charactersReference as string | undefined,
       approvedCanonContext: typeof d.approvedCanonContext === 'string' ? d.approvedCanonContext : undefined,
+      tropes: d.tropes as import('@/types').NicheTropes | undefined,
       coverToneBlock: typeof d.coverToneBlock === 'string' ? d.coverToneBlock : undefined,
     }),
   }),
@@ -622,6 +637,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       charactersReference: d.charactersReference as string | undefined,
       blurb: d.blurb as string | undefined,
       approvedCanonContext: typeof d.approvedCanonContext === 'string' ? d.approvedCanonContext : undefined,
+      tropes: d.tropes as import('@/types').NicheTropes | undefined,
       coverToneBlock: typeof d.coverToneBlock === 'string' ? d.coverToneBlock : undefined,
     }),
   }),
@@ -669,6 +685,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
         outlineChapter,
         assembledContext: d.assembledContext as string | undefined,
         outlinesSourceJson: d.outlinesSourceJson as string,
+        tropes: d.tropes as import('@/types').NicheTropes | undefined,
       }),
     };
   },
@@ -684,6 +701,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
         neighborSummaryBefore: d.neighborSummaryBefore as string | undefined,
         neighborSummaryAfter: d.neighborSummaryAfter as string | undefined,
         assembledContext: d.assembledContext as string | undefined,
+        tropes: d.tropes as import('@/types').NicheTropes | undefined,
         wordTarget: d.wordTarget as number | undefined,
       }),
     };
@@ -961,6 +979,7 @@ export async function POST(request: NextRequest) {
           endingReference: data.endingReference as string || '',
           structureReference: data.structureReference as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+          tropes: data.tropes as import('@/types').NicheTropes | undefined,
           previousChapterContext: data.previousChapterContext as string | undefined,
           nextChapterContext: data.nextChapterContext as string | undefined,
           editorialPass: parseEditorialPass(data.editorialPass),

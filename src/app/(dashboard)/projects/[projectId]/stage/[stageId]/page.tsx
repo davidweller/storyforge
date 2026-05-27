@@ -6,8 +6,12 @@ import { useProject } from '@/hooks/useProject';
 import { useGenerate } from '@/hooks/useGenerate';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout, StageActions, ContentDisplay, LoadingContent, EmptyContent } from '@/components/stages';
+import { Button } from '@/components/ui';
+import { NicheReadableView } from '@/components/niche/NicheReadableView';
 import { ReviewChecklist } from '@/components/review/ReviewChecklist';
 import { checklistItemsForKey } from '@/lib/review/checklists';
+import { tryParseNicheOutput } from '@/lib/generation/schemas';
+import { resolveCanonicalTropes } from '@/lib/niche/tropes';
 import { getNextStage, isStageAccessible } from '@/lib/utils';
 import type { WorkflowStage, DocumentType } from '@/types';
 
@@ -85,8 +89,10 @@ export default function StagePage({ params }: StagePageProps) {
   }
   
   // Check if this stage's document is approved
-  const approvedDoc = docType ? getDocumentByType(docType) : null;
-  const isApproved = !!approvedDoc;
+  const latestDocForStage = docType ? getLatestDocumentByType(docType) : null;
+  const isApproved = !!latestDocForStage?.approved;
+  const parsedNiche = stage === 'niche' ? tryParseNicheOutput(content) : null;
+  const isLegacyNiche = stage === 'niche' && !!content.trim() && !parsedNiche;
   
   // Handle generation
   const handleGenerate = async () => {
@@ -134,6 +140,7 @@ export default function StagePage({ params }: StagePageProps) {
         if (endingDoc) data.endingReference = endingDoc.content;
         if (charsDoc) data.charactersReference = charsDoc.content;
         if (genreDoc) data.genreResearch = genreDoc.content;
+        data.tropes = resolveCanonicalTropes(documents);
       }
       
       const result = await generate(stage, data, manualGenOpts);
@@ -156,6 +163,39 @@ export default function StagePage({ params }: StagePageProps) {
         setCurrentDocId(newDocId);
       }
     } catch (err) {
+      // Error is handled by the hook
+    }
+  };
+
+  const handleReextractNicheTropes = async () => {
+    if (stage !== 'niche' || !content.trim()) return;
+    clearError();
+    try {
+      const genreDoc = getDocumentByType('genre');
+      if (!genreDoc) return;
+      const result = await generate(
+        'niche',
+        {
+          premise: project.premise,
+          genre: project.genre,
+          research: project.research,
+          genreResearch: genreDoc.content,
+          existingNicheReference: content,
+        },
+        manualGenOpts
+      );
+      const latest = getLatestDocumentByType(docType!);
+      const newDocId = await createDocument({
+        projectId,
+        type: docType!,
+        content: result.content,
+        version: (latest?.version || 0) + 1,
+        approved: false,
+      });
+      setCurrentDocId(newDocId);
+      setContent(result.content);
+      setIsEditing(false);
+    } catch {
       // Error is handled by the hook
     }
   };
@@ -223,11 +263,31 @@ export default function StagePage({ params }: StagePageProps) {
         <LoadingContent message={`Generating ${stage.replace('-', ' ')} analysis...`} />
       ) : content ? (
         <>
-          <ContentDisplay
-            content={content}
-            isEditing={isEditing && !isApproved}
-            onContentChange={handleContentChange}
-          />
+          {parsedNiche && !isEditing ? (
+            <NicheReadableView output={parsedNiche} />
+          ) : (
+            <ContentDisplay
+              content={content}
+              isEditing={isEditing && !isApproved}
+              onContentChange={handleContentChange}
+            />
+          )}
+          {isLegacyNiche && (
+            <div className="mt-4 rounded-lg border border-border bg-card p-4 text-sm">
+              <p className="mb-3 text-muted-foreground">
+                This niche document predates structured tropes. Re-extract them into a new draft version when you are ready to migrate canon.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleReextractNicheTropes()}
+                disabled={isGenerating || !getDocumentByType('genre')}
+              >
+                Re-extract structured tropes
+              </Button>
+            </div>
+          )}
           {stage === 'chapter-outlines' && !isApproved && (
             <ReviewChecklist items={checklistItemsForKey('chapter-outlines')} className="mb-4" />
           )}

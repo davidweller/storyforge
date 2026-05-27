@@ -2,6 +2,7 @@ import type { WorkflowStage } from '@/types';
 
 /** Mirrors POST /api/generate structured-output discriminants used for normalization. */
 export type StructuredOutputKindForCountWarnings =
+  | 'niche'
   | 'ending-concepts'
   | 'title'
   | 'chapter-outlines'

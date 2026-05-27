@@ -45,6 +45,7 @@ import {
 } from '@/lib/generation/schemas';
 import { runMergedChapterSceneEvaluation } from '@/lib/chapter/runMergedChapterSceneEvaluation';
 import { approvedCanonMarkdownBlock } from '@/lib/marketing/canonicalContext';
+import { resolveCanonicalTropes } from '@/lib/niche/tropes';
 import {
   assembleContext,
   buildStoryBibleSourceRefs,
@@ -381,6 +382,7 @@ export default function FullAutoPage({
           if (endingDoc) data.endingReference = endingDoc.content;
           if (charsDoc) data.charactersReference = charsDoc.content;
           if (genreDoc) data.genreResearch = genreDoc.content;
+          data.tropes = resolveCanonicalTropes(useProjectStore.getState().documents);
         }
         return data;
       };
@@ -906,6 +908,7 @@ export default function FullAutoPage({
                 outlinesSourceJson,
                 outlineSliceJson,
                 assembledContext: sceneAssembled.text,
+                tropes: sceneAssembled.tropes,
               });
               let parsedScenePlan;
               try {
@@ -983,6 +986,7 @@ export default function FullAutoPage({
                   chapterTitle,
                   sceneCard,
                   assembledContext: proseAssembled.text,
+                  tropes: proseAssembled.tropes,
                   neighborSummaryBefore: neighborBefore,
                   neighborSummaryAfter: neighborAfter,
                   wordTarget: wt,
@@ -1053,6 +1057,7 @@ export default function FullAutoPage({
                 sceneGoal: outline.sceneGoal,
                 pov: outline.pov,
                 assembledContext: assembledContext.text,
+                tropes: assembledContext.tropes,
                 charactersReference: charactersDoc?.content || '',
                 endingReference: endingDoc?.content || '',
                 previousChapterSummaries,
@@ -1338,6 +1343,7 @@ export default function FullAutoPage({
                   revisionInstructions: task.instructions,
                   acceptanceCriteria: task.acceptanceCriteria?.length ? task.acceptanceCriteria : ['Consistency with canon'],
                   assembledContext: revisionContext.text,
+                  tropes: revisionContext.tropes,
                   charactersReference: charactersDoc?.content || '',
                   endingReference: endingDoc?.content || '',
                   structureReference: structureDoc?.content || '',
@@ -1499,6 +1505,7 @@ export default function FullAutoPage({
               revisionInstructions: task.instructions,
               acceptanceCriteria: task.acceptanceCriteria?.length ? task.acceptanceCriteria : ['Consistency with canon'],
               assembledContext: revisionContext.text,
+              tropes: revisionContext.tropes,
               charactersReference: charactersDoc?.content || '',
               endingReference: endingDoc?.content || '',
               structureReference: structureDoc?.content || '',
@@ -1591,6 +1598,7 @@ export default function FullAutoPage({
         const structureDoc = getDocumentByType('structure');
         const charactersDoc = getDocumentByType('characters');
         const marketingCanon = approvedCanonMarkdownBlock(useProjectStore.getState().documents).trim();
+        const marketingTropes = resolveCanonicalTropes(useProjectStore.getState().documents);
         const blurbResult = await generateTracked('blurb', {
           genre: projForMarketing.genre,
           niche: projForMarketing.niche,
@@ -1600,6 +1608,7 @@ export default function FullAutoPage({
           readerTargeting: nicheDoc?.content,
           plotBlueprint: structureDoc?.content,
           charactersReference: charactersDoc?.content,
+          tropes: marketingTropes,
           ...(marketingCanon ? { approvedCanonContext: marketingCanon } : {}),
         });
         await updateProject(projectId, { blurb: blurbResult.content });
@@ -1617,6 +1626,7 @@ export default function FullAutoPage({
           plotBlueprint: structureDoc?.content,
           charactersReference: charactersDoc?.content,
           blurb: blurbResult.content,
+          tropes: marketingTropes,
           ...(marketingCanon ? { approvedCanonContext: marketingCanon } : {}),
         });
         await updateProject(projectId, { amazonDescription: amazonResult.content });

@@ -64,10 +64,11 @@ The workflow sidebar groups stages for clarity:
 | Group | Stages (conceptually) |
 |--------|------------------------|
 | **Planning** | Setup through title |
-| **Writing** | Chapter outlines and chapter drafting (expands to **per-chapter links** once chapters exist) |
+| **Writing** | Chapter outlines, **Story Bible & Canon** workspace, and chapter drafting (expands to **per-chapter links** once chapters exist) |
 | **Editing** | Manuscript assembly, draft export, editorial, revisions, final export — plus per-pass Review under **Editorial Analysis** and Revisions under **Apply Revisions** when multi-pass editorial is enabled |
 | **Marketing** | Blurb and Amazon description (**outside** the linear stage counter; does not block export final) |
 | **Cover** | Front cover (archetype, brief, generation, refine, export) and paperback/back-cover flow (back brief, generation, refine, back export, full wrap), unlocked by canon and front-cover approval rules |
+| **A+ Content** | Cover-aligned A+ setup, prompt brief, image generation, refine, and export, unlocked after front and back cover approval |
 | **Project Dashboard** | Overview, canon tooling shortcuts, usage, and cross-cutting actions |
 
 ### Linear order (`STAGE_ORDER`)
@@ -109,13 +110,14 @@ Official sequence (indices 0–13):
 4. App guides user through **locked stages**, one at a time
 5. At each stage: AI generates → user reviews → approves / edits / regenerates
 6. Approved outputs become **canonical project documents**
-7. User progresses through chapter outlines → chapter drafting (single-pass and/or **scene pipeline**; see below)
+7. User progresses through chapter outlines → **Story Bible & Canon** (Story Bible + optional Creative Brief) → chapter drafting (single-pass and/or **scene pipeline**; see below)
 8. User assembles chapters into a manuscript, optionally exports a draft
 9. User runs editorial review (single pass or **multi-pass editorial**)
 10. User applies revisions from structured tasks
 11. User exports the final manuscript
-12. User may generate marketing copy (blurb, Amazon description) **in parallel** with late pipeline steps
+12. User may generate marketing copy (blurb, Amazon description) **in parallel** with late pipeline steps; marketing prompts use approved canon when available
 13. User may run Cover flows (front cover and paperback full-wrap branch) outside `STAGE_ORDER` once unlock criteria are met
+14. User may create A+ Content after approving front and back cover assets
 
 ---
 
@@ -175,12 +177,18 @@ Official sequence (indices 0–13):
 ---
 
 ### Stage 6 – Title (`title`) (OpenAI)
-**Outputs:** Title concepts; user selection becomes the official book name
+**Outputs:** Title concepts; user selection becomes the official book name. Optional **subtitle** and **tagline** metadata are captured alongside the title for cover typography, listings, and A+ campaign language.
 
 ---
 
 ### Stage 7 – Chapter Outlines (`chapter-outlines`) (OpenAI)
 **Outputs:** Detailed outline per chapter (scene goals, POV, beats, targets) → **`Reference – Chapter Outlines`**
+
+**Canon follow-on:** Approved, parseable chapter outlines unlock the **Story Bible & Canon** workspace, where the user can generate and approve:
+- `story-bible` — durable canon for characters, promises, voice, symbolism, rules, and avoid-lists
+- `creative-brief` — compact, generation-ready canon brief derived from the approved Story Bible
+
+These are valid workflow stages but remain outside `STAGE_ORDER` so existing linear progress is not interrupted.
 
 ---
 
@@ -200,7 +208,7 @@ Official sequence (indices 0–13):
 
 **Saved as:** `Chapter 01`, `Chapter 02`, etc., with **version history**.
 
-**Constraints:** Bounded context per call (assembler / story bible / brief); no silent retroactive canon rewrites.
+**Constraints:** Bounded context per call (assembler / approved Story Bible / Creative Brief); no silent retroactive canon rewrites.
 
 **Full Auto Mode:** User may enable Full Auto to advance many generations with minimal prompts; progress is **checkpointed** so runs can pause and resume. Scene-pipeline full-auto may be gated by product flags (see roadmap).
 
@@ -262,6 +270,12 @@ Final **`.docx` / `.txt`**; show final word count and revision status.
 
 **Not in `STAGE_ORDER`;** available from Marketing group / dashboard without blocking **Export Final**.
 
+**Prompt rules:**
+- Blurb targets tight paperback back-cover copy (roughly 80–120 words).
+- Amazon description targets a skim-friendly KDP listing: short hook, short pitch, and “Perfect for readers who love” bullets.
+- Approved Story Bible / Creative Brief excerpts are primary canon context when available.
+- Optional cover-tone alignment can append approved cover visual tone to marketing prompts.
+
 ---
 
 ### Cover (parallel) — Front Cover + Paperback Branch
@@ -271,9 +285,10 @@ Cover is presented in its own sidebar group and runs outside `STAGE_ORDER`, simi
 **Unlock rules (implemented):**
 - Front-cover subpages unlock once canon exists (`story-bible` or `creative-brief` approved).
 - Paperback/back-cover subpages unlock after front-cover approval (`approvedCoverImageId`).
+- Generate-all/full cover flow requires both an Amazon description and a back-cover blurb; the **approved project blurb** is the authoritative back-panel body text.
 
 **Front cover flow:**
-- `cover-archetype` (configuration-only UI step)
+- `cover-archetype` (configuration/input step: archetype, author name, trim size, optional KDP template upload, and 1–5 cover style references)
 - `cover-brief` (OpenAI JSON, one per archetype when selected)
 - `cover-generate` (image generation via dedicated cover API)
 - `cover-refine` (iterative image refinement via dedicated cover API)
@@ -286,7 +301,7 @@ Cover is presented in its own sidebar group and runs outside `STAGE_ORDER`, simi
 - `back-cover-export` (dedicated export route for approved back image)
 - `cover-full-wrap` (full-wrap composite export: front + spine + back)
 
-**Status fields:** `coverGenerationStatus` and `paperbackGenerationStatus` track progress (`not-started` / `in-progress` / `complete`).
+**Status and campaign fields:** `coverGenerationStatus` and `paperbackGenerationStatus` track progress (`not-started` / `in-progress` / `complete`). Cover campaign metadata includes `authorName`, `coverTrimSizeId`, `kdpTemplateImageData`, and `coverStyleReferencesJson`.
 
 ---
 
@@ -299,17 +314,19 @@ A+ Content is presented as its own sidebar section after Cover and remains outsi
 - Approved front cover tone is reused as style reference for all A+ prompt generation.
 
 **MVP flow:**
-- `a-plus-setup` (choose module styles)
+- `a-plus-setup` (choose module styles, optionally upload A+ example screenshots, and request AI module suggestions)
 - `a-plus-brief` (structured prompt brief JSON via `/api/generate`)
 - `a-plus-generate` (image generation via dedicated A+ image API)
 - `a-plus-refine` (iterative refinement from a parent candidate)
 - `a-plus-export` (PNG download of approved module image)
 
-**Status field:** `aPlusGenerationStatus` (`not-started` / `in-progress` / `complete`).
+**Status and campaign fields:** `aPlusGenerationStatus` (`not-started` / `in-progress` / `complete`), `approvedAPlusModuleId`, and `aPlusStyleReferencesJson`.
+
+**Canon/campaign alignment:** A+ image generation injects trusted approved canon and cover campaign context server-side so generated modules cannot omit project truth even if a client prompt is thin.
 
 ---
 
-### Canon tooling (Project Dashboard — not numbered in `STAGE_ORDER`)
+### Canon tooling (Writing workspace / Dashboard shortcut — not numbered in `STAGE_ORDER`)
 - **`story-bible`** — consolidated canon document (voice, themes, continuity) generated from approved planning docs
 - **`creative-brief`** — compact brief derived from an approved story bible
 
@@ -350,6 +367,7 @@ Including but not limited to:
 - `POST /api/cover/full-wrap` — composite full wrap export (`pdf` or `png`) from front/back assets + template zones + spine config
 
 ### Dedicated A+ routes (not `/api/generate`)
+- `POST /api/aplus/suggest-modules` — suggest A+ module types from uploaded example screenshots and the module catalog
 - `POST /api/aplus/generate` — gpt-image-2 generation for one or more A+ modules
 - `POST /api/aplus/refine` — gpt-image-2 refinement from a parent A+ module image
 - `GET /api/aplus/export` — approved A+ module PNG download
@@ -382,8 +400,11 @@ Including but not limited to:
 ## UI / UX Requirements
 
 ### Core Layout
-- **Left sidebar:** Workflow stages (progress tracker) — grey (not started), amber (in progress), green (approved); **per-chapter** entries under Writing when chapters exist; **per-pass Review / Revisions** nested under Editorial Analysis / Apply Revisions when multi-pass editorial is on
-- **Cover group in sidebar:** Separate **Front cover** and **Back cover** collapsible sections with unlock gating and tooltip guidance
+- **Workflow rail + inner sidebar:** Top-level rail sections (Planning, Writing, Editing, Marketing, Cover, A+ Content) with section-level locks; inner sidebar shows stage/progress items — grey (not started), amber (in progress), green (approved)
+- **Writing sidebar:** Chapter Outlines, Story Bible & Canon, Write Chapters, and **per-chapter** entries when chapters exist
+- **Editing sidebar:** **per-pass Review / Revisions** nested under Editorial Analysis / Apply Revisions when multi-pass editorial is on
+- **Cover group in sidebar:** Design, Review & Export, and Advanced Wrap entries with unlock gating and tooltip guidance
+- **Shared section nav:** Marketing, Cover, and A+ use a shared pill-style sub-navigation component for local step tabs
 - **Main panel:** Current stage content
 - **Right drawer (collapsible):** Reference docs quick view; “what the AI sees” / context transparency where implemented
 
@@ -391,7 +412,7 @@ Including but not limited to:
 - Title, genre, niche, status
 - Progress relative to `STAGE_ORDER`
 - Key stats: chapters approved, word count, last activity
-- Shortcuts to canon tools (story bible, brief), usage metrics where shown
+- Shortcuts/status cards for canon tools (Story Bible, Creative Brief), usage metrics where shown
 - **Continue where I left off** CTA
 
 ### Chapter Writing Interface
@@ -406,10 +427,10 @@ Including but not limited to:
 - Approve / reject / regenerate with notes
 
 ### Cover Interface
-- Front cover tabs: Archetype Selection → Cover Brief → Generation → Refinement → Export
+- Front cover tabs: Archetype Selection / style references / print inputs → Cover Brief → Generation → Refinement → Export
 - Back/paperback tabs: Back cover brief → generation → refinement → back export → full wrap
 - Prompt transparency in cover brief / generation flows and candidate/version handling for images
-- Full-wrap composer accepts KDP template dimensions/zones and exports PDF/PNG
+- Full-wrap composer derives geometry from the uploaded KDP template and exports PDF/PNG
 
 ### Settings Page
 - OpenAI and Anthropic API keys (optional OpenRouter path per routing config)
@@ -466,11 +487,14 @@ None — single-user local app.
 
 **Project**
 - Identifiers, title, genre, niche, microniche, premise, research
+- Book packaging metadata: `subtitle`, `tagline`, `authorName`
 - `status`: active / completed / archived (per implementation types)
 - `currentStage`: `WorkflowStage`
 - `fullAutoMode`, `fourPassEditorial` (multi-pass editorial flag)
-- Marketing fields, `finalExportedAt`, timestamps
-- Cover fields: `approvedCoverImageId`, `approvedBackCoverImageId`, `coverGenerationStatus`, `paperbackGenerationStatus`, optional `kdpTemplateImageData`
+- Marketing fields: `blurb`, `amazonDescription`, optional cover-tone alignment flags (`marketingAlignCoverToneBlurb`, `marketingAlignCoverToneAmazon`)
+- `finalExportedAt`, timestamps
+- Cover fields: `approvedCoverImageId`, `approvedBackCoverImageId`, `coverGenerationStatus`, `paperbackGenerationStatus`, `coverTrimSizeId`, optional `kdpTemplateImageData`, `coverStyleReferencesJson`
+- A+ fields: `aPlusGenerationStatus`, `approvedAPlusModuleId`, `aPlusStyleReferencesJson`
 
 **Document**
 - `type` includes: `genre`, `niche`, `ending`, `ending-choice`, `characters`, `structure`, `chapter-outlines`, `chapter-scene-plan`, `story-bible`, `creative-brief`, pass-specific `editorial-*` types, legacy `editorial`, plus cover docs (`cover-brief`, `cover-image`, `back-cover-brief`, `cover-full-wrap`)

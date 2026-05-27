@@ -321,6 +321,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         outlinesSourceJson,
         outlineSliceJson: outline ? JSON.stringify(outline) : undefined,
         assembledContext: assembled.text,
+        tropes: assembled.tropes,
       }, chapterUsageOpts);
       const plans = documents.filter(
         (d) => d.type === 'chapter-scene-plan' && d.chapterNumber === chapter.chapterNumber
@@ -351,15 +352,10 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       const approvedChapterVersions = Array.from(chapterVersions.values())
         .flat()
         .filter((version) => version.approved);
-      const structureDoc = getDocumentByType('structure');
-      const charactersDoc = getDocumentByType('characters');
-      const endingDoc = getDocumentByType('ending');
-      const genreDoc = getDocumentByType('genre');
-      const nicheDoc = getDocumentByType('niche');
       const outlines = capOutlineWordTargets(parseChapterOutlines(outlinesDocApproved.content), TARGET_MANUSCRIPT_WORDS);
       const outline = outlines.find((o) => o.chapterNumber === chapter.chapterNumber);
       let chapterTitle = chapter.title;
-      let wordTargetChapter = outline?.wordTarget ?? 3000;
+      const wordTargetChapter = outline?.wordTarget ?? 3000;
       if (outline?.title) chapterTitle = outline.title;
 
       const segments: SceneProseSegment[] = [];
@@ -393,6 +389,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
           chapterTitle,
           sceneCard,
           assembledContext: assembled.text,
+          tropes: assembled.tropes,
           neighborSummaryBefore: neighborBefore,
           neighborSummaryAfter: neighborAfter,
           wordTarget: wt,
@@ -501,6 +498,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         revisionInstructions: check.suggestion || check.evidence || 'Improve this scene per evaluation.',
         acceptanceCriteria: [check.suggestion, check.evidence].filter(Boolean) as string[],
         assembledContext: assembled.text,
+        tropes: assembled.tropes,
         charactersReference: charactersDoc?.content ?? '',
         endingReference: endingDoc?.content ?? '',
         structureReference: structureDoc?.content,
@@ -628,6 +626,7 @@ export default function ChapterPage({ params }: ChapterPageProps) {
         sceneGoal,
         pov,
         assembledContext: assembled.text,
+        tropes: assembled.tropes,
         charactersReference: charactersDoc?.content || '',
         endingReference: endingDoc?.content || '',
         previousChapterSummaries,

@@ -106,12 +106,18 @@ function startNextServer() {
 
 // ── Browser window ─────────────────────────────────────────────────────────
 
+function getWindowIcon() {
+  const iconPath = path.join(__dirname, '..', 'build-resources', 'icon.png');
+  return fs.existsSync(iconPath) ? iconPath : undefined;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
+    icon: getWindowIcon(),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

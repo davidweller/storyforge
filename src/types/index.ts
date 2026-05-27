@@ -233,15 +233,43 @@ export interface StoryBibleSourceRef {
   updatedAt: string;
 }
 
+export interface NicheTrope {
+  name: string;
+  rationale: string;
+}
+
+export interface NicheAvoidEntry {
+  name: string;
+  reason: string;
+}
+
+export interface NicheTropes {
+  mustInclude: NicheTrope[];
+  considerIncluding: NicheTrope[];
+  avoid: NicheAvoidEntry[];
+}
+
+export interface NicheOutput {
+  schemaVersion: 1;
+  readerAvatar: string;
+  emotionalPromise: string;
+  positioningStatement: string;
+  marketingHooks: string[];
+  tropes: NicheTropes;
+  summary: string;
+}
+
 export interface StoryBibleDocument {
   schemaVersion: number;
   storyBibleVersion: number;
   generatedAt: string;
   approvedAt: string | null;
   derivedFrom: StoryBibleSourceRef[];
+  tropesSource?: 'structured-niche' | 'extracted-from-prose';
   logline: string;
   genrePromise: string;
   audiencePromise: string;
+  tropes?: NicheTropes;
   voiceAndStyle: {
     pov: string;
     tense: string;
@@ -324,6 +352,7 @@ export interface AssembledContext {
   sections: ContextSection[];
   warnings: string[];
   tokenEstimate: number;
+  tropes?: NicheTropes;
 }
 
 export interface Chapter {

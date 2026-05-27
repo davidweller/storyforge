@@ -16,6 +16,29 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function TropeListBlock({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ name: string; rationale?: string; reason?: string }>;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-4">
+      <h3 className="text-sm font-semibold text-foreground mb-2">{title}</h3>
+      <ul className="space-y-1 text-sm text-muted-foreground">
+        {items.map((item) => (
+          <li key={`${title}-${item.name}`}>
+            <strong className="text-foreground">{item.name}</strong>
+            {item.rationale || item.reason ? ` - ${item.rationale ?? item.reason}` : ''}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function StoryBibleReadableView({ story }: { story: StoryBibleDocument }) {
   return (
     <div className="space-y-4">
@@ -54,6 +77,14 @@ export function StoryBibleReadableView({ story }: { story: StoryBibleDocument })
       </div>
 
       <ListBlock title="Themes" items={story.themes} />
+
+      {story.tropes ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          <TropeListBlock title="Reader tropes: must include" items={story.tropes.mustInclude} />
+          <TropeListBlock title="Reader tropes: consider" items={story.tropes.considerIncluding} />
+          <TropeListBlock title="Reader tropes: avoid" items={story.tropes.avoid} />
+        </div>
+      ) : null}
 
       <div className="rounded-lg border border-border p-4">
         <h3 className="text-sm font-semibold mb-3">Characters</h3>

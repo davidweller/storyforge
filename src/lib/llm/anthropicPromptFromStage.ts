@@ -59,6 +59,7 @@ export function canonBundleForStage(stage: WorkflowStage, data: Record<string, u
           structureContext: data.structureContext as string,
           genreResearch: data.genreResearch as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+          tropes: data.tropes as import('@/types').NicheTropes | undefined,
           wordTarget: data.wordTarget as number | undefined,
         });
         return {
@@ -77,6 +78,7 @@ export function canonBundleForStage(stage: WorkflowStage, data: Record<string, u
           endingReference: (data.endingReference as string) || '',
           structureReference: data.structureReference as string | undefined,
           nicheReference: data.nicheReference as string | undefined,
+          tropes: data.tropes as import('@/types').NicheTropes | undefined,
           previousChapterContext: data.previousChapterContext as string | undefined,
           nextChapterContext: data.nextChapterContext as string | undefined,
           editorialPass: parseEditorialPass(data.editorialPass),
@@ -107,6 +109,7 @@ export function canonBundleForStage(stage: WorkflowStage, data: Record<string, u
           outlineChapter,
           assembledContext: data.assembledContext as string | undefined,
           outlinesSourceJson: data.outlinesSourceJson as string,
+          tropes: data.tropes as import('@/types').NicheTropes | undefined,
         });
         return {
           userPrompt: p.userPrompt,
@@ -123,6 +126,7 @@ export function canonBundleForStage(stage: WorkflowStage, data: Record<string, u
           neighborSummaryBefore: data.neighborSummaryBefore as string | undefined,
           neighborSummaryAfter: data.neighborSummaryAfter as string | undefined,
           assembledContext: data.assembledContext as string | undefined,
+          tropes: data.tropes as import('@/types').NicheTropes | undefined,
           wordTarget: data.wordTarget as number | undefined,
         });
         return {

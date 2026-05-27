@@ -1,4 +1,5 @@
-import type { StoryBibleSourceRef } from '@/types';
+import type { NicheTropes, StoryBibleSourceRef } from '@/types';
+import { tryParseNicheOutput } from '@/lib/generation/schemas';
 
 export const STORY_BIBLE_SYSTEM = `You are a senior story editor building durable canon for a novel. You convert approved planning artifacts into a concise, structured Story Bible that future drafting and editing must obey.
 
@@ -7,6 +8,11 @@ Return only valid JSON that matches the requested contract. Do not include markd
 function referenceSection(label: string, content: string | undefined): string {
   if (!content?.trim()) return '';
   return `\n### ${label}\n${content.trim()}\n`;
+}
+
+function formatStructuredTropes(tropes: NicheTropes | undefined): string {
+  if (!tropes) return '';
+  return `\n### Tropes (structured from niche)\n${JSON.stringify(tropes, null, 2)}\n`;
 }
 
 export function buildStoryBiblePrompt(params: {
@@ -39,6 +45,8 @@ export function buildStoryBiblePrompt(params: {
     chapterOutlinesReference,
     derivedFrom,
   } = params;
+  const structuredNiche = tryParseNicheOutput(nicheReference)?.niche;
+  const tropesSource = structuredNiche?.tropes ? 'structured-niche' : 'extracted-from-prose';
 
   return `Create a Story Bible for this novel from the approved planning artifacts (chapter outlines must already be present—they anchor per-chapter beats and scene promises).
 
@@ -54,6 +62,7 @@ ${JSON.stringify(derivedFrom, null, 2)}
 ## Approved Planning Artifacts
 ${referenceSection('Genre Research', genreResearch)}
 ${referenceSection('Niche / Audience Positioning', nicheReference)}
+${formatStructuredTropes(structuredNiche?.tropes)}
 ${referenceSection('Selected Ending', endingChoice)}
 ${referenceSection('Ending Blueprint', endingReference)}
 ${referenceSection('Characters', charactersReference)}
@@ -68,19 +77,35 @@ Hard constraints:
 - Convert style guidance into explicit POV, tense, narrative distance, style rules, and avoid rules.
 - Identify unresolved threads and ending promises that future chapters must preserve or pay off.
 - Keep each array item concise enough to be reused in prompts.
+- Story Bible schemaVersion 2 adds durable reader tropes. Fill the top-level "tropes" field.
+${structuredNiche?.tropes
+  ? '- Preserve every entry from the supplied structured tropes object exactly in the output "tropes" field. Do not invent new tropes, rename existing ones, or move entries between categories.'
+  : '- No structured trope object was supplied. Extract the best-effort trope lists from the niche prose and set "tropesSource" to "extracted-from-prose".'}
 
 Return only valid JSON in this exact shape:
 
 {
   "storyBible": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "storyBibleVersion": 1,
     "generatedAt": "${new Date().toISOString()}",
     "approvedAt": null,
     "derivedFrom": ${JSON.stringify(derivedFrom, null, 4)},
+    "tropesSource": "${tropesSource}",
     "logline": "string",
     "genrePromise": "string",
     "audiencePromise": "string",
+    "tropes": {
+      "mustInclude": [
+        { "name": "string", "rationale": "string" }
+      ],
+      "considerIncluding": [
+        { "name": "string", "rationale": "string" }
+      ],
+      "avoid": [
+        { "name": "string", "reason": "string" }
+      ]
+    },
     "voiceAndStyle": {
       "pov": "string",
       "tense": "string",

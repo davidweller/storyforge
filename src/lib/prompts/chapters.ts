@@ -10,7 +10,8 @@ export const CHAPTERS_SYSTEM = `You are a skilled fiction writer with a gift for
 Write prose that transports readers and makes them feel deeply.`;
 
 import { TARGET_MANUSCRIPT_WORDS } from '@/lib/constants';
-import type { EditorialPass } from '@/types';
+import type { EditorialPass, NicheTropes } from '@/types';
+import { formatRequiredReaderTropes } from '@/lib/niche/tropes';
 import {
   type PromptParts,
   normalizeCanonRaw,
@@ -41,6 +42,7 @@ export function buildChapterOutlinesPrompt(params: {
   endingReference: string;
   genreResearch?: string;
   nicheReference?: string;
+  tropes?: NicheTropes;
   maxTotalWords?: number;
 }): string {
   const {
@@ -51,8 +53,10 @@ export function buildChapterOutlinesPrompt(params: {
     endingReference,
     genreResearch,
     nicheReference,
+    tropes,
     maxTotalWords = TARGET_MANUSCRIPT_WORDS,
   } = params;
+  const tropesSection = formatRequiredReaderTropes(tropes);
 
   let prompt = `Create a complete Chapter Outlines document for this ${genre} novel based on the Plot Blueprint (Save the Cat beat sheet).
 
@@ -68,6 +72,7 @@ export function buildChapterOutlinesPrompt(params: {
 ## Plot Blueprint (Story Structure)
 ${structureReference}
 
+${tropesSection ? `${tropesSection}\n\n` : ''}
 ## Reference Materials
 
 ${genreResearch ? `**Genre Research & Market Context:**
@@ -205,6 +210,7 @@ export function buildChapterPromptParts(params: {
   structureContext: string;
   genreResearch?: string;
   nicheReference?: string;
+  tropes?: NicheTropes;
   wordTarget?: number;
 }): PromptParts {
   const {
@@ -221,10 +227,12 @@ export function buildChapterPromptParts(params: {
     structureContext,
     genreResearch,
     nicheReference,
+    tropes,
     wordTarget = 3000,
   } = params;
 
   const canon = normalizeCanonRaw(assembledContext);
+  const tropesSection = formatRequiredReaderTropes(tropes);
 
   let userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for this ${genre} novel.
 
@@ -243,6 +251,7 @@ ${pov ? `**POV Character:** ${pov}` : ''}
 
 **Target Word Count:** ~${wordTarget} words
 
+${tropesSection ? `${tropesSection}\n\n` : ''}
 ${canon ? '## Legacy Reference Materials (fallback only)\n\nUse these only when the canon context above is missing a needed detail.\n' : '## Reference Materials'}
 
 ${genreResearch ? `**Genre Research & Market Context:**
@@ -324,6 +333,7 @@ export function buildChapterPrompt(params: {
   structureContext: string;
   genreResearch?: string;
   nicheReference?: string;
+  tropes?: NicheTropes;
   wordTarget?: number;
 }): string {
   const parts = buildChapterPromptParts(params);
@@ -355,6 +365,7 @@ export function buildChapterRevisionPromptParts(params: {
   endingReference: string;
   structureReference?: string;
   nicheReference?: string;
+  tropes?: NicheTropes;
   previousChapterContext?: string;
   nextChapterContext?: string;
   editorialPass?: EditorialPass;
@@ -370,6 +381,7 @@ export function buildChapterRevisionPromptParts(params: {
     endingReference,
     structureReference,
     nicheReference,
+    tropes,
     previousChapterContext,
     nextChapterContext,
     editorialPass = 'structural',
@@ -377,6 +389,7 @@ export function buildChapterRevisionPromptParts(params: {
   } = params;
 
   const canon = normalizeCanonRaw(assembledContext);
+  const tropesSection = formatRequiredReaderTropes(tropes);
 
   const passNote = REVISION_PASS_NOTE[editorialPass];
 
@@ -444,6 +457,7 @@ ${acceptanceCriteria.length > 0
 
 These reference documents define the established canon. Ensure your revisions align with these:
 
+${tropesSection ? `${tropesSection}\n\n` : ''}
 ${charactersReference ? `**Character Profiles${canon ? ' (fallback only)' : ''}:**
 ${charactersReference}
 
@@ -474,6 +488,7 @@ export function buildChapterRevisionPrompt(params: {
   endingReference: string;
   structureReference?: string;
   nicheReference?: string;
+  tropes?: NicheTropes;
   previousChapterContext?: string;
   nextChapterContext?: string;
   editorialPass?: EditorialPass;

@@ -1,3 +1,9 @@
+import type { NicheTropes } from '@/types';
+
+function formatTropeHandles(items: Array<{ name: string }>): string {
+  return items.map((trope) => `- ${trope.name}`).join('\n');
+}
+
 export const BLURB_SYSTEM = `Role
 You are a professional fiction copywriter specialising in high-conversion back-of-the-book blurbs.
 
@@ -34,6 +40,7 @@ export function buildBlurbPrompt(params: {
   charactersReference?: string;
   /** Approved Story Bible + Creative Brief excerpts (primary narrative canon). */
   approvedCanonContext?: string;
+  tropes?: NicheTropes;
   /** When set (opt-in), append approved cover visual tone for alignment. */
   coverToneBlock?: string;
 }): string {
@@ -47,6 +54,7 @@ export function buildBlurbPrompt(params: {
     plotBlueprint,
     charactersReference,
     approvedCanonContext,
+    tropes,
     coverToneBlock,
   } = params;
 
@@ -73,6 +81,10 @@ export function buildBlurbPrompt(params: {
 
   if (readerTargeting) {
     prompt += `\n\n**Reader Targeting & Audience:**\n${readerTargeting.slice(0, 1000)}`;
+  }
+
+  if (tropes) {
+    prompt += `\n\n**Reader tropes (must-includes):**\n${formatTropeHandles(tropes.mustInclude)}\n\n**Reader tropes (avoid):**\n${formatTropeHandles(tropes.avoid)}`;
   }
 
   if (marketAnalysis) {
@@ -114,6 +126,7 @@ export function buildAmazonDescriptionPrompt(params: {
   blurb?: string;
   /** Approved Story Bible + Creative Brief excerpts (primary narrative canon). */
   approvedCanonContext?: string;
+  tropes?: NicheTropes;
   coverToneBlock?: string;
 }): string {
   const {
@@ -127,6 +140,7 @@ export function buildAmazonDescriptionPrompt(params: {
     charactersReference,
     blurb,
     approvedCanonContext,
+    tropes,
     coverToneBlock,
   } = params;
 
@@ -155,6 +169,10 @@ export function buildAmazonDescriptionPrompt(params: {
     prompt += `\n\n**Target Audience & Tropes:**\n${readerTargeting.slice(0, 1500)}`;
   }
 
+  if (tropes) {
+    prompt += `\n\n**Structured reader tropes:**\nMust include:\n${formatTropeHandles(tropes.mustInclude)}\n\nConsider including:\n${formatTropeHandles(tropes.considerIncluding)}\n\nAvoid:\n${formatTropeHandles(tropes.avoid)}`;
+  }
+
   if (marketAnalysis) {
     prompt += `\n\n**Market Analysis:**\n${marketAnalysis.slice(0, 1000)}`;
   }
@@ -173,6 +191,9 @@ export function buildAmazonDescriptionPrompt(params: {
 3. "Perfect for readers who love:" then bullets using "- ".
 
 Strictly adhere to character names from references and approved canon. Output plain text only.`;
+  if (tropes) {
+    prompt += `\n\nUse the supplied reader tropes as the spine of the "Perfect for readers who love" bullet list. Every must-include trope must appear in the bullets, phrased as a reader-facing promise (e.g. "Slow-burn enemies to lovers with a redemption arc"). Add 2-3 bullets from considerIncluding where they reinforce the must-includes. Do not list tropes from the avoid set.`;
+  }
 
   return prompt;
 }

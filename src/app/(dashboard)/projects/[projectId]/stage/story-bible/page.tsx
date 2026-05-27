@@ -58,6 +58,8 @@ export default function StoryBibleStagePage({ params }: { params: Promise<{ proj
       return null;
     }
   }, [storyBibleDraft]);
+  const storyBibleNeedsTropesRefresh =
+    !!parsedReadable && (parsedReadable.schemaVersion < 2 || !('tropes' in parsedReadable));
 
   useEffect(() => {
     setStoryBibleDraft(latestStoryBible?.content ?? '');
@@ -287,6 +289,12 @@ export default function StoryBibleStagePage({ params }: { params: Promise<{ proj
             <Link href={`/projects/${projectId}/stage/chapter-outlines`} className="underline text-accent">
               Open Chapter Outlines
             </Link>
+          </p>
+        )}
+
+        {storyBibleNeedsTropesRefresh && (
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Story Bible needs refresh to include canonical reader tropes. Regenerate it after approving a structured niche document.
           </p>
         )}
 

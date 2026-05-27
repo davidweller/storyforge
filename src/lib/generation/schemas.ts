@@ -45,6 +45,34 @@ export const ChapterSummaryOutputSchema = z.object({
   summary: z.string().min(1),
 });
 
+export const NicheTropeSchema = z.object({
+  name: z.string().min(1),
+  rationale: z.string().min(1),
+});
+
+export const NicheAvoidEntrySchema = z.object({
+  name: z.string().min(1),
+  reason: z.string().min(1),
+});
+
+export const NicheTropesSchema = z.object({
+  mustInclude: z.array(NicheTropeSchema).min(5).max(7),
+  considerIncluding: z.array(NicheTropeSchema).min(3).max(5),
+  avoid: z.array(NicheAvoidEntrySchema).min(3).max(5),
+});
+
+export const NicheOutputSchema = z.object({
+  niche: z.object({
+    schemaVersion: z.literal(1),
+    readerAvatar: z.string().min(1),
+    emotionalPromise: z.string().min(1),
+    positioningStatement: z.string().min(1),
+    marketingHooks: z.array(z.string().min(1)).min(1),
+    tropes: NicheTropesSchema,
+    summary: z.string().min(1),
+  }),
+});
+
 /** Aligns with SOURCE_DOCUMENT_TYPES in assembler (story-bible provenance). */
 const StoryBibleSourceDocumentTypeSchema = z.enum([
   'genre',
@@ -63,8 +91,7 @@ export const StoryBibleSourceRefSchema = z.object({
   updatedAt: z.string().min(1),
 });
 
-export const StoryBibleDocumentSchema = z.object({
-  schemaVersion: z.literal(1),
+const StoryBibleDocumentBaseSchema = z.object({
   storyBibleVersion: z.number().int().positive(),
   generatedAt: z.string().min(1),
   approvedAt: z.string().nullable(),
@@ -109,8 +136,27 @@ export const StoryBibleDocumentSchema = z.object({
   forbiddenChanges: z.array(z.string().min(1)).default([]),
 });
 
+export const StoryBibleDocumentV1Schema = StoryBibleDocumentBaseSchema.extend({
+  schemaVersion: z.literal(1),
+});
+
+export const StoryBibleDocumentV2Schema = StoryBibleDocumentBaseSchema.extend({
+  schemaVersion: z.literal(2),
+  tropesSource: z.enum(['structured-niche', 'extracted-from-prose']),
+  tropes: NicheTropesSchema,
+});
+
+export const StoryBibleDocumentSchema = z.discriminatedUnion('schemaVersion', [
+  StoryBibleDocumentV1Schema,
+  StoryBibleDocumentV2Schema,
+]);
+
 export const StoryBibleOutputSchema = z.object({
   storyBible: StoryBibleDocumentSchema,
+});
+
+export const GeneratedStoryBibleOutputSchema = z.object({
+  storyBible: StoryBibleDocumentV2Schema,
 });
 
 export const CreativeBriefDocumentSchema = z.object({
@@ -166,9 +212,12 @@ export const RevisionVerificationSchema = z.object({
 
 export type EndingConcept = z.infer<typeof EndingConceptSchema> & { id: string };
 export type ChapterOutline = z.infer<typeof ChapterOutlineSchema>;
+export type NicheOutput = z.infer<typeof NicheOutputSchema>;
+export type NicheTropes = z.infer<typeof NicheTropesSchema>;
 export type RevisionQueue = z.infer<typeof RevisionQueueOutputSchema>;
 export type RevisionVerification = z.infer<typeof RevisionVerificationSchema>;
 export type StoryBibleOutput = z.infer<typeof StoryBibleOutputSchema>;
+export type GeneratedStoryBibleOutput = z.infer<typeof GeneratedStoryBibleOutputSchema>;
 export type CreativeBriefOutput = z.infer<typeof CreativeBriefOutputSchema>;
 
 function extractJsonCandidate(content: string): unknown {
@@ -300,8 +349,25 @@ export function parseChapterSummary(content: string): string {
   }
 }
 
+export function parseNicheOutput(content: string): NicheOutput {
+  return NicheOutputSchema.parse(extractJsonCandidate(content));
+}
+
+export function tryParseNicheOutput(content: string | undefined | null): NicheOutput | null {
+  if (!content?.trim()) return null;
+  try {
+    return parseNicheOutput(content);
+  } catch {
+    return null;
+  }
+}
+
 export function parseStoryBible(content: string): StoryBibleOutput {
   return StoryBibleOutputSchema.parse(extractJsonCandidate(content));
+}
+
+export function parseGeneratedStoryBible(content: string): GeneratedStoryBibleOutput {
+  return GeneratedStoryBibleOutputSchema.parse(extractJsonCandidate(content));
 }
 
 export function parseCreativeBrief(content: string): CreativeBriefOutput {

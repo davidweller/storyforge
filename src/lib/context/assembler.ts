@@ -14,6 +14,7 @@ import type {
 import { parseCreativeBrief, parseChapterOutlines, parseStoryBible } from '@/lib/generation/schemas';
 import { estimateTokens } from '@/lib/utils';
 import { contextBlock } from '@/lib/prompts/utils';
+import { formatTropesForCanon, resolveCanonicalTropes } from '@/lib/niche/tropes';
 
 const SOURCE_DOCUMENT_TYPES: DocumentType[] = [
   'genre',
@@ -305,6 +306,7 @@ export function assembleContext(input: AssembleContextInput): AssembledContext {
   const storyBibleDoc = latestApprovedDocument(input.documents, 'story-bible');
   const creativeBriefDoc = latestApprovedDocument(input.documents, 'creative-brief');
   const storyBible = parseStoryBibleDocument(storyBibleDoc);
+  const tropes = resolveCanonicalTropes(input.documents);
   const storyBibleStale = storyBibleDoc ? isStoryBibleStale(storyBibleDoc, input.documents) : true;
   const creativeBriefStale = creativeBriefDoc ? isCreativeBriefStale(creativeBriefDoc, storyBibleDoc) : true;
 
@@ -333,6 +335,7 @@ export function assembleContext(input: AssembleContextInput): AssembledContext {
   const bibleSections = storyBibleSections(storyBible, input.currentChapter);
 
   addSection(sections, warnings, budget, 'project_brief', 'Project Brief', projectBrief);
+  addSection(sections, warnings, budget, 'reader_tropes', 'Reader Tropes', formatTropesForCanon(tropes));
   addSection(sections, warnings, budget, 'creative_brief', 'Creative Brief', creativeBrief);
   addSection(sections, warnings, budget, 'style_sheet', 'Style Sheet', bibleSections.styleSheet);
   addSection(sections, warnings, budget, 'character_cards', 'Character Cards', bibleSections.characterCards);
@@ -386,5 +389,6 @@ export function assembleContext(input: AssembleContextInput): AssembledContext {
     sections,
     warnings,
     tokenEstimate: estimateTokens(text),
+    tropes,
   };
 }
