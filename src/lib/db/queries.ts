@@ -18,6 +18,8 @@ import type {
   CoverGenerationJobInput,
   CoverGenerationJobResult,
   CoverJobStatus,
+  SerialChapter,
+  SerialChapterVersion,
 } from '@/types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,6 +27,16 @@ import type {
 function now(): string {
   return new Date().toISOString();
 }
+
+const KDP_LOCKED_DOCUMENT_TYPES = new Set<DocumentType>([
+  'story-bible',
+  'creative-brief',
+  'chapter-outlines',
+  'characters',
+  'structure',
+  'ending',
+  'ending-choice',
+]);
 
 function toDate(iso: string | null | undefined): Date {
   return iso ? new Date(iso) : new Date();
@@ -58,6 +70,15 @@ function rowToProject(row: Record<string, unknown>): Project {
     status: row.status as Project['status'],
     currentStage: row.currentStage as Project['currentStage'],
     fullAutoMode: Boolean(row.fullAutoMode),
+    serialisationEnabled: Boolean(row.serialisationEnabled),
+    serialisationEnteredAt: row.serialisationEnteredAt ? toDate(row.serialisationEnteredAt as string) : undefined,
+    serialisationStatus:
+      typeof row.serialisationStatus === 'string'
+        ? (row.serialisationStatus as import('@/types').SerialisationStatus)
+        : 'not_started',
+    serialSourceDocumentId: (row.serialSourceDocumentId as string | null) ?? undefined,
+    serialBibleId: (row.serialBibleId as string | null) ?? undefined,
+    royalRoadFictionId: (row.royalRoadFictionId as string | null) ?? undefined,
     fourPassEditorial: row.fourPassEditorial !== undefined && row.fourPassEditorial !== null
       ? Boolean(row.fourPassEditorial)
       : false,
@@ -91,6 +112,15 @@ function rowToProject(row: Record<string, unknown>): Project {
     createdAt: toDate(row.createdAt as string),
     updatedAt: toDate(row.updatedAt as string),
   };
+}
+
+async function assertKdpCanonWritable(projectId: string, reason: string): Promise<void> {
+  const project = await getProject(projectId);
+  if (!project) return;
+  const status = project.serialisationStatus ?? 'not_started';
+  if (status === 'in_progress' || status === 'completed') {
+    throw new Error(`Serialisation is active. ${reason}`);
+  }
 }
 
 function rowToDocument(row: Record<string, unknown>): ProjectDocument {
@@ -181,6 +211,10 @@ function rowToRevisionTask(row: Record<string, unknown>): RevisionTask {
     id: row.id as string,
     projectId: row.projectId as string,
     chapterNumber: row.chapterNumber as number,
+    serialScope: Boolean(row.serialScope),
+    serialChapterId: (row.serialChapterId as string | null) ?? undefined,
+    triggeredByDeltaId: (row.triggeredByDeltaId as string | null) ?? undefined,
+    triggeredByFeedbackId: (row.triggeredByFeedbackId as string | null) ?? undefined,
     editPass,
     issueIds: JSON.parse(row.issueIds as string) as string[],
     instructions: row.instructions as string,
@@ -188,6 +222,34 @@ function rowToRevisionTask(row: Record<string, unknown>): RevisionTask {
     status: row.status as RevisionTask['status'],
     createdAt: toDate(row.createdAt as string),
     updatedAt: toDate(row.updatedAt as string),
+  };
+}
+
+function rowToSerialChapter(row: Record<string, unknown>): SerialChapter {
+  return {
+    id: row.id as string,
+    projectId: row.projectId as string,
+    ordinal: row.ordinal as number,
+    title: row.title as string,
+    hookScore: (row.hookScore as number | null) ?? undefined,
+    hookCategoriesJson: (row.hookCategoriesJson as string | null) ?? undefined,
+    mappingId: row.mappingId as string,
+    createdAt: toDate(row.createdAt as string),
+  };
+}
+
+function rowToSerialChapterVersion(row: Record<string, unknown>): SerialChapterVersion {
+  return {
+    id: row.id as string,
+    serialChapterId: row.serialChapterId as string,
+    version: row.version as number,
+    parentVersionId: (row.parentVersionId as string | null) ?? undefined,
+    content: row.content as string,
+    preNote: (row.preNote as string | null) ?? undefined,
+    postNote: (row.postNote as string | null) ?? undefined,
+    triggeredByDeltaId: (row.triggeredByDeltaId as string | null) ?? undefined,
+    triggeredByFeedbackId: (row.triggeredByFeedbackId as string | null) ?? undefined,
+    createdAt: toDate(row.createdAt as string),
   };
 }
 
@@ -203,9 +265,11 @@ export async function createProject(
   db.prepare(`
     INSERT INTO projects
       (id, title, genre, niche, microniche, premise, research, status, currentStage,
-       fullAutoMode, fourPassEditorial, finalExportedAt, blurb, amazonDescription, coverTrimSizeId, createdAt, updatedAt)
+       fullAutoMode, fourPassEditorial, finalExportedAt, serialisationEnabled, serialisationEnteredAt,
+       serialisationStatus, serialSourceDocumentId, serialBibleId, royalRoadFictionId,
+       blurb, amazonDescription, coverTrimSizeId, createdAt, updatedAt)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.title ?? null,
@@ -219,6 +283,12 @@ export async function createProject(
     data.fullAutoMode ? 1 : 0,
     data.fourPassEditorial !== false ? 1 : 0,
     optionalDateToIso(data.finalExportedAt ?? null),
+    data.serialisationEnabled ? 1 : 0,
+    optionalDateToIso(data.serialisationEnteredAt ?? null),
+    data.serialisationStatus ?? 'not_started',
+    data.serialSourceDocumentId ?? null,
+    data.serialBibleId ?? null,
+    data.royalRoadFictionId ?? null,
     data.blurb ?? null,
     data.amazonDescription ?? null,
     data.coverTrimSizeId ?? null,
@@ -264,6 +334,30 @@ export async function updateProject(
   if (data.finalExportedAt !== undefined) {
     fields.push('finalExportedAt = ?');
     values.push(optionalDateToIso(data.finalExportedAt ?? null));
+  }
+  if (data.serialisationEnabled !== undefined) {
+    fields.push('serialisationEnabled = ?');
+    values.push(data.serialisationEnabled ? 1 : 0);
+  }
+  if (data.serialisationEnteredAt !== undefined) {
+    fields.push('serialisationEnteredAt = ?');
+    values.push(optionalDateToIso(data.serialisationEnteredAt ?? null));
+  }
+  if (data.serialisationStatus !== undefined) {
+    fields.push('serialisationStatus = ?');
+    values.push(data.serialisationStatus);
+  }
+  if (data.serialSourceDocumentId !== undefined) {
+    fields.push('serialSourceDocumentId = ?');
+    values.push(data.serialSourceDocumentId ?? null);
+  }
+  if (data.serialBibleId !== undefined) {
+    fields.push('serialBibleId = ?');
+    values.push(data.serialBibleId ?? null);
+  }
+  if (data.royalRoadFictionId !== undefined) {
+    fields.push('royalRoadFictionId = ?');
+    values.push(data.royalRoadFictionId ?? null);
   }
   if (data.blurb !== undefined) { fields.push('blurb = ?'); values.push(data.blurb ?? null); }
   if (data.amazonDescription !== undefined) { fields.push('amazonDescription = ?'); values.push(data.amazonDescription ?? null); }
@@ -327,11 +421,110 @@ export async function deleteProject(projectId: string): Promise<void> {
   db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
 }
 
+function withForkMetadata(content: string, forkedFromBibleId: string): string {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return JSON.stringify({ ...parsed, forkedFromBibleId }, null, 2);
+    }
+  } catch {
+    // Keep original content when it's not valid JSON.
+  }
+  return content;
+}
+
+export async function enterSerialisation(projectId: string): Promise<{ serialBibleId: string }> {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    const project = db
+      .prepare('SELECT id, finalExportedAt FROM projects WHERE id = ?')
+      .get(projectId) as { id: string; finalExportedAt: string | null } | undefined;
+    if (!project) throw new Error('Project not found');
+    if (!project.finalExportedAt) throw new Error('Serialisation requires final export first');
+
+    const sourceBible = db
+      .prepare(
+        `SELECT * FROM documents
+         WHERE projectId = ? AND type = 'story-bible' AND approved = 1
+         ORDER BY version DESC LIMIT 1`
+      )
+      .get(projectId) as Record<string, unknown> | undefined;
+    if (!sourceBible) throw new Error('No approved story-bible found to fork');
+
+    const serialBibleId = randomUUID();
+    const ts = now();
+    db.prepare(`
+      INSERT INTO documents (id, projectId, type, chapterNumber, content, version, approved, createdAt, updatedAt)
+      VALUES (?, ?, 'story-bible-rr', NULL, ?, 1, 1, ?, ?)
+    `).run(
+      serialBibleId,
+      projectId,
+      withForkMetadata(sourceBible.content as string, sourceBible.id as string),
+      ts,
+      ts
+    );
+
+    db.prepare(`
+      UPDATE projects
+      SET serialisationEnabled = 1,
+          serialisationEnteredAt = ?,
+          serialisationStatus = 'in_progress',
+          serialBibleId = ?,
+          updatedAt = ?
+      WHERE id = ?
+    `).run(ts, serialBibleId, ts, projectId);
+
+    return { serialBibleId };
+  });
+  return tx();
+}
+
+export async function discardSerialisation(projectId: string): Promise<void> {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    const project = db
+      .prepare('SELECT serialisationEnteredAt FROM projects WHERE id = ?')
+      .get(projectId) as { serialisationEnteredAt: string | null } | undefined;
+    if (!project) throw new Error('Project not found');
+
+    db.prepare('DELETE FROM serial_chapter_versions WHERE serialChapterId IN (SELECT id FROM serial_chapters WHERE projectId = ?)').run(projectId);
+    db.prepare('DELETE FROM serial_chapters WHERE projectId = ?').run(projectId);
+    db.prepare('DELETE FROM serial_feedback WHERE projectId = ?').run(projectId);
+    db.prepare('DELETE FROM bible_deltas WHERE projectId = ?').run(projectId);
+    db.prepare('DELETE FROM revision_tasks WHERE projectId = ? AND serialScope = 1').run(projectId);
+    db.prepare(`DELETE FROM documents WHERE projectId = ? AND type IN ('story-bible-rr', 'serial-chapter-mapping')`).run(projectId);
+    if (project.serialisationEnteredAt) {
+      db.prepare(`DELETE FROM documents WHERE projectId = ? AND type = 'source-manuscript' AND createdAt > ?`).run(
+        projectId,
+        project.serialisationEnteredAt
+      );
+    }
+
+    db.prepare(`
+      UPDATE projects
+      SET serialisationEnabled = 0,
+          serialisationStatus = 'not_started',
+          serialisationEnteredAt = NULL,
+          serialSourceDocumentId = NULL,
+          serialBibleId = NULL,
+          updatedAt = ?
+      WHERE id = ?
+    `).run(now(), projectId);
+  });
+  tx();
+}
+
 // ── Project Documents ─────────────────────────────────────────────────────────
 
 export async function createDocument(
   data: Omit<ProjectDocument, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
+  if (KDP_LOCKED_DOCUMENT_TYPES.has(data.type)) {
+    await assertKdpCanonWritable(
+      data.projectId,
+      'Discard RR canon to edit KDP-side canon documents.'
+    );
+  }
   const db = getDb();
   const id = randomUUID();
   const ts = now();
@@ -380,6 +573,18 @@ export async function updateDocument(
   data: Partial<Omit<ProjectDocument, 'id' | 'projectId' | 'createdAt'>>
 ): Promise<void> {
   const db = getDb();
+  const existing = db
+    .prepare('SELECT projectId, type FROM documents WHERE id = ?')
+    .get(documentId) as { projectId: string; type: DocumentType } | undefined;
+  if (existing) {
+    const effectiveType = (data.type ?? existing.type) as DocumentType;
+    if (KDP_LOCKED_DOCUMENT_TYPES.has(effectiveType)) {
+      await assertKdpCanonWritable(
+        existing.projectId,
+        'Discard RR canon to edit KDP-side canon documents.'
+      );
+    }
+  }
   const fields: string[] = [];
   const values: unknown[] = [];
 
@@ -451,6 +656,10 @@ export async function updateChapter(
 export async function createChapterVersion(
   data: Omit<ChapterVersion, 'id' | 'createdAt'>
 ): Promise<string> {
+  await assertKdpCanonWritable(
+    data.projectId,
+    'Discard RR canon to edit KDP chapter versions.'
+  );
   const db = getDb();
   const id = randomUUID();
   const ts = now();
@@ -504,6 +713,15 @@ export async function updateChapterVersion(
   data: Partial<Omit<ChapterVersion, 'id' | 'chapterId' | 'createdAt'>>
 ): Promise<void> {
   const db = getDb();
+  const row = db
+    .prepare('SELECT projectId FROM chapter_versions WHERE id = ?')
+    .get(versionId) as { projectId: string } | undefined;
+  if (row?.projectId) {
+    await assertKdpCanonWritable(
+      row.projectId,
+      'Discard RR canon to edit KDP chapter versions.'
+    );
+  }
   const fields: string[] = [];
   const values: unknown[] = [];
 
@@ -642,16 +860,35 @@ export async function createRevisionTask(
   data: Omit<RevisionTask, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   const db = getDb();
+  if (data.serialScope && data.serialChapterId) {
+    const existingOpen = db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM revision_tasks
+         WHERE serialChapterId = ?
+           AND serialScope = 1
+           AND status IN ('queued', 'in_progress')`
+      )
+      .get(data.serialChapterId) as { count: number } | undefined;
+    if ((existingOpen?.count ?? 0) > 0) {
+      throw new Error('Serial chapter already has an open revision task.');
+    }
+  }
   const id = randomUUID();
   const ts = now();
   db.prepare(`
     INSERT INTO revision_tasks
-      (id, projectId, chapterNumber, editPass, issueIds, instructions, acceptanceCriteria, status, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, projectId, chapterNumber, serialScope, serialChapterId, triggeredByDeltaId, triggeredByFeedbackId,
+       editPass, issueIds, instructions, acceptanceCriteria, status, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     data.projectId,
     data.chapterNumber,
+    data.serialScope ? 1 : 0,
+    data.serialChapterId ?? null,
+    data.triggeredByDeltaId ?? null,
+    data.triggeredByFeedbackId ?? null,
     data.editPass,
     JSON.stringify(data.issueIds),
     data.instructions,
@@ -696,6 +933,10 @@ export async function updateRevisionTask(
   if (data.acceptanceCriteria !== undefined) { fields.push('acceptanceCriteria = ?'); values.push(JSON.stringify(data.acceptanceCriteria)); }
   if (data.issueIds !== undefined) { fields.push('issueIds = ?'); values.push(JSON.stringify(data.issueIds)); }
   if (data.editPass !== undefined) { fields.push('editPass = ?'); values.push(data.editPass); }
+  if (data.serialScope !== undefined) { fields.push('serialScope = ?'); values.push(data.serialScope ? 1 : 0); }
+  if (data.serialChapterId !== undefined) { fields.push('serialChapterId = ?'); values.push(data.serialChapterId ?? null); }
+  if (data.triggeredByDeltaId !== undefined) { fields.push('triggeredByDeltaId = ?'); values.push(data.triggeredByDeltaId ?? null); }
+  if (data.triggeredByFeedbackId !== undefined) { fields.push('triggeredByFeedbackId = ?'); values.push(data.triggeredByFeedbackId ?? null); }
 
   if (fields.length === 0) return;
   fields.push('updatedAt = ?');
@@ -703,6 +944,104 @@ export async function updateRevisionTask(
   values.push(taskId);
 
   db.prepare(`UPDATE revision_tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+}
+
+// ── Serial chapters ───────────────────────────────────────────────────────────
+
+export async function createSerialChapter(data: {
+  projectId: string;
+  ordinal: number;
+  title: string;
+  mappingId: string;
+  hookScore?: number | null;
+  hookCategoriesJson?: string | null;
+}): Promise<string> {
+  const db = getDb();
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO serial_chapters (id, projectId, ordinal, title, hookScore, hookCategoriesJson, mappingId, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    data.projectId,
+    data.ordinal,
+    data.title,
+    data.hookScore ?? null,
+    data.hookCategoriesJson ?? null,
+    data.mappingId,
+    now()
+  );
+  return id;
+}
+
+export async function getProjectSerialChapters(projectId: string): Promise<SerialChapter[]> {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT * FROM serial_chapters WHERE projectId = ? ORDER BY ordinal ASC')
+    .all(projectId) as Record<string, unknown>[];
+  return rows.map(rowToSerialChapter);
+}
+
+export async function getSerialChapter(serialChapterId: string): Promise<SerialChapter | null> {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT * FROM serial_chapters WHERE id = ?')
+    .get(serialChapterId) as Record<string, unknown> | undefined;
+  return row ? rowToSerialChapter(row) : null;
+}
+
+export async function createSerialChapterVersion(data: {
+  serialChapterId: string;
+  version: number;
+  content: string;
+  parentVersionId?: string | null;
+  preNote?: string | null;
+  postNote?: string | null;
+  triggeredByDeltaId?: string | null;
+  triggeredByFeedbackId?: string | null;
+}): Promise<string> {
+  const db = getDb();
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO serial_chapter_versions
+      (id, serialChapterId, version, parentVersionId, content, preNote, postNote, triggeredByDeltaId, triggeredByFeedbackId, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    data.serialChapterId,
+    data.version,
+    data.parentVersionId ?? null,
+    data.content,
+    data.preNote ?? null,
+    data.postNote ?? null,
+    data.triggeredByDeltaId ?? null,
+    data.triggeredByFeedbackId ?? null,
+    now()
+  );
+  return id;
+}
+
+export async function getLatestSerialChapterVersion(
+  serialChapterId: string
+): Promise<SerialChapterVersion | null> {
+  const db = getDb();
+  const row = db
+    .prepare(
+      'SELECT * FROM serial_chapter_versions WHERE serialChapterId = ? ORDER BY version DESC LIMIT 1'
+    )
+    .get(serialChapterId) as Record<string, unknown> | undefined;
+  return row ? rowToSerialChapterVersion(row) : null;
+}
+
+export async function resetProjectSerialChapters(projectId: string): Promise<void> {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(
+      'DELETE FROM serial_chapter_versions WHERE serialChapterId IN (SELECT id FROM serial_chapters WHERE projectId = ?)'
+    ).run(projectId);
+    db.prepare('DELETE FROM serial_chapters WHERE projectId = ?').run(projectId);
+  });
+  tx();
 }
 
 // ── Generation usage (token logging) ───────────────────────────────────────────
@@ -917,6 +1256,10 @@ export async function deleteProjectData(projectId: string): Promise<void> {
   const deleteAll = db.transaction(() => {
     db.prepare('DELETE FROM cover_generation_jobs WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM generation_usage WHERE projectId = ?').run(projectId);
+    db.prepare('DELETE FROM serial_chapter_versions WHERE serialChapterId IN (SELECT id FROM serial_chapters WHERE projectId = ?)').run(projectId);
+    db.prepare('DELETE FROM serial_chapters WHERE projectId = ?').run(projectId);
+    db.prepare('DELETE FROM bible_deltas WHERE projectId = ?').run(projectId);
+    db.prepare('DELETE FROM serial_feedback WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM revision_tasks WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM editorial_issues WHERE projectId = ?').run(projectId);
     db.prepare('DELETE FROM chapter_versions WHERE projectId = ?').run(projectId);

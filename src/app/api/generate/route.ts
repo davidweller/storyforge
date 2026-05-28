@@ -63,6 +63,14 @@ import {
   CHAPTER_SCENE_PROSE_SYSTEM, buildChapterSceneProsePrompt,
   CHAPTER_POLISH_SYSTEM, buildChapterPolishPrompt,
   CHAPTER_SCENE_EVAL_SYSTEM, buildChapterSceneEvalPrompt,
+  SERIAL_HOOK_SCORE_SYSTEM,
+  SERIAL_REPARTITION_SYSTEM,
+  SERIAL_ENHANCE_SYSTEM,
+  SERIAL_FEEDBACK_IMPACT_SYSTEM,
+  buildSerialHookScorePrompt,
+  buildSerialRepartitionPrompt,
+  buildSerialEnhancePrompt,
+  buildSerialFeedbackImpactPrompt,
 } from '@/lib/prompts';
 import {
   parseChapterOutlines,
@@ -77,6 +85,10 @@ import {
   parseChapterSceneProseOutput,
   parseChapterEvaluation,
   parseRevisionVerification,
+  parseSerialHookScores,
+  parseSerialRepartition,
+  parseSerialEnhance,
+  parseSerialFeedbackImpact,
   ChapterOutlineSchema,
   SceneCardSchema,
 } from '@/lib/generation/schemas';
@@ -148,6 +160,7 @@ const WORKFLOW_STAGES = [
   'editorial', 'editorial-issues', 'revision', 'revision-verify', 'export-final', 'blurb', 'amazon-description',
   'cover-brief', 'back-cover-brief',
   'a-plus-brief',
+  'serial-hook-score', 'serial-repartition', 'serial-enhance', 'serial-feedback-impact',
 ] as const;
 
 const USAGE_SOURCE_VALUES = [
@@ -188,7 +201,11 @@ type StructuredOutputKind =
   | 'revision-verify'
   | 'cover-brief'
   | 'back-cover-brief'
-  | 'a-plus-brief';
+  | 'a-plus-brief'
+  | 'serial-hook-score'
+  | 'serial-repartition'
+  | 'serial-enhance'
+  | 'serial-feedback-impact';
 
 const EditorialPassSchema = z.enum(['structural', 'line', 'copy', 'proofread', 'final_report']);
 const optionalString = z.string().optional();
@@ -468,6 +485,50 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
       customText: optionalString,
     })
     .passthrough(),
+  'serial-hook-score': z.object({
+    sceneList: z.array(
+      z.object({
+        sceneId: requiredString,
+        text: requiredString,
+        sourceChapterRef: optionalString,
+      })
+    ),
+    rrBibleExcerpt: requiredString,
+  }).passthrough(),
+  'serial-repartition': z.object({
+    scenes: z.array(
+      z.object({
+        sceneId: requiredString,
+        wordCount: z.number().nonnegative(),
+        hookScore: z.number().min(0).max(10),
+      })
+    ),
+    targetMin: z.number().int().positive(),
+    targetMax: z.number().int().positive(),
+    hardMax: z.number().int().positive(),
+  }).passthrough(),
+  'serial-enhance': z.object({
+    chapterId: requiredString,
+    chapterContent: requiredString,
+    hookScore: z.number().min(0).max(10),
+    bibleExcerpt: requiredString,
+    enhancementMode: z.enum(['closing_beat', 'sharpen_final', 'scene_reorder_suggestion']),
+    maxAddedWords: z.number().int().positive(),
+  }).passthrough(),
+  'serial-feedback-impact': z.object({
+    feedbackId: requiredString,
+    feedbackBody: requiredString,
+    scope: z.enum(['chapter', 'arc']),
+    seedChapterIds: z.array(z.string()),
+    rrBible: z.record(z.string(), z.unknown()),
+    serialChaptersIndex: z.array(
+      z.object({
+        serialChapterId: requiredString,
+        ordinal: z.number().int().positive(),
+        summary: requiredString,
+      })
+    ),
+  }).passthrough(),
 };
 
 function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutputKind | null {
@@ -491,6 +552,10 @@ function getStructuredOutputKind(stage: WorkflowStage, data: D): StructuredOutpu
   if (stage === 'chapter-scenes-prose') return 'chapter-scenes-prose';
   if (stage === 'chapter-scene-eval') return 'chapter-scene-eval';
   if (stage === 'revision-verify') return 'revision-verify';
+  if (stage === 'serial-hook-score') return 'serial-hook-score';
+  if (stage === 'serial-repartition') return 'serial-repartition';
+  if (stage === 'serial-enhance') return 'serial-enhance';
+  if (stage === 'serial-feedback-impact') return 'serial-feedback-impact';
   return null;
 }
 
@@ -554,6 +619,18 @@ function normalizeStructuredOutput(kind: StructuredOutputKind, content: string, 
   }
   if (kind === 'revision-verify') {
     return JSON.stringify(parseRevisionVerification(content), null, 2);
+  }
+  if (kind === 'serial-hook-score') {
+    return JSON.stringify(parseSerialHookScores(content), null, 2);
+  }
+  if (kind === 'serial-repartition') {
+    return JSON.stringify(parseSerialRepartition(content), null, 2);
+  }
+  if (kind === 'serial-enhance') {
+    return JSON.stringify(parseSerialEnhance(content), null, 2);
+  }
+  if (kind === 'serial-feedback-impact') {
+    return JSON.stringify(parseSerialFeedbackImpact(content), null, 2);
   }
   const queue = parseRevisionQueue(content);
   return JSON.stringify(queue, null, 2);
@@ -730,6 +807,48 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
         d.evaluationMode === 'lite' || d.evaluationMode === 'standard' || d.evaluationMode === 'deep'
           ? d.evaluationMode
           : undefined,
+    }),
+  }),
+  'serial-hook-score': (d) => ({
+    system: SERIAL_HOOK_SCORE_SYSTEM,
+    prompt: buildSerialHookScorePrompt({
+      sceneList: d.sceneList as Array<{ sceneId: string; text: string; sourceChapterRef?: string }>,
+      rrBibleExcerpt: d.rrBibleExcerpt as string,
+    }),
+  }),
+  'serial-repartition': (d) => ({
+    system: SERIAL_REPARTITION_SYSTEM,
+    prompt: buildSerialRepartitionPrompt({
+      scenes: d.scenes as Array<{ sceneId: string; wordCount: number; hookScore: number }>,
+      targetMin: d.targetMin as number,
+      targetMax: d.targetMax as number,
+      hardMax: d.hardMax as number,
+    }),
+  }),
+  'serial-enhance': (d) => ({
+    system: SERIAL_ENHANCE_SYSTEM,
+    prompt: buildSerialEnhancePrompt({
+      chapterId: d.chapterId as string,
+      chapterContent: d.chapterContent as string,
+      hookScore: d.hookScore as number,
+      bibleExcerpt: d.bibleExcerpt as string,
+      enhancementMode: d.enhancementMode as 'closing_beat' | 'sharpen_final' | 'scene_reorder_suggestion',
+      maxAddedWords: d.maxAddedWords as number,
+    }),
+  }),
+  'serial-feedback-impact': (d) => ({
+    system: SERIAL_FEEDBACK_IMPACT_SYSTEM,
+    prompt: buildSerialFeedbackImpactPrompt({
+      feedbackId: d.feedbackId as string,
+      feedbackBody: d.feedbackBody as string,
+      scope: d.scope as 'chapter' | 'arc',
+      seedChapterIds: d.seedChapterIds as string[],
+      rrBible: d.rrBible as object,
+      serialChaptersIndex: d.serialChaptersIndex as Array<{
+        serialChapterId: string;
+        ordinal: number;
+        summary: string;
+      }>,
     }),
   }),
 };
@@ -1070,6 +1189,19 @@ export async function POST(request: NextRequest) {
       structuredOutputKind != null ? strictCardinalityViolation(stage, data, result.content) : null;
     if (cardinalityError) {
       return NextResponse.json({ error: cardinalityError }, { status: 422 });
+    }
+
+    if (stage === 'serial-enhance') {
+      const parsed = parseSerialEnhance(result.content);
+      const maxAddedWords = data.maxAddedWords as number;
+      if (parsed.proposal.addedWordCount > maxAddedWords) {
+        return NextResponse.json(
+          {
+            error: `Enhancement exceeds maxAddedWords cap (${parsed.proposal.addedWordCount} > ${maxAddedWords}).`,
+          },
+          { status: 422 }
+        );
+      }
     }
 
     const structuredWarnings =

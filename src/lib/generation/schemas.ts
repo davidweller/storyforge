@@ -210,6 +210,58 @@ export const RevisionVerificationSchema = z.object({
   overallNotes: z.string().optional(),
 });
 
+export const SerialHookScoreOutputSchema = z.object({
+  scores: z.array(
+    z.object({
+      sceneId: z.string().min(1),
+      hookScore: z.number().min(0).max(10),
+      categories: z.object({
+        questionRaised: z.number().min(0).max(10),
+        tension: z.number().min(0).max(10),
+        stakes: z.number().min(0).max(10),
+        momentum: z.number().min(0).max(10),
+      }),
+      weakHookFlag: z.boolean(),
+      rationale: z.string().min(1),
+    })
+  ),
+});
+
+export const SerialRepartitionOutputSchema = z.object({
+  chapters: z.array(
+    z.object({
+      ordinal: z.number().int().positive(),
+      title: z.string().min(1),
+      sceneIds: z.array(z.string().min(1)).min(1),
+      estimatedWordCount: z.number().int().nonnegative(),
+      boundaryHookScore: z.number().min(0).max(10),
+    })
+  ),
+});
+
+export const SerialEnhanceOutputSchema = z.object({
+  proposal: z.object({
+    mode: z.string().min(1),
+    diff: z.string().min(1),
+    addedWordCount: z.number().int().nonnegative(),
+    rationale: z.string().min(1),
+  }),
+});
+
+export const SerialFeedbackImpactOutputSchema = z.object({
+  classification: z.enum(['canon_altering', 'local_prose']),
+  proposedDelta: z
+    .object({
+      biblePath: z.string().min(1),
+      before: z.record(z.string(), z.unknown()),
+      after: z.record(z.string(), z.unknown()),
+      rationale: z.string().min(1),
+    })
+    .optional(),
+  impactedChapterIds: z.array(z.string()),
+  perChapterRationale: z.record(z.string(), z.string()),
+});
+
 export type EndingConcept = z.infer<typeof EndingConceptSchema> & { id: string };
 export type ChapterOutline = z.infer<typeof ChapterOutlineSchema>;
 export type NicheOutput = z.infer<typeof NicheOutputSchema>;
@@ -219,6 +271,10 @@ export type RevisionVerification = z.infer<typeof RevisionVerificationSchema>;
 export type StoryBibleOutput = z.infer<typeof StoryBibleOutputSchema>;
 export type GeneratedStoryBibleOutput = z.infer<typeof GeneratedStoryBibleOutputSchema>;
 export type CreativeBriefOutput = z.infer<typeof CreativeBriefOutputSchema>;
+export type SerialHookScoreOutput = z.infer<typeof SerialHookScoreOutputSchema>;
+export type SerialRepartitionOutput = z.infer<typeof SerialRepartitionOutputSchema>;
+export type SerialEnhanceOutput = z.infer<typeof SerialEnhanceOutputSchema>;
+export type SerialFeedbackImpactOutput = z.infer<typeof SerialFeedbackImpactOutputSchema>;
 
 function extractJsonCandidate(content: string): unknown {
   const trimmed = content.trim();
@@ -338,6 +394,22 @@ export function parseRevisionQueue(content: string): RevisionQueue {
 
 export function parseRevisionVerification(content: string): RevisionVerification {
   return RevisionVerificationSchema.parse(extractJsonCandidate(content));
+}
+
+export function parseSerialHookScores(content: string): SerialHookScoreOutput {
+  return SerialHookScoreOutputSchema.parse(extractJsonCandidate(content));
+}
+
+export function parseSerialRepartition(content: string): SerialRepartitionOutput {
+  return SerialRepartitionOutputSchema.parse(extractJsonCandidate(content));
+}
+
+export function parseSerialEnhance(content: string): SerialEnhanceOutput {
+  return SerialEnhanceOutputSchema.parse(extractJsonCandidate(content));
+}
+
+export function parseSerialFeedbackImpact(content: string): SerialFeedbackImpactOutput {
+  return SerialFeedbackImpactOutputSchema.parse(extractJsonCandidate(content));
 }
 
 export function parseChapterSummary(content: string): string {

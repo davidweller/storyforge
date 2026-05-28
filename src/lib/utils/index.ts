@@ -122,11 +122,10 @@ export function slugify(text: string): string {
 }
 
 // Stage order for linear workflow progression.
-// NOTE: 'blurb' and 'amazon-description' are intentionally excluded here even
-// though they exist in the WorkflowStage union type. Those two are post-pipeline
-// marketing tools accessible from the project dashboard, not sequential steps.
-// As a result, getStageIndex() returns -1 for them — callers must guard for this
-// before using the result in comparisons or array access.
+// NOTE: 'blurb', 'amazon-description', and all `serial-*` stages are intentionally
+// excluded here even though they exist in the WorkflowStage union type. Those are
+// non-linear tracks, not sequential KDP pipeline steps. As a result, getStageIndex()
+// returns -1 for them — callers must guard before numeric comparisons.
 export const STAGE_ORDER = [
   'setup',
   'genre-research',
@@ -200,6 +199,16 @@ export const STAGE_NAMES: Record<string, string> = {
   'export-final': 'Export Final',
   'story-bible': 'Story Bible & Canon',
   'creative-brief': 'Creative Brief',
+  'serial-setup': 'Serial Setup',
+  'serial-source': 'Serial Source',
+  'serial-mapping': 'Serial Mapping',
+  'serial-hook-score': 'Hook Scoring',
+  'serial-repartition': 'Repartition',
+  'serial-enhance': 'Serial Enhancement',
+  'serial-feedback': 'Serial Feedback',
+  'serial-feedback-impact': 'Feedback Impact',
+  'serial-revision': 'Serial Revision',
+  'serial-export': 'Serial Export',
 };
 
 // Stage descriptions
@@ -220,6 +229,16 @@ export const STAGE_DESCRIPTIONS: Record<string, string> = {
   'export-final': 'Export your final manuscript after revisions. Download the polished version ready for publication or submission.',
   'story-bible': 'Lock durable canon after chapter outlines — characters, promises, tone, and rules for drafting and downstream marketing.',
   'creative-brief': 'Compact generation-ready summary derived from the approved Story Bible.',
+  'serial-setup': 'Initialize serialisation and fork RR canon from the approved Story Bible.',
+  'serial-source': 'Choose or upload the source manuscript for serialisation.',
+  'serial-mapping': 'Map scenes into serial-sized chapters with hook-aware boundaries.',
+  'serial-hook-score': 'Score scene boundaries for hook strength.',
+  'serial-repartition': 'Repartition scenes into serial chapter chunks.',
+  'serial-enhance': 'Propose optional cliffhanger-focused chapter enhancements.',
+  'serial-feedback': 'Capture reader feedback for chapter or arc-level follow-up.',
+  'serial-feedback-impact': 'Classify feedback impact and propose canon deltas.',
+  'serial-revision': 'Apply serial-scope chapter revisions from approved feedback tasks.',
+  'serial-export': 'Export serial chapters as Royal Road-formatted markdown.',
 };
 
 // Model used per stage - re-exported from models.ts for backwards compatibility

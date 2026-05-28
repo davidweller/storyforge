@@ -2,7 +2,14 @@
 
 import { cn } from '@/lib/utils';
 
-export type SectionId = 'planning' | 'writing' | 'editing' | 'marketing' | 'cover' | 'aplus';
+export type SectionId =
+  | 'planning'
+  | 'writing'
+  | 'editing'
+  | 'marketing'
+  | 'cover'
+  | 'aplus'
+  | 'serialisation';
 
 interface WorkflowRailProps {
   activeSection: SectionId;
@@ -10,6 +17,8 @@ interface WorkflowRailProps {
   coverCanonUnlocked: boolean;
   paperbackUnlocked: boolean;
   aPlusUnlocked: boolean;
+  serialisationUnlocked?: boolean;
+  serialisationEnabled?: boolean;
   sectionStatus?: Partial<Record<SectionId, 'in_progress' | 'approved'>>;
 }
 
@@ -74,6 +83,15 @@ const SECTIONS: SectionDef[] = [
       </svg>
     ),
   },
+  {
+    id: 'serialisation',
+    label: 'Serialisation',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+      </svg>
+    ),
+  },
 ];
 
 const lockIcon = (
@@ -106,6 +124,8 @@ export function WorkflowRail({
   coverCanonUnlocked,
   paperbackUnlocked,
   aPlusUnlocked,
+  serialisationUnlocked = false,
+  serialisationEnabled = true,
   sectionStatus = {},
 }: WorkflowRailProps) {
   const isLocked = (id: SectionId): { locked: boolean; reason?: string } => {
@@ -119,6 +139,12 @@ export function WorkflowRail({
       if (!aPlusUnlocked) return { locked: true, reason: 'Approve the back cover first.' };
       return { locked: false };
     }
+    if (id === 'serialisation') {
+      if (!serialisationUnlocked) {
+        return { locked: true, reason: 'Complete Export Final first.' };
+      }
+      return { locked: false };
+    }
     return { locked: false };
   };
 
@@ -128,7 +154,7 @@ export function WorkflowRail({
       aria-label="Workflow sections"
     >
       <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-        {SECTIONS.map((section) => {
+        {SECTIONS.filter((section) => serialisationEnabled || section.id !== 'serialisation').map((section) => {
           const { locked, reason } = isLocked(section.id);
           const isActive = activeSection === section.id;
           const status = sectionStatus[section.id];

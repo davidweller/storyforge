@@ -262,6 +262,16 @@ export const STAGE_DEFAULT_MODEL_IDS = {
   'a-plus-brief': 'claude-sonnet-4-6-thinking-medium',
   'cover-brief': 'claude-sonnet-4-6-thinking-medium',
   'back-cover-brief': 'claude-sonnet-4-6-thinking-medium',
+  'serial-setup': 'claude-sonnet-4-6',
+  'serial-source': 'claude-sonnet-4-6',
+  'serial-mapping': 'claude-sonnet-4-6',
+  'serial-hook-score': 'claude-sonnet-4-6',
+  'serial-repartition': 'claude-sonnet-4-6',
+  'serial-enhance': 'claude-sonnet-4-6',
+  'serial-feedback': 'claude-sonnet-4-6',
+  'serial-feedback-impact': 'claude-sonnet-4-6',
+  'serial-revision': 'claude-sonnet-4-6',
+  'serial-export': 'claude-sonnet-4-6',
 } as const satisfies Record<WorkflowStage, string>;
 
 // Default LLM provider per workflow stage (mirrors registry ids — all Anthropic for generation stages).
@@ -294,6 +304,16 @@ export const STAGE_DEFAULT_PROVIDERS: Record<WorkflowStage, LLMProvider> = {
   'a-plus-brief': 'anthropic',
   'cover-brief': 'anthropic',
   'back-cover-brief': 'anthropic',
+  'serial-setup': 'anthropic',
+  'serial-source': 'anthropic',
+  'serial-mapping': 'anthropic',
+  'serial-hook-score': 'anthropic',
+  'serial-repartition': 'anthropic',
+  'serial-enhance': 'anthropic',
+  'serial-feedback': 'anthropic',
+  'serial-feedback-impact': 'anthropic',
+  'serial-revision': 'anthropic',
+  'serial-export': 'anthropic',
 };
 
 // Get default model for a stage

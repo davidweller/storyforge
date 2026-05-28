@@ -74,6 +74,16 @@ export async function deleteProjectData(projectId: string): Promise<void> {
   await dbCall<{ ok: true }>('deleteProjectData', { projectId });
 }
 
+export async function enterSerialisation(
+  projectId: string
+): Promise<{ serialBibleId: string }> {
+  return dbCall<{ serialBibleId: string }>('enterSerialisation', { projectId });
+}
+
+export async function discardSerialisation(projectId: string): Promise<void> {
+  await dbCall<{ ok: true }>('discardSerialisation', { projectId });
+}
+
 export async function getProjectGenerationUsageTotals(
   projectId: string
 ): Promise<GenerationUsageTotals> {

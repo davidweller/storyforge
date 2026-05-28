@@ -16,6 +16,9 @@ export const CHAPTER_POLISH_FEATURE_ENABLED = true;
 /** When true, Full Auto uses the same scene plan → scene prose → polish → eval path as manual Write Chapters. */
 export const FULL_AUTO_USE_SCENE_PIPELINE_DEFAULT = true;
 
+/** Serialisation feature gate for UI/routes during phased rollout. */
+export const SERIALISATION_FEATURE_ENABLED = true;
+
 /** Phase 4 model rubric: combined input budget (scene plan + chapter + canon text). */
 export const CHAPTER_SCENE_EVAL_INPUT_TOKEN_BUDGET = 6_000;
 

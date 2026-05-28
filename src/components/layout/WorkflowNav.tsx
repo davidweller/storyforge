@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { WorkflowSidebar } from './WorkflowSidebar';
 import { WorkflowRail, type SectionId } from './WorkflowRail';
+import { SERIALISATION_FEATURE_ENABLED } from '@/lib/constants';
 import type { WorkflowStage, Chapter, RevisionTask, ProjectDocument } from '@/types';
 
 interface WorkflowNavProps {
@@ -30,6 +31,7 @@ interface WorkflowNavProps {
  * unrecognized route (including the bare /projects/[id] dashboard).
  */
 export function getActiveSection(pathname: string): SectionId {
+  if (SERIALISATION_FEATURE_ENABLED && pathname.includes('/serial/')) return 'serialisation';
   if (pathname.includes('/marketing/')) return 'marketing';
   if (pathname.includes('/cover/')) return 'cover';
   if (pathname.includes('/aplus/')) return 'aplus';
@@ -82,6 +84,8 @@ export function WorkflowNav(props: WorkflowNavProps) {
         coverCanonUnlocked={coverCanonUnlocked}
         paperbackUnlocked={paperbackUnlocked}
         aPlusUnlocked={aPlusUnlocked}
+        serialisationUnlocked={Boolean(props.finalExportedAt)}
+        serialisationEnabled={SERIALISATION_FEATURE_ENABLED}
       />
       <WorkflowSidebar {...props} activeSection={activeSection} />
     </div>

@@ -34,6 +34,14 @@ export async function POST(request: NextRequest) {
         await q.deleteProjectData(body.projectId as string);
         return NextResponse.json({ ok: true });
       }
+      case 'enterSerialisation': {
+        const result = await q.enterSerialisation(body.projectId as string);
+        return NextResponse.json(result);
+      }
+      case 'discardSerialisation': {
+        await q.discardSerialisation(body.projectId as string);
+        return NextResponse.json({ ok: true });
+      }
       case 'getProjectGenerationUsageTotals': {
         const totals = await q.getProjectGenerationUsageTotals(body.projectId as string);
         return NextResponse.json(totals);

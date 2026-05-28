@@ -99,6 +99,39 @@ export function runMigrations(db: Database.Database): void {
   if (!pr6.has('aPlusStyleReferencesJson')) {
     db.exec(`ALTER TABLE projects ADD COLUMN aPlusStyleReferencesJson TEXT`);
   }
+  const pr7 = columnNames(db, 'projects');
+  if (!pr7.has('serialisationEnabled')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN serialisationEnabled INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!pr7.has('serialisationEnteredAt')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN serialisationEnteredAt TEXT`);
+  }
+  if (!pr7.has('serialisationStatus')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN serialisationStatus TEXT NOT NULL DEFAULT 'not_started'`);
+  }
+  if (!pr7.has('serialSourceDocumentId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN serialSourceDocumentId TEXT`);
+  }
+  if (!pr7.has('serialBibleId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN serialBibleId TEXT`);
+  }
+  if (!pr7.has('royalRoadFictionId')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN royalRoadFictionId TEXT`);
+  }
+
+  const rt2 = columnNames(db, 'revision_tasks');
+  if (!rt2.has('serialScope')) {
+    db.exec(`ALTER TABLE revision_tasks ADD COLUMN serialScope INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!rt2.has('serialChapterId')) {
+    db.exec(`ALTER TABLE revision_tasks ADD COLUMN serialChapterId TEXT`);
+  }
+  if (!rt2.has('triggeredByDeltaId')) {
+    db.exec(`ALTER TABLE revision_tasks ADD COLUMN triggeredByDeltaId TEXT`);
+  }
+  if (!rt2.has('triggeredByFeedbackId')) {
+    db.exec(`ALTER TABLE revision_tasks ADD COLUMN triggeredByFeedbackId TEXT`);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS cover_generation_jobs (
@@ -134,6 +167,70 @@ export function runMigrations(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_generation_usage_project_created
     ON generation_usage (projectId, createdAt)
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS serial_chapters (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL REFERENCES projects(id),
+      ordinal INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      hookScore REAL,
+      hookCategoriesJson TEXT,
+      mappingId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (projectId, ordinal)
+    );
+    CREATE INDEX IF NOT EXISTS idx_serial_chapters_project_ordinal
+    ON serial_chapters (projectId, ordinal)
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS serial_chapter_versions (
+      id TEXT PRIMARY KEY,
+      serialChapterId TEXT NOT NULL REFERENCES serial_chapters(id),
+      version INTEGER NOT NULL,
+      parentVersionId TEXT,
+      content TEXT NOT NULL,
+      preNote TEXT,
+      postNote TEXT,
+      triggeredByDeltaId TEXT,
+      triggeredByFeedbackId TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (serialChapterId, version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_serial_chapter_versions_chapter_version
+    ON serial_chapter_versions (serialChapterId, version DESC)
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS serial_feedback (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL REFERENCES projects(id),
+      scope TEXT NOT NULL,
+      chapterIdsJson TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending_impact',
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_serial_feedback_project_created
+    ON serial_feedback (projectId, createdAt)
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bible_deltas (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL REFERENCES projects(id),
+      bibleId TEXT NOT NULL,
+      triggeredByFeedbackId TEXT NOT NULL REFERENCES serial_feedback(id),
+      beforeJson TEXT NOT NULL,
+      afterJson TEXT NOT NULL,
+      biblePath TEXT NOT NULL,
+      rationale TEXT,
+      approvedAt TEXT,
+      approvedBy TEXT,
+      reversalOfId TEXT REFERENCES bible_deltas(id),
+      affectedChapterIdsJson TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_bible_deltas_project_created
+    ON bible_deltas (projectId, createdAt)
   `);
 }
 

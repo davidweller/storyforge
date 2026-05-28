@@ -63,6 +63,16 @@ const STAGE_MAX_TOKENS: Record<WorkflowStage, number> = {
   'a-plus-brief': 8192,
   'cover-brief': 8192,
   'back-cover-brief': 8192,
+  'serial-setup': 2048,
+  'serial-source': 2048,
+  'serial-mapping': 4096,
+  'serial-hook-score': 4096,
+  'serial-repartition': 4096,
+  'serial-enhance': 8192,
+  'serial-feedback': 2048,
+  'serial-feedback-impact': 8192,
+  'serial-revision': 8192,
+  'serial-export': 2048,
 };
 
 /**

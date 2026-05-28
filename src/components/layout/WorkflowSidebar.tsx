@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { SERIALISATION_FEATURE_ENABLED } from '@/lib/constants';
 import { STAGE_NAMES, STAGE_ORDER, getStageIndex, getStageStatus } from '@/lib/utils';
 import {
   EDITORIAL_PASSES,
@@ -175,6 +176,56 @@ const stageIcons: Record<WorkflowStage, React.ReactNode> = {
   'a-plus-brief': (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h12M4 17h16" />
+    </svg>
+  ),
+  'serial-setup': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+    </svg>
+  ),
+  'serial-source': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  'serial-mapping': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+    </svg>
+  ),
+  'serial-hook-score': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17a1 1 0 102 0v-5a1 1 0 10-2 0v5zm-4 0a1 1 0 102 0V7a1 1 0 10-2 0v10zm8 0a1 1 0 102 0v-8a1 1 0 10-2 0v8z" />
+    </svg>
+  ),
+  'serial-repartition': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h7v12H4V6zm9 0h7v5h-7V6zm0 7h7v5h-7v-5z" />
+    </svg>
+  ),
+  'serial-enhance': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    </svg>
+  ),
+  'serial-feedback': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8m-8 4h5m-7 5l-4 2 1-4a9 9 0 1116 0 9 9 0 01-16 2z" />
+    </svg>
+  ),
+  'serial-feedback-impact': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m-8 5h8m-8 5h8M3 7h4m-4 5h4m-4 5h4" />
+    </svg>
+  ),
+  'serial-revision': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  ),
+  'serial-export': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   ),
 };
@@ -692,6 +743,44 @@ export function WorkflowSidebar({
                   <span className="shrink-0">{stageIcons['a-plus-brief']}</span>
                   <span className="flex-1 truncate">{label}</span>
                   {exportDone && marketingCheck}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {SERIALISATION_FEATURE_ENABLED && activeSection === 'serialisation' && (
+          <div className="flex flex-col gap-1">
+            {(
+              [
+                ['setup', 'Setup'],
+                ['source', 'Source'],
+                ['mapping', 'Mapping'],
+                ['enhancement', 'Enhancement'],
+                ['chapters', 'Chapters'],
+                ['feedback', 'Feedback & Canon'],
+                ['export', 'Export'],
+              ] as const
+            ).map(([slug, label]) => {
+              const unlocked = Boolean(finalExportedAt);
+              const href = unlocked ? `/projects/${projectId}/serial/${slug}` : '#';
+              const active = pathname.includes(`/serial/${slug}`);
+              return (
+                <Link
+                  key={slug}
+                  href={href}
+                  title={!unlocked ? 'Complete Export Final first' : undefined}
+                  onClick={(e) => !unlocked && e.preventDefault()}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg no-underline text-sm transition-all',
+                    !unlocked && 'opacity-50 cursor-not-allowed',
+                    active
+                      ? 'bg-accent/[0.08] text-foreground font-medium ring-1 ring-accent/20'
+                      : 'text-muted-foreground hover:bg-muted/60'
+                  )}
+                >
+                  <span className="shrink-0">{stageIcons['serial-mapping']}</span>
+                  <span className="flex-1 truncate">{label}</span>
                 </Link>
               );
             })}

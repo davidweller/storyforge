@@ -28,7 +28,18 @@ export type WorkflowStage =
   | 'a-plus-brief'    // A+ content prompt brief (JSON)
   | 'revision-verify' // Post-revision checklist (structured JSON)
   | 'cover-brief'     // Structured cover direction (JSON)
-  | 'back-cover-brief'; // Back-panel visual brief (JSON)
+  | 'back-cover-brief' // Back-panel visual brief (JSON)
+  // Serialisation track (non-linear; outside STAGE_ORDER)
+  | 'serial-setup'
+  | 'serial-source'
+  | 'serial-mapping'
+  | 'serial-hook-score'
+  | 'serial-repartition'
+  | 'serial-enhance'
+  | 'serial-feedback'
+  | 'serial-feedback-impact'
+  | 'serial-revision'
+  | 'serial-export';
 
 export type StageStatus = 'locked' | 'not_started' | 'in_progress' | 'approved';
 
@@ -55,7 +66,10 @@ export type DocumentType =
   | 'cover-full-wrap'
   | 'a-plus-brief'
   | 'a-plus-module'
-  | 'a-plus-export';
+  | 'a-plus-export'
+  | 'source-manuscript'
+  | 'story-bible-rr'
+  | 'serial-chapter-mapping';
 
 /** Ordered editorial pipeline passes (structural → line → copy → proofread → final_report). */
 export type EditorialPass = 'structural' | 'line' | 'copy' | 'proofread' | 'final_report';
@@ -68,6 +82,7 @@ export type EditorialCategory =
   | 'logic';
 
 export type RevisionTaskStatus = 'queued' | 'in_progress' | 'done';
+export type SerialisationStatus = 'not_started' | 'in_progress' | 'completed';
 
 /** User-uploaded competitor / mood reference (stored as JSON array on `Project`). */
 export interface ProjectStyleReference {
@@ -97,6 +112,12 @@ export interface Project {
   /** When true, revision/export-final unlock only after final_report pass tasks complete. */
   fourPassEditorial?: boolean;
   finalExportedAt?: Date;  // Timestamp when final export was completed
+  serialisationEnabled?: boolean;
+  serialisationEnteredAt?: Date;
+  serialisationStatus?: SerialisationStatus;
+  serialSourceDocumentId?: string | null;
+  serialBibleId?: string | null;
+  royalRoadFictionId?: string | null;
   blurb?: string;          // Back-cover / marketing blurb
   amazonDescription?: string;  // Amazon product description
   /** Display / cover credit name (optional). */
@@ -409,6 +430,10 @@ export interface RevisionTask {
   id: string;
   projectId: string;
   chapterNumber: number;
+  serialScope?: boolean;
+  serialChapterId?: string | null;
+  triggeredByDeltaId?: string | null;
+  triggeredByFeedbackId?: string | null;
   /** Which editorial pass this task belongs to. */
   editPass: EditorialPass;
   issueIds: string[];
@@ -417,6 +442,56 @@ export interface RevisionTask {
   status: RevisionTaskStatus;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface SerialChapter {
+  id: string;
+  projectId: string;
+  ordinal: number;
+  title: string;
+  hookScore?: number;
+  hookCategoriesJson?: string | null;
+  mappingId: string;
+  createdAt: Date;
+}
+
+export interface SerialChapterVersion {
+  id: string;
+  serialChapterId: string;
+  version: number;
+  parentVersionId?: string | null;
+  content: string;
+  preNote?: string | null;
+  postNote?: string | null;
+  triggeredByDeltaId?: string | null;
+  triggeredByFeedbackId?: string | null;
+  createdAt: Date;
+}
+
+export interface SerialFeedback {
+  id: string;
+  projectId: string;
+  scope: 'chapter' | 'arc';
+  chapterIds: string[];
+  body: string;
+  status: 'pending_impact' | 'pending_delta' | 'pending_revisions' | 'complete' | 'dismissed';
+  createdAt: Date;
+}
+
+export interface BibleDelta {
+  id: string;
+  projectId: string;
+  bibleId: string;
+  triggeredByFeedbackId: string;
+  beforeJson: string;
+  afterJson: string;
+  biblePath: string;
+  rationale?: string | null;
+  approvedAt?: Date | null;
+  approvedBy?: string | null;
+  reversalOfId?: string | null;
+  affectedChapterIdsJson?: string | null;
+  createdAt: Date;
 }
 
 // UI State Types

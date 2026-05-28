@@ -56,4 +56,14 @@ export {
   type CoverArchetypeMeta,
   type CoverArchetypeId,
 } from './covers';
+export {
+  SERIAL_HOOK_SCORE_SYSTEM,
+  SERIAL_REPARTITION_SYSTEM,
+  SERIAL_ENHANCE_SYSTEM,
+  SERIAL_FEEDBACK_IMPACT_SYSTEM,
+  buildSerialHookScorePrompt,
+  buildSerialRepartitionPrompt,
+  buildSerialEnhancePrompt,
+  buildSerialFeedbackImpactPrompt,
+} from './serial';
 export { contextBlock } from './utils';

@@ -16,7 +16,11 @@ export type StructuredOutputKindForCountWarnings =
   | 'revision-verify'
   | 'cover-brief'
   | 'back-cover-brief'
-  | 'a-plus-brief';
+  | 'a-plus-brief'
+  | 'serial-hook-score'
+  | 'serial-repartition'
+  | 'serial-enhance'
+  | 'serial-feedback-impact';
 
 type D = Record<string, unknown>;
 
