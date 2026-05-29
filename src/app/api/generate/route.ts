@@ -966,7 +966,7 @@ export async function POST(request: NextRequest) {
               ? EDITORIAL_REPORT_DEFAULT_MODEL_ID
               : EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID;
 
-          // Working edit passes: Sonnet 4.6 thinking; final report: Opus 4.6; createQueue: Sonnet 4.6 thinking.
+          // Working edit passes: Sonnet 4.6 Medium effort; final report + createQueue: Opus 4.8 Low effort.
           let selectedModel = model || defaultEditorialModel;
           // modelSwitched and switchMessage are already declared at function scope
 

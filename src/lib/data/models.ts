@@ -18,6 +18,8 @@ export interface LLMModel {
   thinkingBudgetTokens?: number;
   /** OpenRouter reasoning effort for models that support dual thinking modes. */
   openRouterReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  /** Anthropic Messages API `output_config.effort` (use with adaptive thinking on Opus 4.8+). */
+  anthropicEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 }
 
 // OpenAI Models (GPT-5.2+ only)
@@ -63,15 +65,46 @@ export const ENDING_EXPANSION_DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
 
 /** Default models when `editorial` branches by pass/workflow. */
 export const EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
-export const EDITORIAL_REPORT_DEFAULT_MODEL_ID = 'claude-opus-4-6';
-export const EDITORIAL_QUEUE_DEFAULT_MODEL_ID = 'claude-sonnet-4-6-thinking-medium';
-export const CHAPTER_SCENE_EVAL_DEEP_DEFAULT_MODEL_ID = 'claude-opus-4-6';
+export const EDITORIAL_REPORT_DEFAULT_MODEL_ID = 'claude-opus-4-8-low';
+export const EDITORIAL_QUEUE_DEFAULT_MODEL_ID = 'claude-opus-4-8-low';
+export const CHAPTER_SCENE_EVAL_DEEP_DEFAULT_MODEL_ID = 'claude-opus-4-8-low';
 
 /**
  * Anthropic catalog: Haiku 4.5 plus Sonnet/Opus presets (API IDs per docs/model_recommendations.md).
- * Thinking presets use extended thinking budgets; low-effort rows omit thinking.
+ * Opus 4.8+ uses adaptive thinking with `output_config.effort`; Sonnet medium/high presets still use
+ * legacy extended-thinking budgets until migrated.
  */
 export const ANTHROPIC_MODELS: LLMModel[] = [
+  {
+    id: 'claude-opus-4-8-low',
+    name: 'Claude Opus 4.8 (Low effort)',
+    provider: 'anthropic',
+    description: 'Opus 4.8 with low effort — editorial queue, deep eval, final report defaults',
+    apiModelId: 'claude-opus-4-8',
+    anthropicEffort: 'low',
+    maxTokens: 128_000,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-opus-4-8-medium',
+    name: 'Claude Opus 4.8 (Medium effort)',
+    provider: 'anthropic',
+    description: 'Opus 4.8 with medium effort — balanced reasoning and cost',
+    apiModelId: 'claude-opus-4-8',
+    anthropicEffort: 'medium',
+    maxTokens: 128_000,
+    maxContextTokens: 1_000_000,
+  },
+  {
+    id: 'claude-opus-4-8-high',
+    name: 'Claude Opus 4.8 (High effort)',
+    provider: 'anthropic',
+    description: 'Opus 4.8 with high effort — default API depth for complex reasoning',
+    apiModelId: 'claude-opus-4-8',
+    anthropicEffort: 'high',
+    maxTokens: 128_000,
+    maxContextTokens: 1_000_000,
+  },
   {
     id: 'claude-haiku-4-5-20251001',
     name: 'Claude Haiku 4.5',
@@ -83,7 +116,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
   },
   {
     id: 'claude-opus-4-7-xhigh',
-    name: 'Claude Opus 4.7 (xHigh thinking)',
+    name: 'Claude Opus 4.7 (xHigh effort)',
     provider: 'anthropic',
     description: 'Primary chapter drafting — maximum reasoning depth',
     apiModelId: 'claude-opus-4-7',
@@ -93,7 +126,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
   },
   {
     id: 'claude-opus-4-7-high',
-    name: 'Claude Opus 4.7 (High thinking)',
+    name: 'Claude Opus 4.7 (High effort)',
     provider: 'anthropic',
     description: 'Scene prose, editorial report — strong long-context reasoning',
     apiModelId: 'claude-opus-4-7',
@@ -103,7 +136,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
   },
   {
     id: 'claude-opus-4-7-medium',
-    name: 'Claude Opus 4.7 (Medium thinking)',
+    name: 'Claude Opus 4.7 (Medium effort)',
     provider: 'anthropic',
     description: 'Polish, revision, ending expansion — bounded refinement',
     apiModelId: 'claude-opus-4-7',
@@ -113,7 +146,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
   },
   {
     id: 'claude-sonnet-4-6-thinking-medium',
-    name: 'Claude Sonnet 4.6 (Medium thinking)',
+    name: 'Claude Sonnet 4.6 (Medium effort)',
     provider: 'anthropic',
     description: 'Structured reasoning preset for editorial and canon synthesis',
     apiModelId: 'claude-sonnet-4-6',
@@ -123,7 +156,7 @@ export const ANTHROPIC_MODELS: LLMModel[] = [
   },
   {
     id: 'claude-sonnet-4-6-thinking-high',
-    name: 'Claude Sonnet 4.6 (High thinking)',
+    name: 'Claude Sonnet 4.6 (High effort)',
     provider: 'anthropic',
     description: 'Heavier Sonnet reasoning; editorial fallback for long manuscripts',
     apiModelId: 'claude-sonnet-4-6',
@@ -253,7 +286,7 @@ export const STAGE_DEFAULT_MODEL_IDS = {
   'export-draft': 'claude-sonnet-4-6',
   /** Working edit passes default; final report uses {@link EDITORIAL_REPORT_DEFAULT_MODEL_ID}. */
   editorial: EDITORIAL_WORKING_PASS_DEFAULT_MODEL_ID,
-  'editorial-issues': 'claude-sonnet-4-6-thinking-medium',
+  'editorial-issues': EDITORIAL_QUEUE_DEFAULT_MODEL_ID,
   revision: 'claude-sonnet-4-6',
   'revision-verify': 'claude-sonnet-4-6',
   'export-final': 'claude-sonnet-4-6',

@@ -40,9 +40,14 @@ export interface AnthropicGenerateOptions {
   jsonMode?: boolean;
 }
 
+type AnthropicEffort = NonNullable<
+  NonNullable<ReturnType<typeof getModelById>>['anthropicEffort']
+>;
+
 function resolveAnthropicModel(registryId: string): {
   apiModel: string;
   thinkingBudget: number | undefined;
+  effort: AnthropicEffort | undefined;
   displayName: string;
 } {
   const entry = getModelById(registryId);
@@ -50,8 +55,31 @@ function resolveAnthropicModel(registryId: string): {
   return {
     apiModel,
     thinkingBudget: entry?.thinkingBudgetTokens,
+    effort: entry?.anthropicEffort,
     displayName: entry?.name ?? registryId,
   };
+}
+
+function anthropicRequestExtras(params: {
+  effort: AnthropicEffort | undefined;
+  thinkingBudget: number | undefined;
+  temperature: number;
+}): Pick<
+  Anthropic.Messages.MessageCreateParams,
+  'temperature' | 'thinking' | 'output_config'
+> {
+  if (params.effort) {
+    return {
+      thinking: { type: 'adaptive' },
+      output_config: { effort: params.effort },
+    };
+  }
+  if (params.thinkingBudget != null && params.thinkingBudget >= 1024) {
+    return {
+      thinking: { type: 'enabled', budget_tokens: params.thinkingBudget },
+    };
+  }
+  return { temperature: params.temperature };
 }
 
 function extractTextContent(content: Anthropic.Messages.Message['content']): string {
@@ -77,8 +105,9 @@ export async function generateWithClaude(
     jsonMode,
   } = options;
 
-  const { apiModel, thinkingBudget, displayName } = resolveAnthropicModel(registryModelId);
-  const useThinking = thinkingBudget != null && thinkingBudget >= 1024;
+  const { apiModel, thinkingBudget, effort, displayName } = resolveAnthropicModel(registryModelId);
+  const requestExtras = anthropicRequestExtras({ effort, thinkingBudget, temperature });
+  const useThinking = 'thinking' in requestExtras;
 
   const system: Anthropic.Messages.MessageCreateParams['system'] =
     anthropicSystem ?? systemPrompt ?? '';
@@ -102,8 +131,9 @@ export async function generateWithClaude(
     systemPromptLength: systemPrompt?.length || 0,
     systemMode: anthropicSystem ? 'structured' : 'string',
     maxTokens,
-    temperature: useThinking ? 'N/A (extended thinking)' : temperature,
+    temperature: useThinking ? 'N/A (thinking/effort)' : temperature,
     extendedThinking: useThinking,
+    effort: effort ?? null,
   });
 
   try {
@@ -112,11 +142,7 @@ export async function generateWithClaude(
     const stream = getAnthropic().messages.stream({
       model: apiModel,
       max_tokens: maxTokens,
-      ...(useThinking
-        ? {
-            thinking: { type: 'enabled', budget_tokens: thinkingBudget },
-          }
-        : { temperature }),
+      ...requestExtras,
       system,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -185,8 +211,8 @@ export async function* streamWithClaude(
     anthropicSystem,
   } = options;
 
-  const { apiModel, thinkingBudget } = resolveAnthropicModel(registryModelId);
-  const useThinking = thinkingBudget != null && thinkingBudget >= 1024;
+  const { apiModel, thinkingBudget, effort } = resolveAnthropicModel(registryModelId);
+  const requestExtras = anthropicRequestExtras({ effort, thinkingBudget, temperature });
 
   const system: Anthropic.Messages.MessageCreateParams['system'] =
     anthropicSystem ?? systemPrompt ?? '';
@@ -194,11 +220,7 @@ export async function* streamWithClaude(
   const stream = getAnthropic().messages.stream({
     model: apiModel,
     max_tokens: maxTokens,
-    ...(useThinking
-      ? {
-          thinking: { type: 'enabled', budget_tokens: thinkingBudget },
-        }
-      : { temperature }),
+    ...requestExtras,
     system,
     messages: [{ role: 'user', content: prompt }],
   });

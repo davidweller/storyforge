@@ -67,7 +67,7 @@ These patterns are not banned; in moderation they are part of normal fiction. Th
 
 ### Diction and grammar
 
-- Em dashes (hyphens). Default to commas, full stops, or parentheses; reserve dashes for strong interruption or apposition.
+- Dashes (hyphens). Default to commas, full stops, or parentheses; reserve dashes for strong interruption or apposition.
 - "Slowly" as a default modifier. Most actions should not be slow.
 - "Just" as filler ("she just stood there", "it was just so unfair"). Cut on a final pass.
 - "Began to" / "started to" before a verb. "She began to cry" is almost always weaker than "she cried".

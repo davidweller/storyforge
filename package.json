@@ -18,7 +18,7 @@
     "postinstall": "electron-builder install-app-deps && node scripts/rebuild-better-sqlite3.cjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
+    "@anthropic-ai/sdk": "^0.100.1",
     "@tiptap/extension-bubble-menu": "^3.18.0",
     "@tiptap/extension-floating-menu": "^3.18.0",
     "@tiptap/extension-placeholder": "^3.18.0",
