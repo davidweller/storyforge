@@ -43,6 +43,16 @@ export function getStageStatus(
     if (canProceedToExportFinal(projectStub, revisionTasks)) return 'not_started';
   }
 
+  // Allow export-final when manuscript is ready and user may skip editorial
+  if (
+    stage === 'export-final' &&
+    chapters &&
+    approvedChapterIds &&
+    canSkipToExportFinal(currentStage, chapters, approvedChapterIds)
+  ) {
+    return 'not_started';
+  }
+
   if (isStageAccessible(currentStage, stage)) return 'not_started';
   return 'locked';
 }
@@ -153,6 +163,39 @@ export function isStageAccessible(currentStage: string, targetStage: string): bo
   const currentIndex = getStageIndex(currentStage);
   const targetIndex = getStageIndex(targetStage);
   return targetIndex <= currentIndex;
+}
+
+/** Manuscript is assembled and user has reached export-draft or later, but not export-final yet. */
+export function canSkipToExportFinal(
+  currentStage: string,
+  chapters: { id: string }[],
+  approvedChapterIds: Set<string>
+): boolean {
+  const currentIndex = getStageIndex(currentStage);
+  const exportDraftIndex = getStageIndex('export-draft');
+  const exportFinalIndex = getStageIndex('export-final');
+  if (currentIndex < exportDraftIndex || currentIndex >= exportFinalIndex) return false;
+  return chapters.length > 0 && chapters.every((ch) => approvedChapterIds.has(ch.id));
+}
+
+/** Whether the export-final page should be reachable (including skipping editorial). */
+export function canAccessExportFinal(
+  currentStage: string,
+  revisionTasks: import('@/types').RevisionTask[],
+  chapters: { id: string }[],
+  approvedChapterIds: Set<string>,
+  fourPassEditorial?: boolean
+): boolean {
+  if (isStageAccessible(currentStage, 'export-final')) return true;
+  if (
+    currentStage === 'revision' &&
+    revisionTasks.length > 0 &&
+    revisionTasks.every((t) => t.status === 'done') &&
+    canProceedToExportFinal({ fourPassEditorial: fourPassEditorial ?? false }, revisionTasks)
+  ) {
+    return true;
+  }
+  return canSkipToExportFinal(currentStage, chapters, approvedChapterIds);
 }
 
 // Get next stage

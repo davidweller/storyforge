@@ -92,7 +92,7 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
     }
   }
   
-  const handleExport = async (format: 'docx' | 'txt') => {
+  const handleExport = async (format: 'docx' | 'txt' | 'md') => {
     setIsExporting(true);
     setExportError(null);
     
@@ -159,6 +159,15 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
         await advanceStage(projectId, nextStage as WorkflowStage);
       }
       router.push(`/projects/${projectId}/stage/editorial`);
+    } catch (err) {
+      // Handle error
+    }
+  };
+
+  const handleSkipToExportFinal = async () => {
+    try {
+      await advanceStage(projectId, 'export-final');
+      router.push(`/projects/${projectId}/stage/export-final`);
     } catch (err) {
       // Handle error
     }
@@ -242,8 +251,8 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
         </Button>
       </div>
       
-      {/* Continue to editorial */}
-      <Card>
+      {/* Continue to editorial or skip */}
+      <Card className="mb-4">
         <CardContent className="py-6">
           <div className="flex items-center justify-between">
             <div>
@@ -259,6 +268,28 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
               Continue to Editorial
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold mb-2 text-[var(--foreground)]">Skip Editorial?</h2>
+              <p className="text-[var(--muted-foreground)]">
+                Export your manuscript as-is without AI editorial review or revisions.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleSkipToExportFinal}
+            >
+              Skip to Export Final
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
               </svg>
             </Button>
           </div>

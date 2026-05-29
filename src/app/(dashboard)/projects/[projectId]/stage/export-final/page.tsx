@@ -5,7 +5,7 @@ import { useProject } from '@/hooks/useProject';
 import { useProjectStore } from '@/stores/projectStore';
 import { StageLayout } from '@/components/stages';
 import { Button, Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
-import { isStageAccessible } from '@/lib/utils';
+import { canAccessExportFinal } from '@/lib/utils';
 
 interface ExportFinalPageProps {
   params: Promise<{ projectId: string }>;
@@ -25,7 +25,7 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
     getApprovedChaptersCount,
   } = useProject(projectId);
   
-  const { loadChapterVersions, loadRevisionTasks, updateProject } = useProjectStore();
+  const { loadChapterVersions, loadRevisionTasks, updateProject, advanceStage } = useProjectStore();
   
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -46,12 +46,31 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
     }
   }, [projectId, loadRevisionTasks]);
   
-  // Allow access to export-final if revision is accessible OR all revisions are complete
-  const allRevisionsComplete = revisionTasks.length > 0 && revisionTasks.every(task => task.status === 'done');
-  const canAccessExportFinal = project && (
-    isStageAccessible(project.currentStage, 'export-final') ||
-    (project.currentStage === 'revision' && allRevisionsComplete)
+  // Allow access to export-final if revision is accessible OR all revisions are complete OR skipping editorial
+  const approvedChapterIds = new Set<string>();
+  for (const ch of chapters) {
+    if (getApprovedChapterVersion(ch.id)) {
+      approvedChapterIds.add(ch.id);
+    }
+  }
+
+  const canAccessExportFinalPage = project && canAccessExportFinal(
+    project.currentStage,
+    revisionTasks,
+    chapters,
+    approvedChapterIds,
+    project.fourPassEditorial
   );
+
+  const editorialSkipped = revisionTasks.length === 0;
+
+  // Advance stage when user reaches export-final (including via skip)
+  useEffect(() => {
+    if (!project || !canAccessExportFinalPage) return;
+    if (project.currentStage !== 'export-final') {
+      void advanceStage(projectId, 'export-final');
+    }
+  }, [project, canAccessExportFinalPage, projectId, advanceStage]);
   
   if (loading || !project) {
     return (
@@ -65,7 +84,7 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
   }
   
   // Check if export-final is accessible
-  if (!canAccessExportFinal) {
+  if (!canAccessExportFinalPage) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-var(--header-height))]">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -76,7 +95,7 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
           </div>
           <h2 className="text-xl font-semibold text-[var(--foreground)]">Export Final Not Available</h2>
           <p className="text-[var(--muted-foreground)] max-w-md">
-            Please complete all revisions before exporting your final manuscript.
+            Complete your manuscript assembly first, or finish all revisions before exporting your final manuscript.
           </p>
         </div>
       </div>
@@ -86,15 +105,7 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
   const totalWordCount = getTotalWordCount();
   const approvedCount = getApprovedChaptersCount();
   
-  // Get approved chapter IDs
-  const approvedChapterIds = new Set<string>();
-  for (const ch of chapters) {
-    if (getApprovedChapterVersion(ch.id)) {
-      approvedChapterIds.add(ch.id);
-    }
-  }
-  
-  const handleExport = async (format: 'docx' | 'txt') => {
+  const handleExport = async (format: 'docx' | 'txt' | 'md') => {
     setIsExporting(true);
     setExportError(null);
     
@@ -191,7 +202,9 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
             <div>
               <h2 className="text-xl font-semibold text-[var(--foreground)] mb-1">Manuscript Complete!</h2>
               <p className="text-[var(--muted-foreground)]">
-                Your manuscript has been revised and is ready for export. Download your final version in your preferred format.
+                {editorialSkipped
+                  ? 'Your manuscript is ready for export. Download your final version in your preferred format.'
+                  : 'Your manuscript has been revised and is ready for export. Download your final version in your preferred format.'}
               </p>
             </div>
           </div>
@@ -222,7 +235,7 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
       </Card>
       
       {/* Export buttons */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Button
           variant="secondary"
           size="lg"
@@ -236,6 +249,22 @@ export default function ExportFinalPage({ params }: ExportFinalPageProps) {
             </svg>
             <span className="font-semibold">Export as .docx</span>
             <span className="text-xs text-[var(--muted-foreground)]">Microsoft Word format</span>
+          </div>
+        </Button>
+        
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={() => handleExport('md')}
+          disabled={isExporting || approvedCount === 0}
+          className="h-auto py-6"
+        >
+          <div className="flex flex-col items-center gap-2">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <span className="font-semibold">Export as .md</span>
+            <span className="text-xs text-[var(--muted-foreground)]">Markdown format</span>
           </div>
         </Button>
         

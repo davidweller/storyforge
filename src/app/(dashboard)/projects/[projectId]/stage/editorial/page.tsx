@@ -630,6 +630,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
       throw err;
     }
   };
+
+  const handleSkipToExportFinal = async () => {
+    await advanceStage(projectId, 'export-final');
+    router.push(`/projects/${projectId}/stage/export-final`);
+  };
   
   return (
     <StageLayout
@@ -672,6 +677,11 @@ export default function EditorialPage({ params }: EditorialPageProps) {
           </span>
         )}
       </p>
+      <div className="mb-6 flex justify-end">
+        <Button variant="secondary" onClick={handleSkipToExportFinal} className="text-sm">
+          Skip editorial and export final
+        </Button>
+      </div>
       {/* Error */}
       {(projectError || generateError) && (
         <div className="mb-6 p-4 bg-[rgba(139,38,53,0.1)] border border-[var(--destructive)] rounded-lg">

@@ -16,6 +16,8 @@ export function buildTitleIdeasPrompt(params: {
   structureReference?: string;
   endingReference?: string;
   charactersReference?: string;
+  /** Author-supplied title idea to riff on or refine (optional). */
+  userTitleIdea?: string;
   /** Number of title strings in the JSON array (default 10). */
   titleCount?: number;
 }): string {
@@ -27,6 +29,7 @@ export function buildTitleIdeasPrompt(params: {
     structureReference,
     endingReference,
     charactersReference,
+    userTitleIdea,
     titleCount = 10,
   } = params;
 
@@ -76,6 +79,14 @@ ${structureReference.slice(0, 800)}`;
 
 **Characters (protagonist / conflict)${assembledContext ? ' (fallback only)' : ''}:**
 ${charactersReference.slice(0, 600)}`;
+  }
+
+  if (userTitleIdea?.trim()) {
+    prompt += `
+
+**Author's title idea:** ${userTitleIdea.trim()}
+
+Include this exact title as one option if it fits the story. Generate the remaining options as distinct alternatives inspired by the same tone and market positioning.`;
   }
 
   prompt += `

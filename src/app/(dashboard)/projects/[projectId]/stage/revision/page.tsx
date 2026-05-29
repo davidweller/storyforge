@@ -524,6 +524,11 @@ export default function RevisionPage({ params }: RevisionPageProps) {
     );
   };
   
+  const handleSkipToExportFinal = async () => {
+    await advanceStage(projectId, 'export-final');
+    router.push(`/projects/${projectId}/stage/export-final`);
+  };
+
   return (
     <StageLayout
       projectId={projectId}
@@ -551,6 +556,11 @@ export default function RevisionPage({ params }: RevisionPageProps) {
             {EDITORIAL_PASS_LABELS[p]} — Revisions
           </Button>
         ))}
+      </div>
+      <div className="mb-6 flex justify-end">
+        <Button variant="secondary" onClick={handleSkipToExportFinal} className="text-sm">
+          Skip remaining revisions and export final
+        </Button>
       </div>
       {/* Error */}
       {(projectError || generateError) && (

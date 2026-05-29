@@ -254,6 +254,7 @@ const STAGE_DATA_SCHEMAS: Partial<Record<WorkflowStage, z.ZodTypeAny>> = {
     structureReference: optionalString,
     endingReference: optionalString,
     charactersReference: optionalString,
+    userTitleIdea: optionalString,
   }).passthrough(),
   'chapter-outlines': ProjectContextSchema.extend({
     structureReference: z.string(),
@@ -668,6 +669,7 @@ const SIMPLE_STAGE_HANDLERS: Partial<Record<WorkflowStage, (d: D) => { system: s
       structureReference: d.structureReference as string | undefined,
       endingReference: d.endingReference as string | undefined,
       charactersReference: d.charactersReference as string | undefined,
+      userTitleIdea: d.userTitleIdea as string | undefined,
       titleCount:
         typeof d.titleCount === 'number' && d.titleCount > 0 ? (d.titleCount as number) : undefined,
     }),
