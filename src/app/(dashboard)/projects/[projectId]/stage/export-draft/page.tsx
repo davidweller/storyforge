@@ -217,7 +217,7 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
       </Card>
       
       {/* Export buttons */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <Button
           variant="secondary"
           size="lg"
@@ -231,6 +231,22 @@ export default function ExportDraftPage({ params }: ExportDraftPageProps) {
             </svg>
             <span className="font-semibold">Export as .docx</span>
             <span className="text-xs text-[var(--muted-foreground)]">Microsoft Word format</span>
+          </div>
+        </Button>
+        
+        <Button
+          variant="secondary"
+          size="lg"
+          onClick={() => handleExport('md')}
+          disabled={isExporting || approvedCount === 0}
+          className="h-auto py-6"
+        >
+          <div className="flex flex-col items-center gap-2">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <span className="font-semibold">Export as .md</span>
+            <span className="text-xs text-[var(--muted-foreground)]">Markdown format</span>
           </div>
         </Button>
         

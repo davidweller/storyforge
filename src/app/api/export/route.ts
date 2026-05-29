@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getProject, getProjectChapters, getApprovedChapterVersions } from '@/lib/db/queries';
+import { htmlToEditorialText } from '@/lib/utils/markdown';
 import { 
   Document, 
   Packer, 
@@ -12,7 +13,7 @@ import {
 
 const ExportBodySchema = z.object({
   projectId: z.string().min(1),
-  format: z.enum(['docx', 'txt', 'pdf']),
+  format: z.enum(['docx', 'txt', 'md', 'pdf']),
   includeFrontMatter: z.boolean().optional(),
   includeBackMatter: z.boolean().optional(),
 });
@@ -86,6 +87,34 @@ export async function POST(request: NextRequest) {
         headers: {
           'Content-Type': 'text/plain',
           'Content-Disposition': `attachment; filename="${slugify(project.title || 'manuscript')}.txt"`,
+        },
+      });
+    } else if (format === 'md') {
+      let markdown = '';
+
+      if (includeFront) {
+        markdown += `# ${project.title || 'Untitled'}\n\n`;
+        markdown += `Genre: ${project.genre || ''}\n\n`;
+        markdown += '---\n\n';
+      }
+
+      for (const chapter of sortedChapters) {
+        if (!chapter.content || chapter.content.trim().length === 0) {
+          continue;
+        }
+        markdown += `## Chapter ${chapter.number}: ${chapter.title}\n\n`;
+        markdown += htmlToEditorialText(chapter.content);
+        markdown += '\n\n---\n\n';
+      }
+
+      if (includeBack) {
+        markdown += '\n\nTHE END\n';
+      }
+
+      return new NextResponse(markdown.trim(), {
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${slugify(project.title || 'manuscript')}.md"`,
         },
       });
     } else if (format === 'docx') {
