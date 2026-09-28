@@ -1,0 +1,55 @@
+# Build context exclusions.
+#
+# Without this file the context is ~6.3 GB and includes both the user's novels
+# and two live credential files. Keep the credential patterns in sync with
+# .gitignore.
+
+# Dependencies — always reinstalled inside the image for linux/amd64.
+# The working tree's node_modules is Windows-built and must never be copied.
+node_modules
+**/node_modules
+
+# Build output
+.next
+out
+dist
+build-resources
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# User data — the SQLite database lives in a mounted volume, not the image
+.data
+
+# Secrets. NEVER relax these.
+.env
+.env.*
+env.local
+storyforge.env
+novelgenerator-*.json
+*-firebase-adminsdk-*.json
+
+# VCS and tooling
+.git
+.gitignore
+.github
+.cursor
+.vscode
+.idea
+
+# Not needed at runtime
+docs
+*.md
+!README.md
+Storyforge Icon.png
+
+# Docker's own files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Noise
+*.log
+npm-debug.log*
+coverage
+.DS_Store
+Thumbs.db

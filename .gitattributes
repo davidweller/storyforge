@@ -1,0 +1,36 @@
+# Line-ending policy.
+#
+# Every text file in this repo is stored LF in git (verified: 248/248 text
+# blobs). The working tree drifted to CRLF during the project's Windows era,
+# which made `git status` show all 213 text files as modified and hid the real
+# changes among them. This file stops that recurring.
+#
+# Normalise on checkin, check out LF everywhere — including on Windows. The
+# Electron toolchain, Node and Next.js are all LF-safe.
+* text=auto eol=lf
+
+# Binaries — never touched, never diffed as text.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.icns   binary
+*.webp   binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.otf    binary
+*.pdf    binary
+*.zip    binary
+*.node   binary
+*.db     binary
+*.docx   binary
+*.xlsx   binary
+
+# Windows shell scripts genuinely need CRLF if any are ever added.
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Generated — collapse in diffs and reviews.
+package-lock.json  linguist-generated=true -diff

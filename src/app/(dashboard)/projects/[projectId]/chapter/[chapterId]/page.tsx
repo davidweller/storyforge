@@ -252,6 +252,53 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     getLatestChapterVersion,
     isGenerating,
   ]);
+
+  const isApproved = chapterId ? !!getApprovedChapterVersion(chapterId) : false;
+  const scenePipelineBusy = !!scenePipelineStep;
+
+  const chapterChecklistExtras = useMemo(
+    () =>
+      evaluation?.checks
+        .filter((c) => !c.pass && (c.evidence || c.suggestion))
+        .slice(0, 6)
+        .map((c) => `[${c.sceneId}] ${c.evidence || c.suggestion || c.id}`) ?? [],
+    [evaluation]
+  );
+
+  const handleContentChange = useCallback(
+    (newContent: string) => {
+      setContent(newContent);
+      if (!currentVersionId || isApproved || isGenerating || scenePipelineBusy) return;
+
+      if (newContent === baselineContentRef.current) {
+        setDraftSaveState('saved');
+        return;
+      }
+
+      setDraftSaveState('dirty');
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = setTimeout(() => {
+        autosaveTimerRef.current = null;
+        const vid = currentVersionId;
+        if (!vid) return;
+        setDraftSaveState('saving');
+        void (async () => {
+          try {
+            await updateChapterVersion(vid, {
+              content: newContent,
+              wordCount: countWords(newContent),
+            });
+            baselineContentRef.current = newContent;
+            setLastSavedAt(new Date());
+            setDraftSaveState('saved');
+          } catch {
+            setDraftSaveState('dirty');
+          }
+        })();
+      }, 1500);
+    },
+    [currentVersionId, isApproved, isGenerating, scenePipelineBusy, updateChapterVersion]
+  );
   
   if (projectLoading || !project || !chapter) {
     return (
@@ -264,8 +311,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
     );
   }
   
-  const approvedVersion = getApprovedChapterVersion(chapterId);
-  const isApproved = !!approvedVersion;
   const wordCount = countWords(content);
   const approvedStoryBible = getDocumentByType('story-bible');
   const approvedCreativeBrief = getDocumentByType('creative-brief');
@@ -274,17 +319,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
   const currentIndex = chapters.findIndex((c) => c.id === chapterId);
   const prevChapter = currentIndex > 0 ? chapters[currentIndex - 1] : null;
   const nextChapter = currentIndex < chapters.length - 1 ? chapters[currentIndex + 1] : null;
-
-  const scenePipelineBusy = !!scenePipelineStep;
-
-  const chapterChecklistExtras = useMemo(
-    () =>
-      evaluation?.checks
-        .filter((c) => !c.pass && (c.evidence || c.suggestion))
-        .slice(0, 6)
-        .map((c) => `[${c.sceneId}] ${c.evidence || c.suggestion || c.id}`) ?? [],
-    [evaluation]
-  );
 
   /** Blocks approve when the Phase 4 panel ran evaluation and any rubric row is severity `fail` and not passing. */
   const evalHasBlockingFailures =
@@ -695,42 +729,6 @@ export default function ChapterPage({ params }: ChapterPageProps) {
       // Handle error
     }
   };
-  
-  // Handle content change — debounced autosave for draft versions only
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      setContent(newContent);
-      if (!currentVersionId || isApproved || isGenerating || scenePipelineBusy) return;
-
-      if (newContent === baselineContentRef.current) {
-        setDraftSaveState('saved');
-        return;
-      }
-
-      setDraftSaveState('dirty');
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = setTimeout(() => {
-        autosaveTimerRef.current = null;
-        const vid = currentVersionId;
-        if (!vid) return;
-        setDraftSaveState('saving');
-        void (async () => {
-          try {
-            await updateChapterVersion(vid, {
-              content: newContent,
-              wordCount: countWords(newContent),
-            });
-            baselineContentRef.current = newContent;
-            setLastSavedAt(new Date());
-            setDraftSaveState('saved');
-          } catch {
-            setDraftSaveState('dirty');
-          }
-        })();
-      }, 1500);
-    },
-    [currentVersionId, isApproved, isGenerating, scenePipelineBusy, updateChapterVersion]
-  );
   
   // Get approved chapter IDs for sidebar
   const approvedChapterIds = new Set<string>();

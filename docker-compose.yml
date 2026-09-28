@@ -1,0 +1,68 @@
+# StoryForge on the Synology NAS.
+#
+# Container Manager (DSM 7.2+) runs this as a "Project". Create the project
+# folder first, put this file and storyforge.env in it, and load the image with
+# Image > Add > Add From File before starting.
+#
+# See docs/nas-deployment.md for the full runbook.
+
+services:
+  storyforge:
+    image: storyforge:1.0
+    container_name: storyforge
+    restart: unless-stopped
+
+    # Bound to localhost deliberately. StoryForge has NO authentication of any
+    # kind — /api/db accepts a deleteProjectData action and /api/generate will
+    # spend API credit, both unauthenticated. Tailscale publishes the port
+    # instead, so the only way in is a device on the tailnet:
+    #
+    #   sudo tailscale serve --bg 3000
+    #
+    # Changing this to "3000:3000" exposes it to every device on the LAN,
+    # including guest phones and IoT kit. Don't, unless you have read
+    # docs/nas-deployment.md and accepted that.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    volumes:
+      # Must be a real local filesystem. SQLite runs in WAL mode and will
+      # corrupt or lock badly over SMB/NFS. /volume1 on the NAS is btrfs/ext4.
+      - /volume1/docker/storyforge/data:/data
+
+    # API keys only. chmod 600, never committed, never baked into the image.
+    env_file:
+      - ./storyforge.env
+
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      STORYFORGE_DATA_DIR: /data
+      # Editorial passes on Opus genuinely run for tens of minutes.
+      ANTHROPIC_TIMEOUT_MS: "3600000"
+      API_RATE_LIMIT_MAX: "120"
+      TZ: Europe/London
+
+    # 6 GB total, shared with DSM. This leaves DSM ~2.5 GB. The full-wrap cover
+    # composite in src/lib/cover/fullWrapComposite.ts is the only thing likely
+    # to reach the ceiling; if it OOMs, run that one job on the desktop.
+    mem_limit: 3g
+    memswap_limit: 3g
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health/db').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 60s
+      timeout: 10s
+      start_period: 45s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

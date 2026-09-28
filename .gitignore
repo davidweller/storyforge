@@ -40,6 +40,8 @@ node_modules/
 .env
 .env.*
 env.local
+# Docker secrets file (see env.docker.example)
+storyforge.env
 
 # Next.js
 .next/
@@ -65,3 +67,6 @@ Thumbs.db
 
 # Plans
 .cursor/plans/
+
+# Local build output and large media (added 2026-09-28)
+.claude/settings.local.json

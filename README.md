@@ -81,6 +81,31 @@ If you start without `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, use the app **Setti
 npm run electron:build:win
 ```
 
+## Running headless (Docker / NAS)
+
+Electron is only a window. It forks the standalone Next.js server on `127.0.0.1:3000`
+and points a `BrowserWindow` at it — there are no IPC channels, and all data access
+already goes over HTTP to `/api/db`. So the same server runs perfectly well in a
+container with no Electron at all, reachable from a browser on any device.
+
+```bash
+cp env.docker.example storyforge.env   # then chmod 600 and fill in the API keys
+docker build -t storyforge:1.0 .
+docker compose up -d
+```
+
+Set `STORYFORGE_DATA_DIR` to a volume on a **real local filesystem** — SQLite runs in
+WAL mode and will not survive an SMB or NFS mount.
+
+> **StoryForge has no authentication of any kind.** `useAuth` returns
+> `isAuthenticated: true` unconditionally, `middleware.ts` does rate limiting only, and
+> there is no users table. Anyone who can reach the port can delete every project and
+> spend your API credit. `docker-compose.yml` therefore binds to `127.0.0.1` and expects
+> a Tailscale (or equivalent) layer in front. Do not expose the port directly.
+
+Full runbook, including the Synology setup, data cutover and the nightly consistent
+backup: [docs/nas-deployment.md](docs/nas-deployment.md).
+
 ## Workflow Stages
 
 Planning & drafting follow this linear pipeline:
